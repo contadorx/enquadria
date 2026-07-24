@@ -68,24 +68,33 @@ export interface Resultado {
 
 export const PARAMETROS_2027: Parametros = {
   aliquota: 0.088,
-  das: 0.012,
+  das: 0.01473,
   corteS1: 1.5,
   fronteiraMin: 0.8,
   fronteiraMax: 1.2,
 };
 
 /**
- * dDAS por anexo — parcela de PIS/Cofins dentro do DAS.
- * VALORES PROVISÓRIOS. Substituir pela tabela de repartição por anexo E faixa
- * antes de qualquer laudo real. Está aqui só para o motor rodar ponta a ponta.
+ * dDAS por anexo E faixa — parcela de PIS/Cofins dentro do DAS, como fração
+ * da receita. Derivado da partilha oficial do Simples (LC 123). No banco, a
+ * fonte é `parametros_exercicio.das_por_anexo`; esta constante é o espelho
+ * usado quando o app roda sem carregar o parâmetro (ex.: modo demonstração).
  */
-export const DAS_POR_ANEXO: Record<number, number> = {
-  1: 0.012,
-  2: 0.011,
-  3: 0.010,
-  4: 0.009,
-  5: 0.010,
+export const DAS_POR_ANEXO_FAIXA: Record<number, Record<number, number>> = {
+  1: { 1: 0.0062, 2: 0.01131, 3: 0.01473, 4: 0.01658, 5: 0.02216, 6: 0.02945 },
+  2: { 1: 0.0063, 2: 0.01092, 3: 0.014, 4: 0.01568, 5: 0.02058, 6: 0.042 },
+  3: { 1: 0.00936, 2: 0.01747, 3: 0.02106, 4: 0.02496, 5: 0.03276, 6: 0.05148 },
+  4: { 1: 0.00675, 2: 0.0135, 3: 0.0153, 4: 0.021, 5: 0.033, 6: 0.0495 },
+  5: { 1: 0.02658, 2: 0.03087, 3: 0.03344, 4: 0.03516, 5: 0.03945, 6: 0.05231 },
 };
+
+/** resolve o dDAS de uma empresa; cai no anexo I faixa 3 se faltar dado */
+export function dasDe(anexo?: number | null, faixa?: number | null): number {
+  const a = anexo && DAS_POR_ANEXO_FAIXA[anexo] ? anexo : 1;
+  const tabela = DAS_POR_ANEXO_FAIXA[a];
+  const f = faixa && tabela[faixa] ? faixa : 3;
+  return tabela[f];
+}
 
 export function decidir(r: Respostas, p: Parametros = PARAMETROS_2027): Resultado {
   const corteS1 = p.corteS1 ?? 1.5;

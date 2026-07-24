@@ -63,9 +63,15 @@ export default async function LaudoDoc({ params }: { params: { id: string } }) {
 
       <div className="sheet">
         <div className="brand">
-          <div>
-            <div className="firm">{t?.nome ?? "Escritório"}</div>
-            {t?.crc && <div className="crc">{t.crc}</div>}
+          <div className="firmwrap">
+            {t?.logo_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={t.logo_url} alt="" className="logo" />
+            )}
+            <div>
+              <div className="firm">{t?.nome ?? "Escritório"}</div>
+              {t?.crc && <div className="crc">{t.crc}</div>}
+            </div>
           </div>
           <div className="wm">LAUDO {numero}<br />{dataEmissao}</div>
         </div>
@@ -104,6 +110,8 @@ export default async function LaudoDoc({ params }: { params: { id: string } }) {
         .doc { max-width: 780px; margin: 0 auto; padding: 24px; }
         .sheet { background: #fff; border: 1px solid #E2E8F0; border-radius: 8px; padding: 44px 46px; color: #334155; font-size: 13px; line-height: 1.6; }
         .brand { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0B1220; padding-bottom: 12px; margin-bottom: 22px; }
+        .firmwrap { display: flex; align-items: center; gap: 12px; }
+        .logo { max-height: 40px; max-width: 140px; object-fit: contain; }
         .firm { font-weight: 800; font-size: 17px; color: #0F172A; letter-spacing: -.01em; }
         .crc { font-size: 11px; color: #64748B; text-transform: uppercase; letter-spacing: .06em; margin-top: 3px; }
         .wm { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #94A3B8; text-align: right; letter-spacing: .08em; }

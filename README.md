@@ -7,7 +7,7 @@ Next.js 14 (App Router) · Supabase (Postgres + RLS) · Tailwind · Vercel
 
 ## Subir
 
-1. Supabase → SQL Editor → rodar em ordem: `0001_init`, `0002_importacao`, `0003_laudo_termo`. (seguros de rodar 2x)
+1. Supabase → SQL Editor → rodar em ordem: `0001_init`, `0002_importacao`, `0003_laudo_termo`, `0004_billing_ddas`. (seguros de rodar 2x)
 2. `.env.local` a partir do `.env.local.example`:
    - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `RECEITA_API_URL`, `RECEITA_API_TOKEN` — OPCIONAIS. Endpoint da base da
@@ -21,6 +21,32 @@ Build validado:
 
     NEXT_PUBLIC_SUPABASE_URL="https://fake.supabase.co" \
     NEXT_PUBLIC_SUPABASE_ANON_KEY="fake" npm run build
+
+## Fatia 4 — o que entrou (o produto completo)
+
+- dDAS REAL por anexo e faixa, derivado da partilha oficial do Simples
+  (LC 123, anexos I–V). Sai a parcela PIS/Cofins do DAS; ICMS/ISS permanecem
+  até 2029. Ressalva que resta: a alíquota nominal de topo superestima a
+  efetiva nas faixas baixas — para laudo de produção, trocar pela efetiva
+  calculada da RBT12. É o piso defensável, não mais um placeholder.
+- Billing Asaas (`lib/asaas.ts` + `/api/checkout` + webhook `/api/asaas`):
+  pacotes da janela (Essencial R$297, Escritório R$597, Carteira R$997) e
+  assinatura recorrente R$97/mês. Degrada sem ASAAS_API_KEY.
+- Configurações (`/painel/config`): edição de nome/CRC e UPLOAD DE LOGO
+  (Supabase Storage). A logo entra na capa de laudo e termo — white-label completo.
+- Webhook ZapSign (`/api/zapsign`): marca o termo assinado e a análise decidida.
+- Página de planos (`/painel/planos`) com checkout.
+
+## Integrações opcionais (env) — todas degradam com elegância
+
+    RECEITA_API_URL / RECEITA_API_TOKEN   enriquecimento contra a Receita
+    ZAPSIGN_API_TOKEN                      assinatura eletrônica do termo
+    ASAAS_API_KEY / ASAAS_ENV             cobrança dos pacotes (sandbox|production)
+
+## Webhooks a apontar nos painéis externos
+
+    Asaas   → POST {app}/api/asaas    (PAYMENT_CONFIRMED / PAYMENT_RECEIVED)
+    ZapSign → POST {app}/api/zapsign   (evento signed)
 
 ## Fatia 3 — o que entrou
 
@@ -74,8 +100,11 @@ Sem nenhuma delas o app funciona ponta a ponta.
     saída:   { "11222333000181": { cnae_principal, cnaes_secundarios,
                porte, situacao, anexo }, ... }
 
-## Pendência que bloqueia laudo real
+## Sobre o número no laudo
 
-`das_por_anexo` em `parametros_exercicio` é PROVISÓRIO. Substituir pela
-repartição de PIS/Cofins por anexo e faixa antes de emitir qualquer laudo.
-Confirmar em: art. 516 da LC 214/2025 e Resolução CGSN 186/2026.
+`das_por_anexo` agora traz a partilha REAL do Simples por anexo e faixa (LC 123).
+O motor usa a alíquota nominal de topo da faixa como aproximação conservadora da
+efetiva — o que é o piso defensável. Para o laudo de máxima precisão, calcular a
+alíquota efetiva a partir da RBT12 de cada empresa (a coluna de faixa de
+faturamento entra numa próxima fatia). A interpretação do que sai do DAS no
+híbrido (só PIS/Cofins, ICMS/ISS até 2029) segue confirmada pela partilha oficial.

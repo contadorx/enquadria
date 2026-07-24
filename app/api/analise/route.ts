@@ -40,7 +40,7 @@ export async function POST(req: Request) {
     .eq("exercicio", 2027)
     .maybeSingle();
 
-  // anexo da empresa afina o dDAS
+  // anexo da empresa afina o dDAS (faixa de faturamento entra na fatia futura)
   const { data: empresa } = await supabase
     .from("empresas")
     .select("anexo")
@@ -50,8 +50,15 @@ export async function POST(req: Request) {
   let parametros = PARAMETROS_2027;
   if (param) {
     const anexo = empresa?.anexo ?? 1;
-    const dasMap = (param.das_por_anexo ?? {}) as Record<string, number>;
-    const das = dasMap[String(anexo)] ?? PARAMETROS_2027.das;
+    const faixaFat = 3; // padrão conservador até derivar da RBT12
+    const dasMap = (param.das_por_anexo ?? {}) as Record<string, Record<string, number> | number>;
+    const doAnexo = dasMap[String(anexo)];
+    let das = PARAMETROS_2027.das;
+    if (typeof doAnexo === "number") {
+      das = doAnexo; // formato antigo (só anexo)
+    } else if (doAnexo && typeof doAnexo === "object") {
+      das = doAnexo[String(faixaFat)] ?? doAnexo["3"] ?? PARAMETROS_2027.das;
+    }
     parametros = {
       aliquota: Number(param.aliquota_cbs) + Number(param.aliquota_ibs),
       das,

@@ -12,6 +12,10 @@ const LINKS = [
     { href: "/painel/fila", label: "Fila de análise" },
     { href: "/painel/janela", label: "Painel da janela" },
   ]},
+  { grupo: "Escritório", itens: [
+    { href: "/painel/planos", label: "Planos" },
+    { href: "/painel/config", label: "Configurações" },
+  ]},
 ];
 
 export default async function PainelLayout({ children }: { children: React.ReactNode }) {
