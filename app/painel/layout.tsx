@@ -10,6 +10,7 @@ const LINKS = [
     { href: "/painel/importar", label: "Importar" },
     { href: "/painel/carteira", label: "Carteira" },
     { href: "/painel/fila", label: "Fila de análise" },
+    { href: "/painel/janela", label: "Painel da janela" },
   ]},
 ];
 

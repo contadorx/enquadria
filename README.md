@@ -7,7 +7,7 @@ Next.js 14 (App Router) · Supabase (Postgres + RLS) · Tailwind · Vercel
 
 ## Subir
 
-1. Supabase → SQL Editor → rodar em ordem: `enquadria_0001_init.sql`, depois `enquadria_0002_importacao.sql`. (seguros de rodar 2x)
+1. Supabase → SQL Editor → rodar em ordem: `0001_init`, `0002_importacao`, `0003_laudo_termo`. (seguros de rodar 2x)
 2. `.env.local` a partir do `.env.local.example`:
    - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `RECEITA_API_URL`, `RECEITA_API_TOKEN` — OPCIONAIS. Endpoint da base da
@@ -21,6 +21,32 @@ Build validado:
 
     NEXT_PUBLIC_SUPABASE_URL="https://fake.supabase.co" \
     NEXT_PUBLIC_SUPABASE_ANON_KEY="fake" npm run build
+
+## Fatia 3 — o que entrou
+
+- Laudo white-label: rota de impressão `/doc/laudo/[id]` com a marca do
+  escritório (nome, CRC), premissas, resultado e recomendação. Numeração
+  sequencial por tenant via RPC atômica. Botão "Baixar PDF" (print-to-PDF).
+- Termo de ciência: `/doc/termo/[id]` com a decisão registrada e o rastro de
+  assinatura. Integração ZapSign (`lib/zapsign.ts`) que degrada com elegância:
+  sem token, o termo é impresso e assinado presencialmente; com token, cria o
+  envelope e devolve o link de assinatura.
+- Painel da janela (`/painel/janela`): régua da contagem regressiva, progresso
+  e lista de pendências.
+- Ações no motor: "Emitir laudo" e "Gerar termo" após salvar a análise.
+
+## RPCs (migration 0003)
+
+    emitir_laudo(analise)          numera por tenant, muda status, atômico
+    registrar_termo(analise, ...)  cria/atualiza termo, avança status
+    assinar_termo(termo, ref)      marca assinatura concluída (webhook futuro)
+
+## Integrações opcionais (env)
+
+    RECEITA_API_URL / RECEITA_API_TOKEN   enriquecimento contra a Receita
+    ZAPSIGN_API_TOKEN                      assinatura eletrônica do termo
+
+Sem nenhuma delas o app funciona ponta a ponta.
 
 ## Fatia 2 — o que entrou
 
@@ -47,12 +73,6 @@ Build validado:
     entrada: { "cnpjs": ["11222333000181", ...] }
     saída:   { "11222333000181": { cnae_principal, cnaes_secundarios,
                porte, situacao, anexo }, ... }
-
-## O que NÃO existe ainda (fatia 3)
-
-- Laudo em PDF white-label, termo de ciência, assinatura (ZapSign)
-- Painel da janela com contagem regressiva e pendências
-- Billing (Asaas)
 
 ## Pendência que bloqueia laudo real
 

@@ -70,6 +70,11 @@ function MotorInterno() {
   const [r, setR] = useState<Respostas>(PADRAO);
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState(false);
+  const [analiseId, setAnaliseId] = useState<string | null>(null);
+  const [laudoId, setLaudoId] = useState<string | null>(null);
+  const [ocupado, setOcupado] = useState<string | null>(null);
+  const [termoNome, setTermoNome] = useState("");
+  const [termoEmail, setTermoEmail] = useState("");
 
   useEffect(() => {
     if (!empresaId) return;
@@ -83,10 +88,19 @@ function MotorInterno() {
       if (emp) setEmpresa(emp);
       const { data: an } = await supabase
         .from("analises")
-        .select("respostas")
+        .select("id, respostas")
         .eq("empresa_id", empresaId)
         .maybeSingle();
       if (an?.respostas) setR(an.respostas as Respostas);
+      if (an?.id) {
+        setAnaliseId(an.id);
+        const { data: l } = await supabase
+          .from("laudos")
+          .select("id")
+          .eq("analise_id", an.id)
+          .maybeSingle();
+        if (l?.id) setLaudoId(l.id);
+      }
     })();
   }, [empresaId]);
 
@@ -103,12 +117,59 @@ function MotorInterno() {
         body: JSON.stringify({ empresa_id: empresaId, respostas: r }),
       });
       if (resp.ok) {
+        const json = await resp.json();
+        if (json.analise_id) setAnaliseId(json.analise_id);
         setSalvo(true);
         router.refresh();
         setTimeout(() => setSalvo(false), 2500);
       }
     } finally {
       setSalvando(false);
+    }
+  }
+
+  async function emitirLaudo() {
+    if (!analiseId) return;
+    setOcupado("laudo");
+    try {
+      const resp = await fetch("/api/laudo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ analise_id: analiseId }),
+      });
+      const json = await resp.json();
+      if (resp.ok && json.laudo_id) {
+        setLaudoId(json.laudo_id);
+        window.open(`/doc/laudo/${json.laudo_id}`, "_blank");
+        router.refresh();
+      }
+    } finally {
+      setOcupado(null);
+    }
+  }
+
+  async function enviarTermo() {
+    if (!analiseId || !termoNome || !termoEmail) return;
+    setOcupado("termo");
+    try {
+      const resp = await fetch("/api/termo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          analise_id: analiseId,
+          decisao: res.saida === "S4" ? "optar" : "permanecer",
+          nome: termoNome,
+          email: termoEmail,
+          empresa: empresa?.razao_social,
+        }),
+      });
+      const json = await resp.json();
+      if (resp.ok && json.termo_id) {
+        window.open(`/doc/termo/${json.termo_id}`, "_blank");
+        router.refresh();
+      }
+    } finally {
+      setOcupado(null);
     }
   }
 
@@ -237,6 +298,63 @@ function MotorInterno() {
               com dados fiscais efetivos. A responsabilidade técnica é do contador que assina.
             </p>
           </div>
+
+          {analiseId && (
+            <div className="rounded border border-line bg-surface p-4 shadow-card">
+              <div className="mb-3 font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
+                Entregáveis
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={emitirLaudo}
+                  disabled={ocupado === "laudo"}
+                  className="rounded-sm border border-line px-3.5 py-2 text-[13px] font-semibold text-slate2 disabled:opacity-40"
+                >
+                  {ocupado === "laudo" ? "..." : laudoId ? "Reabrir laudo" : "Emitir laudo"}
+                </button>
+                {laudoId && (
+                  <a
+                    href={`/doc/laudo/${laudoId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-sm border border-line px-3.5 py-2 text-[13px] font-semibold text-accentdeep"
+                  >
+                    Abrir para PDF
+                  </a>
+                )}
+              </div>
+
+              <div className="mt-4 border-t border-linesoft pt-4">
+                <div className="mb-2 text-[12.5px] font-semibold">Termo de ciência</div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    value={termoNome}
+                    onChange={(e) => setTermoNome(e.target.value)}
+                    placeholder="Nome do signatário"
+                    className="flex-1 rounded-sm border border-line px-3 py-2 text-[13px] outline-none focus:border-accent"
+                  />
+                  <input
+                    value={termoEmail}
+                    onChange={(e) => setTermoEmail(e.target.value)}
+                    placeholder="email@empresa.com"
+                    className="flex-1 rounded-sm border border-line px-3 py-2 text-[13px] outline-none focus:border-accent"
+                  />
+                  <button
+                    onClick={enviarTermo}
+                    disabled={ocupado === "termo" || !termoNome || !termoEmail}
+                    className="whitespace-nowrap rounded-sm bg-ink px-3.5 py-2 text-[13px] font-semibold text-white disabled:opacity-40"
+                  >
+                    {ocupado === "termo" ? "..." : "Gerar termo"}
+                  </button>
+                </div>
+                <p className="mt-2 text-[11px] text-muted">
+                  Decisão registrada: {res.saida === "S4" ? "optar pelo híbrido" : "permanecer no tradicional"}.
+                  Com ZapSign configurado, o link de assinatura é criado automaticamente.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
