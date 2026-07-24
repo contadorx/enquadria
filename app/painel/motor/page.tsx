@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase-browser";
 import { decidir, pct, SAIDAS, PARAMETROS_2027, type Respostas } from "@/lib/motor";
 import { Gauge } from "@/components/Gauge";
 
@@ -57,26 +59,87 @@ const CLASSE_SAIDA: Record<string, string> = {
   verde: "bg-verde",
 };
 
-export default function Motor() {
-  const [r, setR] = useState<Respostas>({
-    b2b: 0.9,
-    qual: 0.92,
-    cred: 0.7,
-    folha: 0.12,
-    preco: 2,
-    conc: 1,
-    exig: 0,
-  });
+const PADRAO: Respostas = { b2b: 0.9, qual: 0.92, cred: 0.7, folha: 0.12, preco: 2, conc: 1, exig: 0 };
+
+function MotorInterno() {
+  const params = useSearchParams();
+  const router = useRouter();
+  const empresaId = params.get("empresa");
+
+  const [empresa, setEmpresa] = useState<{ razao_social: string; anexo: number | null } | null>(null);
+  const [r, setR] = useState<Respostas>(PADRAO);
+  const [salvando, setSalvando] = useState(false);
+  const [salvo, setSalvo] = useState(false);
+
+  useEffect(() => {
+    if (!empresaId) return;
+    const supabase = createClient();
+    (async () => {
+      const { data: emp } = await supabase
+        .from("empresas")
+        .select("razao_social, anexo")
+        .eq("id", empresaId)
+        .maybeSingle();
+      if (emp) setEmpresa(emp);
+      const { data: an } = await supabase
+        .from("analises")
+        .select("respostas")
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+      if (an?.respostas) setR(an.respostas as Respostas);
+    })();
+  }, [empresaId]);
 
   const res = decidir(r, PARAMETROS_2027);
   const saida = SAIDAS[res.saida];
 
+  async function salvar() {
+    if (!empresaId) return;
+    setSalvando(true);
+    try {
+      const resp = await fetch("/api/analise", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ empresa_id: empresaId, respostas: r }),
+      });
+      if (resp.ok) {
+        setSalvo(true);
+        router.refresh();
+        setTimeout(() => setSalvo(false), 2500);
+      }
+    } finally {
+      setSalvando(false);
+    }
+  }
+
   return (
     <div>
-      <h1 className="text-[19px] font-bold tracking-tight">Análise de enquadramento</h1>
-      <p className="mt-0.5 text-[13px] text-muted">
-        Cenário para 2027 · CBS {pct(PARAMETROS_2027.aliquota - 0.001, 1)} + IBS 0,1%
-      </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-[19px] font-bold tracking-tight">
+            {empresa?.razao_social ?? "Análise de enquadramento"}
+          </h1>
+          <p className="mt-0.5 text-[13px] text-muted">
+            Cenário para 2027 · CBS {pct(PARAMETROS_2027.aliquota - 0.001, 1)} + IBS 0,1%
+            {empresa?.anexo ? ` · Anexo ${empresa.anexo}` : ""}
+          </p>
+        </div>
+        {empresaId && (
+          <button
+            onClick={salvar}
+            disabled={salvando}
+            className="rounded-sm bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+          >
+            {salvando ? "Salvando..." : salvo ? "Salvo ✓" : "Salvar análise"}
+          </button>
+        )}
+      </div>
+
+      {!empresaId && (
+        <p className="mt-3 rounded-sm bg-accentwash px-3 py-2 text-[12.5px] text-accentdeep">
+          Modo de demonstração — abra uma empresa pela fila para salvar a análise.
+        </p>
+      )}
 
       <div className="mt-5 grid grid-cols-1 items-start gap-5 lg:grid-cols-[1.05fr_0.95fr]">
         <div className="rounded border border-line bg-surface p-4 shadow-card">
@@ -131,8 +194,11 @@ export default function Motor() {
               <div className="bg-surface px-4 py-3.5 text-[13.5px] text-slate2">
                 {saida.descricao}
                 {res.saida === "S4" && isFinite(res.re) && (
-                  <> Repasse de {pct(res.re)} contra {pct(res.fc)} de ganho do comprador — folga de{" "}
-                    {(res.folga * 100).toFixed(1).replace(".", ",")} pontos.</>
+                  <>
+                    {" "}
+                    Repasse de {pct(res.re)} contra {pct(res.fc)} de ganho do comprador — folga de{" "}
+                    {(res.folga * 100).toFixed(1).replace(".", ",")} pontos.
+                  </>
                 )}
                 {res.prioridade && (
                   <div className="mt-2.5 rounded-sm bg-vermelhowash px-2.5 py-2 font-mono text-[11px] tracking-wide text-vermelho">
@@ -162,9 +228,7 @@ export default function Motor() {
                 ))}
                 <tr>
                   <td className="pt-3 font-bold">Custo líquido / repasse necessário</td>
-                  <td className="pt-3 text-right font-mono font-bold text-accentdeep">
-                    {pct(res.re)}
-                  </td>
+                  <td className="pt-3 text-right font-mono font-bold text-accentdeep">{pct(res.re)}</td>
                 </tr>
               </tbody>
             </table>
@@ -176,5 +240,13 @@ export default function Motor() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function Motor() {
+  return (
+    <Suspense fallback={<div className="text-sm text-muted">Carregando…</div>}>
+      <MotorInterno />
+    </Suspense>
   );
 }

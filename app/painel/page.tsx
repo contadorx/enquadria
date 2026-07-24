@@ -40,7 +40,7 @@ export default async function Painel() {
             decidir sobre o regime híbrido de quem pode ser descartado com segurança.
           </p>
           <Link
-            href="/painel/carteira"
+            href="/painel/importar"
             className="mt-5 inline-block rounded-sm bg-ink px-4 py-2.5 text-sm font-semibold text-white"
           >
             Importar carteira

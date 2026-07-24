@@ -7,8 +7,9 @@ const JANELA = { abre: "2026-09-01", fecha: "2026-09-30" };
 const LINKS = [
   { grupo: "Janela 2027", itens: [
     { href: "/painel", label: "Painel" },
+    { href: "/painel/importar", label: "Importar" },
     { href: "/painel/carteira", label: "Carteira" },
-    { href: "/painel/motor", label: "Análise" },
+    { href: "/painel/fila", label: "Fila de análise" },
   ]},
 ];
 
