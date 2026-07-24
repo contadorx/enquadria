@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
 import { Regua } from "@/components/Regua";
+import { BotaoSair } from "@/components/BotaoSair";
 
 const JANELA = { abre: "2026-09-01", fecha: "2026-09-30" };
 
@@ -64,6 +65,7 @@ export default async function PainelLayout({ children }: { children: React.React
           <div className="mt-6 border-t border-linesoft px-[18px] pt-4">
             <p className="text-[12px] font-semibold leading-tight">{escritorio}</p>
             <p className="mt-0.5 truncate font-mono text-[10px] text-muted">{user?.email}</p>
+            <BotaoSair />
           </div>
         </aside>
 
