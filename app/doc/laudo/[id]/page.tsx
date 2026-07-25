@@ -7,6 +7,8 @@ import {
   premissasEmTexto,
   resultadoEmTexto,
   recomendacao,
+  baseDeCalculo,
+  dDASestimado,
   type AnaliseGravada,
 } from "@/lib/laudo";
 
@@ -29,7 +31,7 @@ export default async function LaudoDoc({ params }: { params: { id: string } }) {
 
   const { data: analise } = await supabase
     .from("analises")
-    .select("id, rq, ch, cl, re, fc, saida, prioridade, respostas, calculado_em, empresa_id")
+    .select("id, rq, ch, cl, re, fc, saida, prioridade, respostas, calculado_em, empresa_id, parametros")
     .eq("id", laudo.analise_id)
     .maybeSingle();
   if (!analise) notFound();
@@ -51,6 +53,8 @@ export default async function LaudoDoc({ params }: { params: { id: string } }) {
   const cor = COR_HEX[rec.cor];
   const premissas = premissasEmTexto(a.respostas);
   const resultado = resultadoEmTexto(a);
+  const base = baseDeCalculo(a);
+  const estimado = dDASestimado(a);
   const dataEmissao = new Date(laudo.emitido_em).toLocaleDateString("pt-BR");
   const numero = String(laudo.numero).padStart(4, "0");
 
@@ -92,6 +96,19 @@ export default async function LaudoDoc({ params }: { params: { id: string } }) {
 
         <div className="sec">Resultado</div>
         <ul>{resultado.map((p, i) => <li key={i}>{p}</li>)}</ul>
+
+        {base.length > 0 && (
+          <>
+            <div className="sec">Base de cálculo</div>
+            <ul>{base.map((p, i) => <li key={i}>{p}</li>)}</ul>
+            {estimado && (
+              <div className="prio" style={{ borderColor: "#D97706", background: "#FFFBEB", color: "#92580A" }}>
+                RBT12 não informada nesta análise: a parcela do DAS foi estimada pelo topo da faixa.
+                Informe a receita bruta dos 12 meses para o número exato.
+              </div>
+            )}
+          </>
+        )}
 
         <div className="sec">Recomendação</div>
         <div className="box" style={{ borderColor: cor }}>

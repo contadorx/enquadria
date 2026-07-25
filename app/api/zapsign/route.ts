@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase-server";
+import { createAdminClient } from "@/lib/supabase-admin";
 
 /**
- * Webhook do ZapSign. Marca o termo como assinado quando o documento é
- * concluído, e avança a análise para "decidida".
+ * Webhook do ZapSign — sem sessão de usuário, usa service role. Marca o termo
+ * assinado e avança a análise para "decidida".
  */
 export async function POST(req: Request) {
-  let evento: { status?: string; token?: string; external_id?: string };
+  let evento: { status?: string; token?: string };
   try {
     evento = await req.json();
   } catch {
@@ -17,7 +17,12 @@ export async function POST(req: Request) {
   const ref = evento.token;
   if (!assinado || !ref) return NextResponse.json({ ok: true, ignorado: true });
 
-  const supabase = createClient();
+  const supabase = createAdminClient();
+  if (!supabase) {
+    console.warn("[zapsign] SUPABASE_SERVICE_ROLE_KEY ausente — termo não marcado:", ref);
+    return NextResponse.json({ ok: true, pendente: true });
+  }
+
   const { data: termo } = await supabase
     .from("termos")
     .select("id, analise_id")
@@ -25,14 +30,8 @@ export async function POST(req: Request) {
     .maybeSingle();
 
   if (termo) {
-    await supabase
-      .from("termos")
-      .update({ assinado_em: new Date().toISOString() })
-      .eq("id", termo.id);
-    await supabase
-      .from("analises")
-      .update({ status: "decidida" })
-      .eq("id", termo.analise_id);
+    await supabase.from("termos").update({ assinado_em: new Date().toISOString() }).eq("id", termo.id);
+    await supabase.from("analises").update({ status: "decidida" }).eq("id", termo.analise_id);
   }
 
   return NextResponse.json({ ok: true });

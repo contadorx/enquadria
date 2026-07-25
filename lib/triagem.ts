@@ -37,6 +37,24 @@ const B2C = ["47", "55", "56", "85", "86", "93", "96", "97"];
 
 const div = (cnae?: string | null) => (cnae || "").replace(/\D/g, "").slice(0, 2);
 
+/**
+ * ANEXO PROVÁVEL a partir do CNAE — só um ponto de partida quando a empresa não
+ * traz o anexo do CSV nem da Receita. Comércio → I, indústria/extrativa → II,
+ * construção e serviços do §5º-C → IV, demais serviços → III (o mais comum).
+ * A distinção III × V depende do fator R (folha), que o CNAE não revela — por
+ * isso serviço cai em III, e o contador ajusta na análise se for o caso.
+ */
+export function anexoPorCnae(cnae?: string | null): number | undefined {
+  const d = div(cnae);
+  if (!d) return undefined;
+  const n = Number(d);
+  if (["45", "46", "47"].includes(d)) return 1; // comércio
+  if (n >= 5 && n <= 33) return 2; // indústria e extrativa
+  if (["41", "42", "43"].includes(d)) return 4; // construção civil
+  if (n >= 49 && n <= 99) return 3; // serviços em geral
+  return 3;
+}
+
 export function triar(e: EmpresaBruta): Triagem {
   const situacao = (e.situacao || "").toUpperCase();
   const porte = (e.porte || "").toUpperCase();

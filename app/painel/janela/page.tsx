@@ -63,6 +63,14 @@ export default async function Janela() {
             Efeito a partir de janeiro de 2027 · próxima janela em março de 2027
           </p>
         </div>
+        <a
+          href="/doc/relatorio"
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-sm border border-line px-4 py-2 text-sm font-semibold text-slate2"
+        >
+          Exportar relatório do escritório
+        </a>
       </div>
 
       <div className="mt-4 rounded border border-line bg-ink px-4 py-3">

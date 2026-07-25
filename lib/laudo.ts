@@ -7,7 +7,7 @@
  * a fonte da verdade daquele laudo naquela data.
  */
 
-import { pct, SAIDAS, type Saida } from "./motor";
+import { pct, moeda, SAIDAS, type Saida, type DDAS } from "./motor";
 
 export interface AnaliseGravada {
   id: string;
@@ -20,6 +20,8 @@ export interface AnaliseGravada {
   prioridade: boolean;
   respostas: Record<string, number> | null;
   calculado_em: string | null;
+  /** parâmetros congelados na análise, incluindo o dDAS efetivo (rastreabilidade) */
+  parametros?: { ddas?: DDAS; aliquota?: number; das?: number } | null;
 }
 
 export interface EmpresaLaudo {
@@ -79,6 +81,40 @@ export function resultadoEmTexto(a: AnaliseGravada): string[] {
 export function recomendacao(a: AnaliseGravada): { titulo: string; descricao: string; cor: string } {
   const s = (a.saida ?? "S1") as Saida;
   return SAIDAS[s];
+}
+
+/**
+ * Rastreabilidade da base de cálculo do dDAS — como a parcela PIS/Cofris que
+ * sai do DAS foi apurada. Torna o laudo auditável: qual RBT12, qual faixa, qual
+ * alíquota (efetiva ou estimada). Vazio nas análises anteriores à Fatia 5.
+ */
+export function baseDeCalculo(a: AnaliseGravada): string[] {
+  const d = a.parametros?.ddas;
+  if (!d) return [];
+  const linhas: string[] = [];
+  if (d.fonte === "efetiva") {
+    linhas.push(
+      `Alíquota efetiva do Simples: ${pct(d.aliquota)} — apurada sobre a RBT12 de ${moeda(
+        d.rbt12
+      )} (Anexo ${d.anexo}, faixa ${d.faixa}).`
+    );
+  } else {
+    linhas.push(
+      `Alíquota do Simples: ${pct(d.aliquota)} — topo da faixa ${d.faixa} do Anexo ${d.anexo}, ` +
+        `estimativa conservadora usada por falta de RBT12 informada (tende a superestimar o custo).`
+    );
+  }
+  linhas.push(
+    `Parcela PIS/Cofins que migra para a CBS e sai do DAS: ${pct(d.sharePC)} da carga do Simples = ${pct(
+      d.das
+    )} da receita.`
+  );
+  return linhas;
+}
+
+/** true quando a base do dDAS foi estimada (sem RBT12) — dispara o aviso no laudo */
+export function dDASestimado(a: AnaliseGravada): boolean {
+  return a.parametros?.ddas?.fonte === "conservador";
 }
 
 export function decisaoSugerida(a: AnaliseGravada): "optar" | "permanecer" {

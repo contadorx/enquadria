@@ -1,16 +1,12 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase-server";
+import { createAdminClient } from "@/lib/supabase-admin";
 
 /**
- * Webhook do Asaas. Ativa a assinatura quando a cobrança é confirmada.
- * A validação forte (token do webhook) fica a cargo do painel do Asaas +
- * checagem do header; aqui tratamos o essencial do ciclo.
+ * Webhook do Asaas — chega SEM sessão de usuário, então usa service role
+ * (a RLS bloquearia um update anônimo). Ativa a assinatura na confirmação.
  */
 export async function POST(req: Request) {
-  let evento: {
-    event?: string;
-    payment?: { id?: string; externalReference?: string };
-  };
+  let evento: { event?: string; payment?: { externalReference?: string } };
   try {
     evento = await req.json();
   } catch {
@@ -23,15 +19,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, ignorado: true });
   }
 
-  // service role: o webhook não tem sessão de usuário
-  const supabase = createClient();
+  const supabase = createAdminClient();
+  if (!supabase) {
+    // sem service role: aceita o evento para não gerar reenvio, mas avisa no log
+    console.warn("[asaas] SUPABASE_SERVICE_ROLE_KEY ausente — assinatura não ativada:", assinaturaId);
+    return NextResponse.json({ ok: true, pendente: true });
+  }
+
   const validoAte = new Date();
   validoAte.setDate(validoAte.getDate() + 365);
 
-  await supabase
+  const { error } = await supabase
     .from("assinaturas")
     .update({ status: "ativa", valido_ate: validoAte.toISOString().slice(0, 10) })
     .eq("id", assinaturaId);
 
+  if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

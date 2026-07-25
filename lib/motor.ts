@@ -75,25 +75,161 @@ export const PARAMETROS_2027: Parametros = {
 };
 
 /**
- * dDAS por anexo E faixa — parcela de PIS/Cofins dentro do DAS, como fração
- * da receita. Derivado da partilha oficial do Simples (LC 123). No banco, a
- * fonte é `parametros_exercicio.das_por_anexo`; esta constante é o espelho
- * usado quando o app roda sem carregar o parâmetro (ex.: modo demonstração).
+ * TABELA LEGAL DO SIMPLES NACIONAL — LC 123, Anexos I a V.
+ * Conferida contra as tabelas oficiais da Receita Federal (jul/2026).
+ *
+ * Cada faixa carrega o que a alíquota EFETIVA precisa:
+ *   teto      · teto de RBT12 da faixa, em R$
+ *   nominal   · alíquota nominal da faixa (fração)
+ *   deduzir   · parcela a deduzir da faixa, em R$
+ *   sharePC   · (Cofins% + PIS/Pasep%) da partilha OFICIAL daquela faixa —
+ *               a fatia da carga que vira CBS e SAI do DAS no regime híbrido.
+ *
+ * A alíquota efetiva do Simples é (RBT12 × nominal − deduzir) / RBT12: sempre
+ * ≤ nominal, e bem abaixo nas faixas baixas. Usar a nominal superestima o
+ * custo — por isso o laudo de produção calcula a efetiva a partir da RBT12.
  */
-export const DAS_POR_ANEXO_FAIXA: Record<number, Record<number, number>> = {
-  1: { 1: 0.0062, 2: 0.01131, 3: 0.01473, 4: 0.01658, 5: 0.02216, 6: 0.02945 },
-  2: { 1: 0.0063, 2: 0.01092, 3: 0.014, 4: 0.01568, 5: 0.02058, 6: 0.042 },
-  3: { 1: 0.00936, 2: 0.01747, 3: 0.02106, 4: 0.02496, 5: 0.03276, 6: 0.05148 },
-  4: { 1: 0.00675, 2: 0.0135, 3: 0.0153, 4: 0.021, 5: 0.033, 6: 0.0495 },
-  5: { 1: 0.02658, 2: 0.03087, 3: 0.03344, 4: 0.03516, 5: 0.03945, 6: 0.05231 },
+export interface FaixaSimples {
+  teto: number;
+  nominal: number;
+  deduzir: number;
+  sharePC: number;
+}
+
+export const ANEXOS_SIMPLES: Record<number, FaixaSimples[]> = {
+  // Anexo I — Comércio
+  1: [
+    { teto: 180000, nominal: 0.04, deduzir: 0, sharePC: 0.155 },
+    { teto: 360000, nominal: 0.073, deduzir: 5940, sharePC: 0.155 },
+    { teto: 720000, nominal: 0.095, deduzir: 13860, sharePC: 0.155 },
+    { teto: 1800000, nominal: 0.107, deduzir: 22500, sharePC: 0.155 },
+    { teto: 3600000, nominal: 0.143, deduzir: 87300, sharePC: 0.155 },
+    { teto: 4800000, nominal: 0.19, deduzir: 378000, sharePC: 0.344 },
+  ],
+  // Anexo II — Indústria
+  2: [
+    { teto: 180000, nominal: 0.045, deduzir: 0, sharePC: 0.14 },
+    { teto: 360000, nominal: 0.078, deduzir: 5940, sharePC: 0.14 },
+    { teto: 720000, nominal: 0.1, deduzir: 13860, sharePC: 0.14 },
+    { teto: 1800000, nominal: 0.112, deduzir: 22500, sharePC: 0.14 },
+    { teto: 3600000, nominal: 0.147, deduzir: 85500, sharePC: 0.14 },
+    { teto: 4800000, nominal: 0.3, deduzir: 720000, sharePC: 0.255 },
+  ],
+  // Anexo III — Serviços (fator R ≥ 28% e serviços do §5º-B)
+  3: [
+    { teto: 180000, nominal: 0.06, deduzir: 0, sharePC: 0.156 },
+    { teto: 360000, nominal: 0.112, deduzir: 9360, sharePC: 0.171 },
+    { teto: 720000, nominal: 0.135, deduzir: 17640, sharePC: 0.166 },
+    { teto: 1800000, nominal: 0.16, deduzir: 35640, sharePC: 0.166 },
+    { teto: 3600000, nominal: 0.21, deduzir: 125640, sharePC: 0.156 },
+    { teto: 4800000, nominal: 0.33, deduzir: 648000, sharePC: 0.195 },
+  ],
+  // Anexo IV — Serviços (construção, limpeza, advocacia; sem CPP no DAS)
+  4: [
+    { teto: 180000, nominal: 0.045, deduzir: 0, sharePC: 0.215 },
+    { teto: 360000, nominal: 0.09, deduzir: 8100, sharePC: 0.25 },
+    { teto: 720000, nominal: 0.102, deduzir: 12420, sharePC: 0.24 },
+    { teto: 1800000, nominal: 0.14, deduzir: 39780, sharePC: 0.23 },
+    { teto: 3600000, nominal: 0.22, deduzir: 183780, sharePC: 0.22 },
+    { teto: 4800000, nominal: 0.33, deduzir: 828000, sharePC: 0.25 },
+  ],
+  // Anexo V — Serviços intensivos em conhecimento (fator R < 28%)
+  5: [
+    { teto: 180000, nominal: 0.155, deduzir: 0, sharePC: 0.1715 },
+    { teto: 360000, nominal: 0.18, deduzir: 4500, sharePC: 0.1715 },
+    { teto: 720000, nominal: 0.195, deduzir: 9900, sharePC: 0.1815 },
+    { teto: 1800000, nominal: 0.205, deduzir: 17100, sharePC: 0.1915 },
+    { teto: 3600000, nominal: 0.23, deduzir: 62100, sharePC: 0.1715 },
+    { teto: 4800000, nominal: 0.305, deduzir: 540000, sharePC: 0.2 },
+  ],
 };
 
-/** resolve o dDAS de uma empresa; cai no anexo I faixa 3 se faltar dado */
+/** normaliza o índice do anexo; cai no Anexo I quando ausente ou inválido */
+function anexoValido(anexo?: number | null): number {
+  return anexo && ANEXOS_SIMPLES[anexo] ? anexo : 1;
+}
+
+/** faixa (1–6) de uma empresa a partir da RBT12; null quando a RBT12 é inválida */
+export function faixaDe(anexo: number | null | undefined, rbt12: number): number | null {
+  if (!(rbt12 > 0)) return null;
+  const tabela = ANEXOS_SIMPLES[anexoValido(anexo)];
+  for (let i = 0; i < tabela.length; i++) {
+    if (rbt12 <= tabela[i].teto) return i + 1;
+  }
+  return tabela.length; // acima do teto do Simples: última faixa (sublimite tratado à parte)
+}
+
+/**
+ * Alíquota EFETIVA do Simples a partir da RBT12 real: (RBT12 × nominal − PD) / RBT12.
+ * Retorna null se a RBT12 for inválida (sem valor não há efetiva — usa-se o fallback).
+ */
+export function aliquotaEfetivaSimples(anexo: number | null | undefined, rbt12: number): number | null {
+  const f = faixaDe(anexo, rbt12);
+  if (f == null) return null;
+  const faixa = ANEXOS_SIMPLES[anexoValido(anexo)][f - 1];
+  return Math.max((rbt12 * faixa.nominal - faixa.deduzir) / rbt12, 0);
+}
+
+export interface DDAS {
+  /** parcela PIS/Cofins que sai do DAS, como fração da receita — é o `das` do motor */
+  das: number;
+  /** faixa usada (1–6) */
+  faixa: number;
+  /** anexo usado (1–5) */
+  anexo: number;
+  /** alíquota do Simples aplicada (efetiva quando há RBT12; nominal no fallback) */
+  aliquota: number;
+  /** fração PIS/Cofins da partilha da faixa */
+  sharePC: number;
+  /** RBT12 usada, quando informada */
+  rbt12: number | null;
+  /** "efetiva" = calculada da RBT12 real · "conservador" = topo da faixa (nominal) */
+  fonte: "efetiva" | "conservador";
+}
+
+/**
+ * dDAS EFETIVO por empresa — o número que entra no motor como `das`.
+ *
+ * Com RBT12 real → alíquota efetiva daquela RBT12 × sharePC da faixa.
+ * Sem RBT12     → FALLBACK CONSERVADOR: alíquota nominal (topo da faixa) ×
+ *                 sharePC, na faixa informada (ou faixa 3 se nada vier). Nunca
+ *                 subestima o custo, e o laudo marca a premissa como estimada.
+ */
+export function dDASefetivo(
+  anexo?: number | null,
+  rbt12?: number | null,
+  faixaFallback?: number | null
+): DDAS {
+  const a = anexoValido(anexo);
+  const tabela = ANEXOS_SIMPLES[a];
+
+  if (rbt12 && rbt12 > 0) {
+    const f = faixaDe(a, rbt12) as number;
+    const faixa = tabela[f - 1];
+    const efetiva = Math.max((rbt12 * faixa.nominal - faixa.deduzir) / rbt12, 0);
+    return { das: efetiva * faixa.sharePC, faixa: f, anexo: a, aliquota: efetiva, sharePC: faixa.sharePC, rbt12, fonte: "efetiva" };
+  }
+
+  const f = faixaFallback && tabela[faixaFallback - 1] ? faixaFallback : 3;
+  const faixa = tabela[f - 1];
+  return { das: faixa.nominal * faixa.sharePC, faixa: f, anexo: a, aliquota: faixa.nominal, sharePC: faixa.sharePC, rbt12: null, fonte: "conservador" };
+}
+
+/**
+ * dDAS por anexo E faixa — espelho conservador (nominal × sharePC), derivado da
+ * tabela oficial acima, para o modo demonstração e o `parametros_exercicio`.
+ * A fonte única é ANEXOS_SIMPLES; aqui é só a projeção topo-da-faixa.
+ */
+export const DAS_POR_ANEXO_FAIXA: Record<number, Record<number, number>> = Object.fromEntries(
+  Object.entries(ANEXOS_SIMPLES).map(([a, faixas]) => [
+    Number(a),
+    Object.fromEntries(faixas.map((f, i) => [i + 1, Math.round(f.nominal * f.sharePC * 1e5) / 1e5])),
+  ])
+);
+
+/** resolve o dDAS conservador de uma empresa; cai no anexo I faixa 3 se faltar dado */
 export function dasDe(anexo?: number | null, faixa?: number | null): number {
-  const a = anexo && DAS_POR_ANEXO_FAIXA[anexo] ? anexo : 1;
-  const tabela = DAS_POR_ANEXO_FAIXA[a];
-  const f = faixa && tabela[faixa] ? faixa : 3;
-  return tabela[f];
+  return dDASefetivo(anexo, null, faixa).das;
 }
 
 export function decidir(r: Respostas, p: Parametros = PARAMETROS_2027): Resultado {
@@ -152,3 +288,8 @@ export const SAIDAS: Record<Saida, { titulo: string; descricao: string; cor: str
 
 export const pct = (x: number, casas = 1) =>
   !isFinite(x) ? "—" : `${(x * 100).toFixed(casas).replace(".", ",")}%`;
+
+export const moeda = (x?: number | null) =>
+  x == null || !isFinite(x)
+    ? "—"
+    : x.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });

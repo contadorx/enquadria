@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
-import { decidir, PARAMETROS_2027, type Respostas } from "@/lib/motor";
+import { decidir, dDASefetivo, PARAMETROS_2027, type Respostas } from "@/lib/motor";
+import { anexoPorCnae } from "@/lib/triagem";
 
 /**
  * Persiste uma análise: recebe empresa + respostas, recalcula o motor NO
@@ -23,7 +24,7 @@ export async function POST(req: Request) {
   const tenantId = perfil?.tenant_id;
   if (!tenantId) return NextResponse.json({ erro: "workspace não encontrado" }, { status: 400 });
 
-  let corpo: { empresa_id: string; janela_id?: string; respostas: Respostas };
+  let corpo: { empresa_id: string; janela_id?: string; respostas: Respostas; rbt12?: number | null };
   try {
     corpo = await req.json();
   } catch {
@@ -36,37 +37,45 @@ export async function POST(req: Request) {
   // parâmetros vigentes do exercício (fonte da verdade é o banco)
   const { data: param } = await supabase
     .from("parametros_exercicio")
-    .select("aliquota_cbs, aliquota_ibs, das_por_anexo, corte_s1, fronteira_min, fronteira_max")
+    .select("aliquota_cbs, aliquota_ibs, corte_s1, fronteira_min, fronteira_max")
     .eq("exercicio", 2027)
     .maybeSingle();
 
-  // anexo da empresa afina o dDAS (faixa de faturamento entra na fatia futura)
+  // anexo + RBT12 da empresa sustentam a alíquota EFETIVA do dDAS
   const { data: empresa } = await supabase
     .from("empresas")
-    .select("anexo")
+    .select("anexo, rbt12, cnae_principal")
     .eq("id", corpo.empresa_id)
     .maybeSingle();
 
-  let parametros = PARAMETROS_2027;
-  if (param) {
-    const anexo = empresa?.anexo ?? 1;
-    const faixaFat = 3; // padrão conservador até derivar da RBT12
-    const dasMap = (param.das_por_anexo ?? {}) as Record<string, Record<string, number> | number>;
-    const doAnexo = dasMap[String(anexo)];
-    let das = PARAMETROS_2027.das;
-    if (typeof doAnexo === "number") {
-      das = doAnexo; // formato antigo (só anexo)
-    } else if (doAnexo && typeof doAnexo === "object") {
-      das = doAnexo[String(faixaFat)] ?? doAnexo["3"] ?? PARAMETROS_2027.das;
-    }
-    parametros = {
-      aliquota: Number(param.aliquota_cbs) + Number(param.aliquota_ibs),
-      das,
-      corteS1: Number(param.corte_s1),
-      fronteiraMin: Number(param.fronteira_min),
-      fronteiraMax: Number(param.fronteira_max),
-    };
+  // RBT12 informado na tela tem prioridade; persiste para reuso e para o laudo
+  const rbt12Informado =
+    corpo.rbt12 != null && Number.isFinite(corpo.rbt12) && Number(corpo.rbt12) > 0
+      ? Number(corpo.rbt12)
+      : null;
+  if (rbt12Informado != null && rbt12Informado !== Number(empresa?.rbt12 ?? 0)) {
+    await supabase.from("empresas").update({ rbt12: rbt12Informado }).eq("id", corpo.empresa_id);
   }
+
+  const anexoEfetivo = empresa?.anexo ?? anexoPorCnae(empresa?.cnae_principal) ?? 1;
+  const rbt12Efetivo = rbt12Informado ?? (empresa?.rbt12 != null ? Number(empresa.rbt12) : null);
+
+  // dDAS EFETIVO por empresa: com RBT12 usa a alíquota efetiva; sem, topo da faixa
+  const ddas = dDASefetivo(anexoEfetivo, rbt12Efetivo);
+
+  const aliquota = param
+    ? Number(param.aliquota_cbs) + Number(param.aliquota_ibs)
+    : PARAMETROS_2027.aliquota;
+
+  const parametros = {
+    aliquota,
+    das: ddas.das,
+    corteS1: param ? Number(param.corte_s1) : PARAMETROS_2027.corteS1,
+    fronteiraMin: param ? Number(param.fronteira_min) : PARAMETROS_2027.fronteiraMin,
+    fronteiraMax: param ? Number(param.fronteira_max) : PARAMETROS_2027.fronteiraMax,
+    // rastreabilidade da premissa do dDAS, congelada com a análise
+    ddas,
+  };
 
   const r = decidir(corpo.respostas, parametros);
 

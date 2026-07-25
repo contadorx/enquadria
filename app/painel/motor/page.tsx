@@ -3,7 +3,9 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
-import { decidir, pct, SAIDAS, PARAMETROS_2027, type Respostas } from "@/lib/motor";
+import { decidir, dDASefetivo, pct, moeda, SAIDAS, PARAMETROS_2027, type Respostas } from "@/lib/motor";
+import { anexoPorCnae } from "@/lib/triagem";
+import { parseValorBRL } from "@/lib/csv";
 import { Gauge } from "@/components/Gauge";
 
 const PERGUNTAS: {
@@ -66,7 +68,13 @@ function MotorInterno() {
   const router = useRouter();
   const empresaId = params.get("empresa");
 
-  const [empresa, setEmpresa] = useState<{ razao_social: string; anexo: number | null } | null>(null);
+  const [empresa, setEmpresa] = useState<{
+    razao_social: string;
+    anexo: number | null;
+    cnae_principal?: string | null;
+    rbt12?: number | null;
+  } | null>(null);
+  const [rbt12, setRbt12] = useState<string>("");
   const [r, setR] = useState<Respostas>(PADRAO);
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState(false);
@@ -82,10 +90,13 @@ function MotorInterno() {
     (async () => {
       const { data: emp } = await supabase
         .from("empresas")
-        .select("razao_social, anexo")
+        .select("razao_social, anexo, cnae_principal, rbt12")
         .eq("id", empresaId)
         .maybeSingle();
-      if (emp) setEmpresa(emp);
+      if (emp) {
+        setEmpresa(emp);
+        if (emp.rbt12 != null) setRbt12(String(emp.rbt12));
+      }
       const { data: an } = await supabase
         .from("analises")
         .select("id, respostas")
@@ -104,7 +115,12 @@ function MotorInterno() {
     })();
   }, [empresaId]);
 
-  const res = decidir(r, PARAMETROS_2027);
+  // dDAS EFETIVO na prévia: mesmo cálculo do servidor (anexo + RBT12 informado)
+  const anexoEfetivo = empresa?.anexo ?? anexoPorCnae(empresa?.cnae_principal) ?? 1;
+  const rbt12Num = parseValorBRL(rbt12) ?? null;
+  const ddas = dDASefetivo(anexoEfetivo, rbt12Num);
+  const parametros = { ...PARAMETROS_2027, das: ddas.das };
+  const res = decidir(r, parametros);
   const saida = SAIDAS[res.saida];
 
   async function salvar() {
@@ -114,7 +130,7 @@ function MotorInterno() {
       const resp = await fetch("/api/analise", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ empresa_id: empresaId, respostas: r }),
+        body: JSON.stringify({ empresa_id: empresaId, respostas: r, rbt12: rbt12Num }),
       });
       if (resp.ok) {
         const json = await resp.json();
@@ -142,6 +158,12 @@ function MotorInterno() {
         setLaudoId(json.laudo_id);
         window.open(`/doc/laudo/${json.laudo_id}`, "_blank");
         router.refresh();
+      } else {
+        alert(
+          "Não foi possível emitir o laudo: " +
+            (json.erro ?? "erro desconhecido") +
+            "\n\nSe a mensagem mencionar a função emitir_laudo, a migration 0003 ainda não foi aplicada no banco."
+        );
       }
     } finally {
       setOcupado(null);
@@ -167,6 +189,12 @@ function MotorInterno() {
       if (resp.ok && json.termo_id) {
         window.open(`/doc/termo/${json.termo_id}`, "_blank");
         router.refresh();
+      } else {
+        alert(
+          "Não foi possível gerar o termo: " +
+            (json.erro ?? "erro desconhecido") +
+            "\n\nSe mencionar registrar_termo, a migration 0003 ainda não foi aplicada."
+        );
       }
     } finally {
       setOcupado(null);
@@ -207,6 +235,41 @@ function MotorInterno() {
           <div className="mb-3 font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
             Premissas informadas
           </div>
+
+          <div className="mb-3.5 border-b border-linesoft pb-3.5">
+            <div className="text-[13.5px] font-semibold">
+              Receita bruta dos últimos 12 meses (RBT12)
+            </div>
+            <p className="mb-2 mt-0.5 text-[12px] text-muted">
+              É o que torna a alíquota do Simples EFETIVA, não a nominal do topo da faixa.
+              Sem informar, o cálculo usa o topo da faixa {ddas.faixa} — estimativa conservadora.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center rounded-sm border border-line px-2.5 focus-within:border-accent">
+                <span className="font-mono text-[12px] text-muted">R$</span>
+                <input
+                  value={rbt12}
+                  onChange={(e) => setRbt12(e.target.value)}
+                  inputMode="decimal"
+                  placeholder="ex.: 480.000"
+                  className="w-36 bg-transparent px-2 py-1.5 font-mono text-[13px] outline-none"
+                />
+              </div>
+              <span
+                className={`rounded-sm px-2 py-1 font-mono text-[11px] ${
+                  ddas.fonte === "efetiva"
+                    ? "bg-verdewash text-verde"
+                    : "bg-accentwash text-accentdeep"
+                }`}
+              >
+                Anexo {ddas.anexo} · faixa {ddas.faixa} ·{" "}
+                {ddas.fonte === "efetiva"
+                  ? `efetiva ${pct(ddas.aliquota)}`
+                  : `topo ${pct(ddas.aliquota)} (estimado)`}
+              </span>
+            </div>
+          </div>
+
           {PERGUNTAS.map((p, i) => (
             <div
               key={p.chave}
@@ -279,7 +342,10 @@ function MotorInterno() {
                 {[
                   ["IBS/CBS no regime regular sobre a base", pct(res.ch)],
                   ["Compras que geram crédito", pct(r.cred)],
-                  ["Sai do DAS (parcela PIS/Cofins)", "−" + pct(PARAMETROS_2027.das)],
+                  [
+                    `Sai do DAS — PIS/Cofins (efetiva ${pct(ddas.aliquota)} × ${pct(ddas.sharePC)})`,
+                    "−" + pct(ddas.das),
+                  ],
                   ["Receita vendida a quem aproveita crédito", pct(res.rq)],
                 ].map(([k, v]) => (
                   <tr key={k}>
@@ -294,6 +360,17 @@ function MotorInterno() {
               </tbody>
             </table>
             <p className="mt-3 text-[11.5px] leading-relaxed text-muted">
+              {ddas.fonte === "efetiva" ? (
+                <>
+                  dDAS pela alíquota EFETIVA do Simples sobre a RBT12 de {moeda(ddas.rbt12)} (Anexo{" "}
+                  {ddas.anexo}, faixa {ddas.faixa}).{" "}
+                </>
+              ) : (
+                <>
+                  RBT12 não informada — dDAS pelo TOPO da faixa {ddas.faixa} do Anexo {ddas.anexo}
+                  {" "}(estimativa conservadora, tende a superestimar o custo). Informe a RBT12 para o número exato.{" "}
+                </>
+              )}
               Estimativa de cenário a partir das premissas informadas. Não substitui apuração
               com dados fiscais efetivos. A responsabilidade técnica é do contador que assina.
             </p>

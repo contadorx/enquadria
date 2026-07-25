@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
-import { triar, resumir, type EmpresaBruta } from "@/lib/triagem";
+import { triar, resumir, anexoPorCnae, type EmpresaBruta } from "@/lib/triagem";
 import { enriquecer, fundir } from "@/lib/receita";
 import type { LinhaCarteira } from "@/lib/csv";
 
@@ -66,11 +66,12 @@ export async function POST(req: Request) {
       razao_social: enriquecido.razao_social,
       cnae_principal: enriquecido.cnae_principal ?? null,
       cnaes_secundarios: enriquecido.cnaes_secundarios ?? null,
-      anexo: enriquecido.anexo ?? null,
+      anexo: enriquecido.anexo ?? anexoPorCnae(enriquecido.cnae_principal) ?? null,
       porte: enriquecido.porte ?? null,
       situacao: enriquecido.situacao ?? null,
       regime: enriquecido.regime ?? null,
       faturamento_faixa: enriquecido.faturamento_faixa ?? null,
+      rbt12: l.rbt12 ?? null,
       faixa: t.faixa,
       motivo_triagem: t.motivo,
       prioridade_maxima: t.prioridade_maxima,
