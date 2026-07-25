@@ -65,7 +65,7 @@ export async function POST(req: Request) {
     .update({
       token,
       hash_documento: hash,
-      status: "pendente",
+      assinatura_status: "pendente",
       assinante_email: corpo.email,
     })
     .eq("id", termoId);

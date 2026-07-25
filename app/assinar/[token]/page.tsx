@@ -21,7 +21,7 @@ export default async function AssinarPage({ params }: { params: { token: string 
 
   const { data: termo } = await supabase
     .from("termos")
-    .select("status, decisao, assinante_nome, assinado_em, metodo, hash_documento, analise_id")
+    .select("assinatura_status, decisao, assinante_nome, assinado_em, metodo, hash_documento, analise_id")
     .eq("token", params.token)
     .maybeSingle();
   if (!termo) notFound();
@@ -35,7 +35,7 @@ export default async function AssinarPage({ params }: { params: { token: string 
     ? await supabase.from("empresas").select("razao_social, cnpj").eq("id", analise.empresa_id).maybeSingle()
     : { data: null };
 
-  if (termo.status === "assinado") {
+  if (termo.assinatura_status === "assinado") {
     return (
       <Casca>
         <div className="rounded border border-verde bg-verdewash p-6 text-center">

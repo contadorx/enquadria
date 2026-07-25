@@ -48,12 +48,12 @@ export async function POST(req: Request) {
 
   const { data: termo } = await supabase
     .from("termos")
-    .select("id, status, analise_id, hash_documento, otp_hash, otp_expira, otp_tentativas")
+    .select("id, assinatura_status, analise_id, hash_documento, otp_hash, otp_expira, otp_tentativas")
     .eq("token", corpo.token)
     .maybeSingle();
 
   if (!termo) return NextResponse.json({ erro: "termo não encontrado" }, { status: 404 });
-  if (termo.status === "assinado") {
+  if (termo.assinatura_status === "assinado") {
     return NextResponse.json({ erro: "este termo já foi assinado" }, { status: 409 });
   }
 
@@ -139,7 +139,7 @@ export async function POST(req: Request) {
     const { error: upErr } = await supabase
       .from("termos")
       .update({
-        status: "assinado",
+        assinatura_status: "assinado",
         assinado_em: agora,
         assinante_nome: corpo.nome,
         assinante_cpf: corpo.cpf ?? null,

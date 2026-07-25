@@ -11,7 +11,7 @@ export default async function TermoDoc({ params }: { params: { id: string } }) {
   const { data: termo } = await supabase
     .from("termos")
     .select(
-      "decisao, assinante_nome, assinante_cpf, assinante_email, assinado_em, status, token, metodo, hash_documento, evidencia, carimbo, criado_em, analise_id"
+      "decisao, assinante_nome, assinante_cpf, assinante_email, assinado_em, assinatura_status, token, metodo, hash_documento, evidencia, carimbo, criado_em, analise_id"
     )
     .eq("id", params.id)
     .maybeSingle();
@@ -38,7 +38,7 @@ export default async function TermoDoc({ params }: { params: { id: string } }) {
   const t = perfil?.tenants as { nome?: string; crc?: string; logo_url?: string } | null;
 
   const optou = termo.decisao === "optar";
-  const assinado = termo.status === "assinado" || !!termo.assinado_em;
+  const assinado = termo.assinatura_status === "assinado" || !!termo.assinado_em;
   const trilha = assinado
     ? trilhaEmTexto({
         assinante_nome: termo.assinante_nome,
