@@ -61,8 +61,9 @@ export default async function Fila() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-[19px] font-bold tracking-tight">Fila de análise</h1>
-          <p className="mt-0.5 text-[13px] text-muted">
-            {fila.length} empresas · {concluidas} concluídas · {fila.length - concluidas} pendentes
+          <p className="mt-0.5 max-w-[70ch] text-[13px] text-muted">
+            Só as empresas que exigem decisão nesta janela, na ordem de quem paga melhor.{" "}
+            {concluidas} de {fila.length} já têm decisão registrada.
           </p>
         </div>
       </div>

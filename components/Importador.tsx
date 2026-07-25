@@ -2,8 +2,35 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { parsearCarteira, CSV_EXEMPLO, type ResultadoParse } from "@/lib/csv";
+import { parsearCarteira, CSV_EXEMPLO, type ResultadoParse, type LinhaCarteira } from "@/lib/csv";
 import { ROTULO_FAIXA, triar, type Faixa } from "@/lib/triagem";
+
+/** o que cada campo faz — mostrado na confirmação de leitura do arquivo */
+const CAMPOS: { chave: keyof LinhaCarteira; rotulo: string; papel: string; essencial?: boolean }[] = [
+  { chave: "cnpj", rotulo: "CNPJ", papel: "identifica a empresa e busca os dados na Receita", essencial: true },
+  { chave: "razao_social", rotulo: "Razão social", papel: "nome que aparece no laudo", essencial: true },
+  { chave: "cnae_principal", rotulo: "CNAE", papel: "define a faixa da triagem" },
+  { chave: "rbt12", rotulo: "RBT12", papel: "torna a alíquota efetiva, não estimada" },
+  { chave: "anexo", rotulo: "Anexo", papel: "afina o cálculo do que sai do DAS" },
+  { chave: "regime", rotulo: "Regime", papel: "separa quem já está fora do Simples" },
+  { chave: "porte", rotulo: "Porte", papel: "identifica MEI" },
+  { chave: "situacao", rotulo: "Situação", papel: "descarta empresas inativas" },
+];
+
+const MODELO_CSV = `cnpj,razao_social,cnae_principal,porte,regime,anexo,rbt12
+11.222.333/0001-81,Distribuidora Exemplo Ltda,4649-4/08,EPP,Simples Nacional,1,480000
+07.526.557/0001-00,Restaurante Exemplo ME,5611-2/01,ME,Simples Nacional,3,220000
+22.333.444/0001-55,Transportes Exemplo Ltda,4930-2/02,EPP,Simples Nacional,3,1200000`;
+
+function baixarModelo() {
+  const blob = new Blob(["﻿" + MODELO_CSV], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "modelo-carteira-enquadria.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 const ORDEM: Faixa[] = ["A", "B", "C", "D", "MEI", "FORA"];
 const COR: Record<Faixa, string> = {
@@ -56,7 +83,19 @@ export function Importador() {
     const texto = await arquivo.text();
     const resultado = parsearCarteira(texto);
     if (!resultado.colunas_reconhecidas.cnpj) {
-      setErro("Não encontrei a coluna de CNPJ. Confira o cabeçalho do arquivo.");
+      const achadas = (resultado.colunas_ignoradas ?? []).slice(0, 6).join(", ");
+      setErro(
+        `Não encontrei a coluna de CNPJ.${
+          achadas ? ` Li estas colunas: ${achadas}.` : ""
+        } Renomeie a coluna dos documentos para "cnpj" (ou baixe o modelo e cole seus dados nele).`
+      );
+      setParse(null);
+      return;
+    }
+    if (resultado.linhas.length === 0) {
+      setErro(
+        `Reconheci o cabeçalho, mas nenhuma linha tinha CNPJ válido — ${resultado.descartadas} descartadas. Confira se os documentos estão completos (14 dígitos).`
+      );
       setParse(null);
       return;
     }
@@ -144,18 +183,51 @@ export function Importador() {
             onClick={usarExemplo}
             className="rounded-sm border border-line px-4 py-2.5 text-sm font-semibold text-slate2"
           >
-            Usar carteira de exemplo
+            Ver com carteira de exemplo
+          </button>
+          <button
+            onClick={baixarModelo}
+            className="rounded-sm border border-line px-4 py-2.5 text-sm font-semibold text-accentdeep"
+          >
+            Baixar modelo CSV
           </button>
           {nomeArquivo && (
             <span className="font-mono text-[12px] text-muted">{nomeArquivo}</span>
           )}
         </div>
+
         <p className="mt-4 max-w-[70ch] text-[12.5px] leading-relaxed text-muted">
-          Aceita qualquer exportação com pelo menos CNPJ e razão social — as colunas são
-          reconhecidas por sinônimos. CNAE, porte e situação, quando faltam, vêm do
-          enriquecimento contra a Receita. CNPJs inválidos e repetidos são descartados
-          antes de gravar.
+          Exporte a carteira do seu sistema como CSV e suba do jeito que veio: as colunas são
+          reconhecidas por sinônimo, sem formato rígido. <b className="text-slate2">Só CNPJ e razão
+          social são obrigatórios</b> — o resto, quando falta, vem do enriquecimento contra a
+          Receita. CNPJs inválidos e repetidos são descartados antes de gravar.
         </p>
+
+        <details className="mt-3">
+          <summary className="cursor-pointer text-[12.5px] font-semibold text-accentdeep">
+            Quais colunas o Enquadria entende?
+          </summary>
+          <div className="mt-2.5 overflow-hidden rounded-sm border border-linesoft">
+            <table className="w-full border-collapse text-[12px]">
+              <tbody>
+                {CAMPOS.map((c) => (
+                  <tr key={c.chave}>
+                    <td className="border-b border-linesoft bg-surface2 px-2.5 py-1.5 font-semibold">
+                      {c.rotulo}
+                      {c.essencial && <span className="ml-1 text-vermelho">*</span>}
+                    </td>
+                    <td className="border-b border-linesoft px-2.5 py-1.5 text-muted">{c.papel}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-[11.5px] text-muted">
+            * obrigatórios. Nomes diferentes são aceitos: &quot;documento&quot;, &quot;nome
+            empresarial&quot;, &quot;faturamento 12 meses&quot; e afins são reconhecidos
+            automaticamente.
+          </p>
+        </details>
       </div>
 
       {erro && (
@@ -179,6 +251,58 @@ export function Importador() {
             >
               {enviando ? "Gravando..." : `Gravar ${parse.linhas.length} empresas`}
             </button>
+          </div>
+
+          {/* LEITURA DO ARQUIVO — o que foi reconhecido, e de qual coluna */}
+          <div className="mt-4 rounded border border-line bg-surface p-4">
+            <div className="mb-2.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
+              Como li o seu arquivo
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {CAMPOS.map((c) => {
+                const col = parse.colunas_reconhecidas[c.chave];
+                const achou = !!col;
+                return (
+                  <span
+                    key={c.chave}
+                    title={c.papel}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] ${
+                      achou
+                        ? "border-verde bg-verdewash text-verde"
+                        : c.essencial
+                        ? "border-vermelho bg-vermelhowash text-vermelho"
+                        : "border-line bg-surface2 text-muted"
+                    }`}
+                  >
+                    <span className="font-mono text-[10px]">{achou ? "✓" : "—"}</span>
+                    {c.rotulo}
+                    {achou && (
+                      <span className="font-mono text-[10px] opacity-70">← {col}</span>
+                    )}
+                  </span>
+                );
+              })}
+            </div>
+
+            {(() => {
+              const faltando = CAMPOS.filter(
+                (c) => !parse.colunas_reconhecidas[c.chave] && !c.essencial
+              );
+              if (faltando.length === 0) return null;
+              return (
+                <p className="mt-2.5 text-[11.5px] leading-relaxed text-muted">
+                  Não encontrei {faltando.map((f) => f.rotulo).join(", ")}. Isso não impede a
+                  importação — o que der, o enriquecimento pela Receita completa. Sem RBT12, a
+                  alíquota do laudo sai estimada pelo topo da faixa.
+                </p>
+              );
+            })()}
+
+            {parse.colunas_ignoradas.length > 0 && (
+              <p className="mt-2 text-[11px] text-muted">
+                Colunas do arquivo que não usei: {parse.colunas_ignoradas.join(", ")}.
+              </p>
+            )}
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded border border-linesoft bg-linesoft md:grid-cols-6">
@@ -234,11 +358,6 @@ export function Importador() {
             )}
           </div>
 
-          {parse.colunas_ignoradas.length > 0 && (
-            <p className="mt-3 text-[11.5px] text-muted">
-              Colunas ignoradas: {parse.colunas_ignoradas.join(", ")}
-            </p>
-          )}
         </div>
       )}
     </div>
