@@ -83,6 +83,8 @@ function MotorInterno() {
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [termoNome, setTermoNome] = useState("");
   const [termoEmail, setTermoEmail] = useState("");
+  const [linkAssinatura, setLinkAssinatura] = useState<string | null>(null);
+  const [copiado, setCopiado] = useState(false);
 
   useEffect(() => {
     if (!empresaId) return;
@@ -187,7 +189,11 @@ function MotorInterno() {
       });
       const json = await resp.json();
       if (resp.ok && json.termo_id) {
-        window.open(`/doc/termo/${json.termo_id}`, "_blank");
+        if (json.link_assinatura) {
+          setLinkAssinatura(
+            typeof window !== "undefined" ? window.location.origin + json.link_assinatura : json.link_assinatura
+          );
+        }
         router.refresh();
       } else {
         alert(
@@ -422,13 +428,41 @@ function MotorInterno() {
                     disabled={ocupado === "termo" || !termoNome || !termoEmail}
                     className="whitespace-nowrap rounded-sm bg-ink px-3.5 py-2 text-[13px] font-semibold text-white disabled:opacity-40"
                   >
-                    {ocupado === "termo" ? "..." : "Gerar termo"}
+                    {ocupado === "termo" ? "..." : linkAssinatura ? "Gerar novo" : "Gerar termo"}
                   </button>
                 </div>
-                <p className="mt-2 text-[11px] text-muted">
-                  Decisão registrada: {res.saida === "S4" ? "optar pelo híbrido" : "permanecer no tradicional"}.
-                  Com ZapSign configurado, o link de assinatura é criado automaticamente.
-                </p>
+
+                {linkAssinatura ? (
+                  <div className="mt-3 rounded-sm border border-accent bg-accentwash p-3">
+                    <div className="text-[12px] font-semibold text-accentdeep">Link de assinatura — envie ao cliente</div>
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <input
+                        readOnly
+                        value={linkAssinatura}
+                        className="flex-1 rounded-sm border border-line bg-surface px-2.5 py-1.5 font-mono text-[11.5px] text-slate2 outline-none"
+                      />
+                      <button
+                        onClick={() => {
+                          navigator.clipboard?.writeText(linkAssinatura);
+                          setCopiado(true);
+                          setTimeout(() => setCopiado(false), 2000);
+                        }}
+                        className="whitespace-nowrap rounded-sm bg-ink px-3 py-1.5 text-[12px] font-semibold text-white"
+                      >
+                        {copiado ? "Copiado ✓" : "Copiar"}
+                      </button>
+                    </div>
+                    <p className="mt-1.5 text-[11px] text-muted">
+                      O cliente abre o link, confere o termo e assina (com código por e-mail, se o envio estiver ativo).
+                      Sem e-mail configurado, a assinatura sai no modo simples — igualmente válida.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-[11px] text-muted">
+                    Decisão registrada: {res.saida === "S4" ? "optar pelo híbrido" : "permanecer no tradicional"}.
+                    Ao gerar, sai o link de assinatura eletrônica para enviar ao cliente.
+                  </p>
+                )}
               </div>
             </div>
           )}

@@ -3,13 +3,16 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase-server";
 import { BotaoImprimir } from "@/components/BotaoImprimir";
 import { formatarCnpj } from "@/lib/cnpj";
+import { trilhaEmTexto } from "@/lib/esign";
 
 export default async function TermoDoc({ params }: { params: { id: string } }) {
   const supabase = createClient();
 
   const { data: termo } = await supabase
     .from("termos")
-    .select("decisao, assinante_nome, assinado_em, assinatura_url, criado_em, analise_id")
+    .select(
+      "decisao, assinante_nome, assinante_cpf, assinante_email, assinado_em, status, token, metodo, hash_documento, evidencia, carimbo, criado_em, analise_id"
+    )
     .eq("id", params.id)
     .maybeSingle();
   if (!termo) notFound();
@@ -35,21 +38,33 @@ export default async function TermoDoc({ params }: { params: { id: string } }) {
   const t = perfil?.tenants as { nome?: string; crc?: string; logo_url?: string } | null;
 
   const optou = termo.decisao === "optar";
-  const assinado = !!termo.assinado_em;
+  const assinado = termo.status === "assinado" || !!termo.assinado_em;
+  const trilha = assinado
+    ? trilhaEmTexto({
+        assinante_nome: termo.assinante_nome,
+        assinante_cpf: termo.assinante_cpf,
+        assinante_email: termo.assinante_email,
+        assinado_em: termo.assinado_em,
+        metodo: termo.metodo,
+        hash_documento: termo.hash_documento,
+        evidencia: termo.evidencia as never,
+        carimbo: termo.carimbo as never,
+      })
+    : [];
 
   return (
     <div className="doc">
       <div className="no-print mb-4 flex items-center justify-between">
         <Link href="/painel/fila" className="text-sm text-accentdeep">← voltar à fila</Link>
         <div className="flex gap-2">
-          {termo.assinatura_url && !assinado && (
+          {!assinado && termo.token && (
             <a
-              href={termo.assinatura_url}
+              href={`/assinar/${termo.token}`}
               target="_blank"
               rel="noreferrer"
               className="rounded-sm border border-line px-4 py-2 text-sm font-semibold text-accentdeep"
             >
-              Abrir link de assinatura
+              Abrir página de assinatura
             </a>
           )}
           <BotaoImprimir rotulo="Imprimir termo" />
@@ -101,14 +116,21 @@ export default async function TermoDoc({ params }: { params: { id: string } }) {
             <>Assinado eletronicamente por <b>{termo.assinante_nome}</b> em{" "}
               {new Date(termo.assinado_em!).toLocaleString("pt-BR")}.</>
           ) : (
-            <>Aguardando assinatura de <b>{termo.assinante_nome}</b>
-              {termo.assinatura_url ? " pelo link de assinatura enviado." : " — para colher presencialmente."}</>
+            <>Aguardando assinatura de <b>{termo.assinante_nome}</b> pela página de assinatura enviada
+              (ou colha presencialmente e arquive).</>
           )}
         </div>
 
+        {assinado && trilha.length > 0 && (
+          <>
+            <div className="sec">Trilha de auditoria</div>
+            <ul>{trilha.map((l, i) => <li key={i} style={{ wordBreak: "break-all" }}>{l}</li>)}</ul>
+          </>
+        )}
+
         <div className="foot">
-          Documento arquivado no dossiê da empresa. Cópia enviada ao e-mail cadastrado e ao
-          contador responsável.
+          Documento arquivado no dossiê da empresa. A validade da assinatura eletrônica decorre da
+          Lei nº 14.063/2020 e da MP nº 2.200-2/2001, com a trilha de auditoria acima.
         </div>
       </div>
 
