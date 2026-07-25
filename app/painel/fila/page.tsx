@@ -125,12 +125,20 @@ export default async function Fila() {
                     {STATUS_ROTULO[status]}
                   </td>
                   <td className="border-b border-linesoft px-2.5 py-2.5 text-right">
-                    <Link
-                      href={`/painel/motor?empresa=${e.id}`}
-                      className="rounded-sm border border-line px-3 py-1.5 text-[12.5px] font-semibold text-slate2"
-                    >
-                      {a ? "Rever" : "Analisar"}
-                    </Link>
+                    <div className="flex justify-end gap-1.5">
+                      <Link
+                        href={`/painel/empresa/${e.id}`}
+                        className="rounded-sm border border-line px-3 py-1.5 text-[12.5px] font-semibold text-muted"
+                      >
+                        Dossiê
+                      </Link>
+                      <Link
+                        href={`/painel/motor?empresa=${e.id}`}
+                        className="rounded-sm border border-line px-3 py-1.5 text-[12.5px] font-semibold text-slate2"
+                      >
+                        {a ? "Rever" : "Analisar"}
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               );

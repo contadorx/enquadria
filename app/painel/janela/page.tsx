@@ -60,7 +60,7 @@ export default async function Janela() {
         <div>
           <h1 className="text-[19px] font-bold tracking-tight">Janela de setembro de 2026</h1>
           <p className="mt-0.5 text-[13px] text-muted">
-            Efeito a partir de janeiro de 2027 · próxima janela em março de 2027
+            Efeito no 1º semestre de 2027 · a opção vale por semestre e volta a ser decidida
           </p>
         </div>
         <a
@@ -126,10 +126,16 @@ export default async function Janela() {
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-5 rounded border border-[#A5F3FC] bg-accentwash px-4 py-4">
         <p className="max-w-[52ch] text-[13.5px] text-slate2">
-          Nas próximas janelas o motor recalcula sozinho. Quando o ICMS e o ISS começarem a
-          sair do DAS, a conta vira para vários destes clientes — e você já terá o histórico deles aqui dentro.
+          A opção vale por semestre: a decisão volta. Quando o ICMS e o ISS começarem a sair do
+          DAS, a conta vira para vários destes clientes — e você já terá o histórico deles aqui
+          dentro. A <b>Revisão da carteira</b> mostra quem muda a cada novo parâmetro.
         </p>
-        <div className="whitespace-nowrap font-mono text-[16px] font-semibold text-accentdeep">março / 2027</div>
+        <Link
+          href="/painel/revisao"
+          className="whitespace-nowrap rounded-sm border border-accentdeep px-3.5 py-2 text-[13px] font-semibold text-accentdeep"
+        >
+          Ver a revisão
+        </Link>
       </div>
     </div>
   );

@@ -6,12 +6,17 @@ import { BotaoSair } from "@/components/BotaoSair";
 const JANELA = { abre: "2026-09-01", fecha: "2026-09-30" };
 
 const LINKS = [
-  { grupo: "Janela 2027", itens: [
+  { grupo: "Janela atual", itens: [
     { href: "/painel", label: "Painel" },
     { href: "/painel/importar", label: "Importar" },
     { href: "/painel/carteira", label: "Carteira" },
     { href: "/painel/fila", label: "Fila de análise" },
     { href: "/painel/janela", label: "Painel da janela" },
+  ]},
+  { grupo: "Acompanhamento", itens: [
+    { href: "/painel/radar", label: "Radar da transição" },
+    { href: "/painel/revisao", label: "Revisão da carteira" },
+    { href: "/painel/comparativo", label: "Comparativo de regimes" },
   ]},
   { grupo: "Escritório", itens: [
     { href: "/painel/planos", label: "Planos" },
