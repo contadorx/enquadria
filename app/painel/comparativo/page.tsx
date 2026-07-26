@@ -71,6 +71,8 @@ function ComparativoInterno() {
   const [margem, setMargem] = useState("15");
   const [p, setP] = useState<Premissas>(PREMISSAS_PADRAO);
   const [mostrarPremissas, setMostrarPremissas] = useState(false);
+  const [emitindo, setEmitindo] = useState(false);
+  const [bloqueio, setBloqueio] = useState<string | null>(null);
 
   useEffect(() => {
     if (!empresaId) return;
@@ -111,6 +113,28 @@ function ComparativoInterno() {
 
   const r = compararRegimes(entrada, p);
   const fr = fatorR(entrada.receita, entrada.folha);
+
+  async function emitir() {
+    setEmitindo(true);
+    setBloqueio(null);
+    try {
+      const resp = await fetch("/api/comparativo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ empresa_id: empresaId, entrada, premissas: p }),
+      });
+      const json = await resp.json();
+      if (resp.ok && json.comparativo_id) {
+        window.open(`/doc/comparativo/${json.comparativo_id}`, "_blank");
+      } else if (json.bloqueado_por_plano) {
+        setBloqueio(json.erro as string);
+      } else {
+        alert("Não foi possível emitir: " + (json.erro ?? "erro desconhecido"));
+      }
+    } finally {
+      setEmitindo(false);
+    }
+  }
   const maior = Math.max(...r.regimes.map((x) => x.total), 1);
 
   const setPct = (k: keyof Premissas) => (v: string) =>
@@ -128,15 +152,36 @@ function ComparativoInterno() {
             Simples × Presumido × Real no mundo IBS/CBS · estimativa de cenário
           </p>
         </div>
-        {empresaId && (
-          <Link
-            href={`/painel/empresa/${empresaId}`}
-            className="rounded-sm border border-line px-4 py-2 text-[13px] font-semibold text-slate2"
+        <div className="flex flex-wrap gap-2">
+          {empresaId && (
+            <Link
+              href={`/painel/empresa/${empresaId}`}
+              className="rounded-sm border border-line px-4 py-2 text-[13px] font-semibold text-slate2"
+            >
+              Ver dossiê
+            </Link>
+          )}
+          <button
+            onClick={emitir}
+            disabled={emitindo || entrada.receita <= 0}
+            className="rounded-sm bg-ink px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-40"
           >
-            Ver dossiê
-          </Link>
-        )}
+            {emitindo ? "Emitindo…" : "Emitir comparativo"}
+          </button>
+        </div>
       </div>
+
+      {bloqueio && (
+        <div className="mt-4 rounded-sm border border-accent bg-accentwash p-3.5">
+          <p className="text-[13px] text-slate2">{bloqueio}</p>
+          <a
+            href="/painel/planos"
+            className="mt-2 inline-block rounded-sm bg-accent px-3.5 py-2 text-[13px] font-bold text-[#04212B]"
+          >
+            Ver o PRO — R$ 47/mês
+          </a>
+        </div>
+      )}
 
       <div className="mt-5 grid grid-cols-1 items-start gap-5 lg:grid-cols-[340px_1fr]">
         {/* ENTRADA */}

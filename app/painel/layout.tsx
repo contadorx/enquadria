@@ -11,6 +11,8 @@ const LINKS = [
     { href: "/painel/importar", label: "Importar" },
     { href: "/painel/carteira", label: "Carteira" },
     { href: "/painel/fila", label: "Fila de análise" },
+    { href: "/painel/lote", label: "Análise em lote" },
+    { href: "/painel/entrega", label: "Entrega" },
     { href: "/painel/janela", label: "Painel da janela" },
   ]},
   { grupo: "Acompanhamento", itens: [
@@ -19,6 +21,7 @@ const LINKS = [
     { href: "/painel/comparativo", label: "Comparativo de regimes" },
   ]},
   { grupo: "Escritório", itens: [
+    { href: "/painel/equipe", label: "Equipe" },
     { href: "/painel/planos", label: "Planos" },
     { href: "/painel/config", label: "Configurações" },
   ]},

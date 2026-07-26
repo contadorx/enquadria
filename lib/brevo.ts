@@ -49,6 +49,35 @@ export async function enviarEmail(params: {
   }
 }
 
+/** convite para assinar o termo — enviado ao cliente do contador */
+export function htmlConviteAssinatura(params: {
+  empresa: string;
+  escritorio: string;
+  link: string;
+  decisao: "optar" | "permanecer";
+}): string {
+  const decisao =
+    params.decisao === "optar"
+      ? "optar pelo recolhimento de IBS/CBS por fora do DAS a partir de 2027"
+      : "permanecer no regime tradicional do Simples Nacional";
+  return `
+  <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#334155">
+    <div style="border-bottom:2px solid #0B1220;padding-bottom:12px;margin-bottom:20px">
+      <strong style="font-size:18px;color:#0B1220">${params.escritorio}</strong>
+    </div>
+    <p style="font-size:15px">Sobre a <strong>${params.empresa}</strong>:</p>
+    <p>A reforma tributária abriu uma janela que se encerra em <strong>30 de setembro</strong>.
+    Analisamos a situação da sua empresa e a recomendação é <strong>${decisao}</strong>.</p>
+    <p>Para formalizar, precisamos da sua ciência. Leva menos de um minuto:</p>
+    <p style="text-align:center;margin:26px 0">
+      <a href="${params.link}" style="background:#06B6D4;color:#04212B;font-weight:bold;text-decoration:none;padding:14px 26px;border-radius:999px;display:inline-block">Ler e assinar o termo</a>
+    </p>
+    <p style="font-size:13px;color:#64748B">A decisão vale pelo semestre e não pode ser alterada dentro do período.
+    Se preferir conversar antes de assinar, é só responder a este e-mail.</p>
+    <p style="font-size:11px;color:#94A3B8;margin-top:22px">Documento com assinatura eletrônica (Lei nº 14.063/2020). Se você não reconhece este envio, ignore esta mensagem.</p>
+  </div>`;
+}
+
 /** HTML simples do e-mail do código de assinatura */
 export function htmlCodigoOtp(codigo: string, empresa?: string): string {
   return `

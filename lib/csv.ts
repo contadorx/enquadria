@@ -21,6 +21,11 @@ export interface LinhaCarteira {
   faturamento_faixa?: string;
   /** RBT12 em R$ (receita bruta dos 12 meses) — base da alíquota efetiva */
   rbt12?: number;
+  /** quem assina o termo pela empresa */
+  contato_nome?: string;
+  /** para onde vai o link de assinatura */
+  contato_email?: string;
+  contato_telefone?: string;
 }
 
 /**
@@ -28,6 +33,13 @@ export interface LinhaCarteira {
  * como número. Devolve undefined para rótulos de faixa ("3,6mi", "acima",
  * "20–40%") ou qualquer coisa abaixo de R$ 1.000 — que não é RBT12 real.
  */
+/** aceita o e-mail só se parecer e-mail — lixo na coluna não vira convite errado */
+export function emailValido(bruto?: string | null): string | undefined {
+  const s = (bruto || "").trim().toLowerCase();
+  if (!s) return undefined;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s) ? s : undefined;
+}
+
 export function parseValorBRL(bruto?: string | null): number | undefined {
   if (!bruto) return undefined;
   let s = String(bruto).trim();
@@ -67,6 +79,9 @@ const SINONIMOS: Record<keyof LinhaCarteira, string[]> = {
   anexo: ["anexo", "anexo simples"],
   faturamento_faixa: ["faturamento", "faixa faturamento", "receita", "rbt12", "faturamento 12m"],
   rbt12: ["rbt 12", "receita bruta 12 meses", "receita bruta acumulada", "faturamento anual", "faturamento 12 meses", "rbt12 valor"],
+  contato_nome: ["contato", "responsavel", "socio", "nome do contato", "nome contato", "representante", "signatario"],
+  contato_email: ["email", "e-mail", "email contato", "e-mail do contato", "email responsavel", "mail"],
+  contato_telefone: ["telefone", "celular", "whatsapp", "fone", "tel"],
 };
 
 const semAcento = (s: string) =>
@@ -137,6 +152,9 @@ export function parsearCarteira(texto: string): ResultadoParse {
       anexo: Number.isFinite(anexo) ? anexo : undefined,
       faturamento_faixa: fatRaw || rbtRaw || undefined,
       rbt12,
+      contato_nome: pega(row, "contato_nome") || undefined,
+      contato_email: emailValido(pega(row, "contato_email")),
+      contato_telefone: pega(row, "contato_telefone") || undefined,
     });
   }
 
@@ -150,7 +168,7 @@ export function parsearCarteira(texto: string): ResultadoParse {
   };
 }
 
-export const CSV_EXEMPLO = `cnpj,razao_social,cnae_principal,porte,regime,rbt12
-11.222.333/0001-81,Distribuidora Aurora Autopeças Ltda,4649-4/08,EPP,Simples Nacional,480000
-07.526.557/0001-00,Casa Nova Restaurante ME,5611-2/01,ME,Simples Nacional,220000
-22.333.444/0001-55,Transportes Vale Verde Ltda,4930-2/02,EPP,Simples Nacional,1200000`;
+export const CSV_EXEMPLO = `cnpj,razao_social,cnae_principal,porte,regime,rbt12,contato,email
+11.222.333/0001-81,Distribuidora Aurora Autopeças Ltda,4649-4/08,EPP,Simples Nacional,480000,Marcos Aurélio,marcos@aurora.com.br
+07.526.557/0001-00,Casa Nova Restaurante ME,5611-2/01,ME,Simples Nacional,220000,Helena Prado,helena@casanova.com.br
+22.333.444/0001-55,Transportes Vale Verde Ltda,4930-2/02,EPP,Simples Nacional,1200000,Jorge Valle,jorge@valeverde.com.br`;

@@ -21,7 +21,22 @@ export interface AnaliseGravada {
   respostas: Record<string, number> | null;
   calculado_em: string | null;
   /** parâmetros congelados na análise, incluindo o dDAS efetivo (rastreabilidade) */
-  parametros?: { ddas?: DDAS; aliquota?: number; das?: number } | null;
+  parametros?: {
+    ddas?: DDAS;
+    aliquota?: number;
+    das?: number;
+    /** "lote_cnae" quando as premissas foram estimadas pelo CNAE, não informadas */
+    origem_premissas?: string;
+    confianca_premissas?: string;
+  } | null;
+}
+
+/**
+ * true quando as premissas vieram da análise em lote e ainda não foram
+ * confirmadas pelo contador. O laudo leva a assinatura dele — ele precisa saber.
+ */
+export function premissasEstimadas(a: AnaliseGravada): boolean {
+  return a.parametros?.origem_premissas === "lote_cnae";
 }
 
 export interface EmpresaLaudo {

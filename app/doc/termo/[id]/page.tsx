@@ -11,33 +11,51 @@ export default async function TermoDoc({ params }: { params: { id: string } }) {
   const { data: termo } = await supabase
     .from("termos")
     .select(
-      "decisao, assinante_nome, assinante_cpf, assinante_email, assinado_em, assinatura_status, token, metodo, hash_documento, evidencia, carimbo, criado_em, analise_id"
+      "decisao, assinante_nome, assinante_cpf, assinante_email, assinado_em, assinatura_status, token, metodo, hash_documento, evidencia, carimbo, criado_em, analise_id, snapshot"
     )
     .eq("id", params.id)
     .maybeSingle();
   if (!termo) notFound();
 
-  const { data: analise } = await supabase
-    .from("analises")
-    .select("empresa_id")
-    .eq("id", termo.analise_id)
-    .maybeSingle();
+  /**
+   * Como no laudo: o termo é prova e lê o que foi congelado na criação. O
+   * hash_documento continua sendo a garantia de integridade do que o signatário
+   * aceitou; o snapshot garante que a APRESENTAÇÃO também não mude depois.
+   */
+  const snap = termo.snapshot as {
+    decisao?: "optar" | "permanecer";
+    empresa?: { razao_social?: string; cnpj?: string };
+    escritorio?: { nome?: string; crc?: string; logo_url?: string };
+  } | null;
 
-  const { data: empresa } = analise
-    ? await supabase
-        .from("empresas")
-        .select("razao_social, cnpj")
-        .eq("id", analise.empresa_id)
-        .maybeSingle()
-    : { data: null };
+  let empresa: { razao_social?: string; cnpj?: string } | null = snap?.empresa ?? null;
+  let t: { nome?: string; crc?: string; logo_url?: string } | null = snap?.escritorio ?? null;
 
-  const { data: perfil } = await supabase
-    .from("profiles")
-    .select("tenants(nome, crc, logo_url)")
-    .maybeSingle();
-  const t = perfil?.tenants as { nome?: string; crc?: string; logo_url?: string } | null;
+  if (!empresa) {
+    const { data: analise } = await supabase
+      .from("analises")
+      .select("empresa_id")
+      .eq("id", termo.analise_id)
+      .maybeSingle();
+    const { data: emp } = analise
+      ? await supabase
+          .from("empresas")
+          .select("razao_social, cnpj")
+          .eq("id", analise.empresa_id)
+          .maybeSingle()
+      : { data: null };
+    empresa = emp;
+  }
 
-  const optou = termo.decisao === "optar";
+  if (!t?.nome) {
+    const { data: perfil } = await supabase
+      .from("profiles")
+      .select("tenants(nome, crc, logo_url)")
+      .maybeSingle();
+    t = perfil?.tenants as { nome?: string; crc?: string; logo_url?: string } | null;
+  }
+
+  const optou = (snap?.decisao ?? termo.decisao) === "optar";
   const assinado = termo.assinatura_status === "assinado" || !!termo.assinado_em;
   const trilha = assinado
     ? trilhaEmTexto({
@@ -128,6 +146,14 @@ export default async function TermoDoc({ params }: { params: { id: string } }) {
           </>
         )}
 
+        {termo.hash_documento && (
+          <div className="verif">
+            <b>Verificação de autenticidade.</b> Qualquer pessoa pode conferir este termo em{" "}
+            <b>enquadria.com.br/verificar</b>, informando o código abaixo:
+            <div className="cod">{termo.hash_documento}</div>
+          </div>
+        )}
+
         <div className="foot">
           Documento arquivado no dossiê da empresa. A validade da assinatura eletrônica decorre da
           Lei nº 14.063/2020 e da MP nº 2.200-2/2001, com a trilha de auditoria acima.
@@ -151,6 +177,8 @@ export default async function TermoDoc({ params }: { params: { id: string } }) {
         li { margin-bottom: 5px; }
         .box { border: 1px solid #CAA24D33; border-color: #0E7490; background: #ECFEFF; border-radius: 6px; padding: 12px 14px; font-size: 13px; margin-top: 8px; }
         .foot { margin-top: 26px; padding-top: 12px; border-top: 1px solid #EEF2F7; font-size: 10px; color: #64748B; }
+        .verif { margin-top: 16px; border: 1px dashed #A5F3FC; background: #ECFEFF; border-radius: 6px; padding: 9px 12px; font-size: 10.5px; color: #0E7490; line-height: 1.55; }
+        .cod { font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; color: #334155; word-break: break-all; margin-top: 4px; letter-spacing: .02em; }
         @media print {
           .no-print { display: none !important; }
           .doc { padding: 0; max-width: none; }

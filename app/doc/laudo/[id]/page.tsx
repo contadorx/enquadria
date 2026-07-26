@@ -24,29 +24,53 @@ export default async function LaudoDoc({ params }: { params: { id: string } }) {
 
   const { data: laudo } = await supabase
     .from("laudos")
-    .select("numero, emitido_em, analise_id")
+    .select("numero, emitido_em, analise_id, snapshot")
     .eq("id", params.id)
     .maybeSingle();
   if (!laudo) notFound();
 
-  const { data: analise } = await supabase
-    .from("analises")
-    .select("id, rq, ch, cl, re, fc, saida, prioridade, respostas, calculado_em, empresa_id, parametros")
-    .eq("id", laudo.analise_id)
-    .maybeSingle();
-  if (!analise) notFound();
+  /**
+   * O laudo é PROVA: lê o que foi congelado na emissão, não o estado atual da
+   * análise. Sem isso, revisar a análise reescreveria retroativamente um
+   * documento já entregue e com termo assinado. Laudos emitidos antes da
+   * migration 0014 caem no caminho antigo (leitura ao vivo).
+   */
+  const snap = laudo.snapshot as {
+    analise?: Record<string, unknown>;
+    empresa?: { razao_social?: string; cnpj?: string; anexo?: number; regime?: string };
+    escritorio?: { nome?: string; crc?: string; logo_url?: string };
+    janela?: string | null;
+  } | null;
 
-  const { data: empresa } = await supabase
-    .from("empresas")
-    .select("razao_social, cnpj, anexo, regime")
-    .eq("id", analise.empresa_id)
-    .maybeSingle();
+  let analise: Record<string, unknown> | null = snap?.analise ?? null;
+  let empresa: { razao_social?: string; cnpj?: string; anexo?: number; regime?: string } | null =
+    snap?.empresa ?? null;
+  let t: { nome?: string; crc?: string; logo_url?: string } | null = snap?.escritorio ?? null;
 
-  const { data: perfil } = await supabase
-    .from("profiles")
-    .select("tenants(nome, crc, logo_url)")
-    .maybeSingle();
-  const t = perfil?.tenants as { nome?: string; crc?: string; logo_url?: string } | null;
+  if (!analise) {
+    const { data: aoVivo } = await supabase
+      .from("analises")
+      .select("id, rq, ch, cl, re, fc, saida, prioridade, respostas, calculado_em, empresa_id, parametros")
+      .eq("id", laudo.analise_id)
+      .maybeSingle();
+    if (!aoVivo) notFound();
+    analise = aoVivo as unknown as Record<string, unknown>;
+
+    const { data: emp } = await supabase
+      .from("empresas")
+      .select("razao_social, cnpj, anexo, regime")
+      .eq("id", aoVivo.empresa_id)
+      .maybeSingle();
+    empresa = emp;
+  }
+
+  if (!t) {
+    const { data: perfil } = await supabase
+      .from("profiles")
+      .select("tenants(nome, crc, logo_url)")
+      .maybeSingle();
+    t = perfil?.tenants as { nome?: string; crc?: string; logo_url?: string } | null;
+  }
 
   const a = analise as unknown as AnaliseGravada;
   const rec = recomendacao(a);
@@ -119,7 +143,20 @@ export default async function LaudoDoc({ params }: { params: { id: string } }) {
           Estimativa de cenário construída a partir de premissas informadas pelo contador
           responsável. Alíquota de referência da CBS sujeita a ajuste de neutralidade. Este
           documento organiza a decisão; a responsabilidade técnica é do profissional que o assina.
+          {snap?.analise && (
+            <>
+              {" "}
+              Os valores acima foram registrados na emissão e não se alteram por revisões
+              posteriores da análise.
+            </>
+          )}
         </div>
+        <div className="verif">
+          <b>Verificação de autenticidade.</b> Este laudo pode ser conferido em{" "}
+          <b>enquadria.com.br/verificar</b>, informando o número{" "}
+          <b>{numero}</b> e o CNPJ da empresa.
+        </div>
+
         <div className="sign">Contador responsável</div>
       </div>
 
@@ -140,6 +177,7 @@ export default async function LaudoDoc({ params }: { params: { id: string } }) {
         li { margin-bottom: 4px; }
         .box { border: 1px solid; background: #F8FAFC; border-radius: 6px; padding: 12px 14px; font-size: 13.5px; }
         .foot { margin-top: 26px; padding-top: 12px; border-top: 1px solid #EEF2F7; font-size: 10px; color: #64748B; line-height: 1.6; }
+        .verif { margin-top: 12px; border: 1px dashed #A5F3FC; background: #ECFEFF; border-radius: 6px; padding: 9px 12px; font-size: 10.5px; color: #0E7490; line-height: 1.55; }
         .sign { margin-top: 40px; padding-top: 8px; border-top: 1px solid #334155; width: 240px; font-size: 11px; color: #64748B; }
         @media print {
           .no-print { display: none !important; }

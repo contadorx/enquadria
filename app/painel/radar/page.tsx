@@ -9,6 +9,7 @@ import {
   type ItemRadar,
   type EmpresaRadar,
 } from "@/lib/radar";
+import { MarcarLido } from "@/components/MarcarLido";
 
 /**
  * RADAR DA TRANSIÇÃO — o pulso mensal.
@@ -36,6 +37,9 @@ export default async function Radar() {
 
   const { data: analises } = await supabase.from("analises").select("empresa_id, saida");
   const porEmpresa = new Map((analises ?? []).map((a) => [a.empresa_id, a.saida]));
+
+  const { data: leituras } = await supabase.from("radar_leituras").select("item_id");
+  const lidos = new Set((leituras ?? []).map((l) => l.item_id));
 
   const empresas: EmpresaRadar[] = (empresasRaw ?? []).map((e) => ({
     id: e.id,
@@ -81,12 +85,24 @@ export default async function Radar() {
             const alvo = atingidas(item, empresas);
             const dias = diasPara(item.vigencia_em, hoje);
             const vigente = dias != null && dias <= 0;
+            const lido = lidos.has(item.id);
+            const novo = alvo.length > 0 && !lido;
 
             return (
-              <div key={item.id} className="rounded border border-line bg-surface p-4 shadow-card">
+              <div
+                key={item.id}
+                className={`rounded border bg-surface p-4 shadow-card ${
+                  novo ? "border-accent" : "border-line"
+                } ${lido ? "opacity-70" : ""}`}
+              >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
+                      {novo && (
+                        <span className="rounded-full bg-accent px-2 py-0.5 font-mono text-[9.5px] font-semibold uppercase tracking-[0.1em] text-[#04212B]">
+                          novo
+                        </span>
+                      )}
                       <span
                         className={`font-mono text-[9.5px] uppercase tracking-[0.14em] ${
                           COR_SEVERIDADE[item.severidade] ?? "text-muted"
@@ -148,9 +164,14 @@ export default async function Radar() {
                   </div>
                 )}
 
-                {item.fonte && (
-                  <p className="mt-2.5 font-mono text-[10.5px] text-muted">fonte: {item.fonte}</p>
-                )}
+                <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+                  {item.fonte ? (
+                    <p className="font-mono text-[10.5px] text-muted">fonte: {item.fonte}</p>
+                  ) : (
+                    <span />
+                  )}
+                  {alvo.length > 0 && <MarcarLido itemId={item.id} lido={lido} />}
+                </div>
               </div>
             );
           })}

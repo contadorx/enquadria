@@ -66,6 +66,14 @@ export default async function Fila() {
             {concluidas} de {fila.length} já têm decisão registrada.
           </p>
         </div>
+        {fila.length > concluidas && (
+          <Link
+            href="/painel/lote"
+            className="rounded-sm border border-accentdeep px-4 py-2.5 text-[13px] font-semibold text-accentdeep"
+          >
+            Analisar em lote
+          </Link>
+        )}
       </div>
 
       {fila.length === 0 ? (

@@ -31,11 +31,21 @@ export async function POST(req: Request) {
   // empresa da análise — alimenta o conteúdo canônico que será "assinado"
   const { data: analise } = await supabase
     .from("analises")
-    .select("empresa_id")
+    .select("empresa_id, saida, re, fc, janela_id")
     .eq("id", corpo.analise_id)
     .maybeSingle();
   const { data: empresa } = analise
     ? await supabase.from("empresas").select("razao_social, cnpj").eq("id", analise.empresa_id).maybeSingle()
+    : { data: null };
+
+  const { data: perfilT } = await supabase
+    .from("profiles")
+    .select("tenants(nome, crc, logo_url)")
+    .eq("id", user.id)
+    .maybeSingle();
+  const tt = perfilT?.tenants as { nome?: string; crc?: string; logo_url?: string } | null;
+  const { data: janela } = analise?.janela_id
+    ? await supabase.from("janelas").select("nome").eq("id", analise.janela_id).maybeSingle()
     : { data: null };
 
   const hash = sha256(
@@ -67,6 +77,19 @@ export async function POST(req: Request) {
       hash_documento: hash,
       assinatura_status: "pendente",
       assinante_email: corpo.email,
+      // congela a apresentação: o documento não muda se a análise for revisada
+      snapshot: {
+        congelado_em: new Date().toISOString(),
+        decisao: corpo.decisao,
+        clausulas: CLAUSULAS_CIENCIA,
+        empresa: {
+          razao_social: empresa?.razao_social ?? corpo.empresa ?? "empresa",
+          cnpj: empresa?.cnpj ?? "",
+        },
+        escritorio: { nome: tt?.nome, crc: tt?.crc, logo_url: tt?.logo_url },
+        analise: { saida: analise?.saida, re: analise?.re, fc: analise?.fc },
+        janela: janela?.nome ?? null,
+      },
     })
     .eq("id", termoId);
   if (upErr) return NextResponse.json({ erro: upErr.message }, { status: 500 });

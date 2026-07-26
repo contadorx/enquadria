@@ -11,6 +11,7 @@ import {
   type Saida,
 } from "@/lib/motor";
 import { anexoPorCnae } from "@/lib/triagem";
+import { NovaRodada } from "@/components/NovaRodada";
 
 /**
  * REVISÃO DA CARTEIRA — o recálculo de 1 clique da próxima janela.
@@ -215,10 +216,13 @@ export default async function Revisao() {
             </tbody>
           </table>
 
+          <NovaRodada totalAnalises={linhas.length} />
+
           <p className="mt-4 max-w-[80ch] text-[11.5px] leading-relaxed text-muted">
             Esta tela não altera nenhuma análise: ela compara o que está gravado com o que o motor
-            devolveria hoje. Para atualizar de fato uma empresa, abra o dossiê e salve a análise
-            novamente — o laudo antigo permanece como prova da decisão tomada naquela data.
+            devolveria hoje. Para atualizar uma empresa dentro desta mesma janela, abra o dossiê e
+            salve a análise novamente — os laudos já emitidos ficam congelados com os números da
+            data em que saíram e não mudam.
           </p>
         </>
       )}

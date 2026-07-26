@@ -85,6 +85,7 @@ function MotorInterno() {
   const [termoEmail, setTermoEmail] = useState("");
   const [linkAssinatura, setLinkAssinatura] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
+  const [bloqueio, setBloqueio] = useState<string | null>(null);
 
   useEffect(() => {
     if (!empresaId) return;
@@ -160,6 +161,8 @@ function MotorInterno() {
         setLaudoId(json.laudo_id);
         window.open(`/doc/laudo/${json.laudo_id}`, "_blank");
         router.refresh();
+      } else if (json.bloqueado_por_plano) {
+        setBloqueio(json.erro as string);
       } else {
         alert(
           "Não foi possível emitir o laudo: " +
@@ -387,6 +390,32 @@ function MotorInterno() {
               <div className="mb-3 font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
                 Entregáveis
               </div>
+
+              {bloqueio && (
+                <div className="mb-3 rounded-sm border border-accent bg-accentwash p-3.5">
+                  <div className="text-[13.5px] font-semibold text-ink">
+                    Você chegou ao limite do plano gratuito
+                  </div>
+                  <p className="mt-1 text-[12.5px] text-slate2">{bloqueio}</p>
+                  <p className="mt-1.5 text-[12.5px] text-slate2">
+                    Uma única análise que você cobra do cliente paga o ano inteiro de Enquadria.
+                  </p>
+                  <div className="mt-2.5 flex flex-wrap gap-2">
+                    <a
+                      href="/painel/planos"
+                      className="rounded-sm bg-accent px-3.5 py-2 text-[13px] font-bold text-[#04212B]"
+                    >
+                      Ver o PRO — R$ 47/mês
+                    </a>
+                    <button
+                      onClick={() => setBloqueio(null)}
+                      className="rounded-sm border border-line px-3.5 py-2 text-[13px] font-semibold text-slate2"
+                    >
+                      Agora não
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="flex flex-wrap gap-2">
                 <button

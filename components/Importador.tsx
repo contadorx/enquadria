@@ -15,12 +15,15 @@ const CAMPOS: { chave: keyof LinhaCarteira; rotulo: string; papel: string; essen
   { chave: "regime", rotulo: "Regime", papel: "separa quem já está fora do Simples" },
   { chave: "porte", rotulo: "Porte", papel: "identifica MEI" },
   { chave: "situacao", rotulo: "Situação", papel: "descarta empresas inativas" },
+  { chave: "contato_nome", rotulo: "Contato", papel: "quem assina o termo pela empresa" },
+  { chave: "contato_email", rotulo: "E-mail", papel: "para enviar o link de assinatura em lote" },
+  { chave: "contato_telefone", rotulo: "Telefone", papel: "acompanhamento comercial" },
 ];
 
-const MODELO_CSV = `cnpj,razao_social,cnae_principal,porte,regime,anexo,rbt12
-11.222.333/0001-81,Distribuidora Exemplo Ltda,4649-4/08,EPP,Simples Nacional,1,480000
-07.526.557/0001-00,Restaurante Exemplo ME,5611-2/01,ME,Simples Nacional,3,220000
-22.333.444/0001-55,Transportes Exemplo Ltda,4930-2/02,EPP,Simples Nacional,3,1200000`;
+const MODELO_CSV = `cnpj,razao_social,cnae_principal,porte,regime,anexo,rbt12,contato,email,telefone
+11.222.333/0001-81,Distribuidora Exemplo Ltda,4649-4/08,EPP,Simples Nacional,1,480000,Marcos Aurélio,marcos@exemplo.com.br,(11) 90000-0000
+07.526.557/0001-00,Restaurante Exemplo ME,5611-2/01,ME,Simples Nacional,3,220000,Helena Prado,helena@exemplo.com.br,(11) 90000-0001
+22.333.444/0001-55,Transportes Exemplo Ltda,4930-2/02,EPP,Simples Nacional,3,1200000,Jorge Valle,jorge@exemplo.com.br,(11) 90000-0002`;
 
 function baixarModelo() {
   const blob = new Blob(["﻿" + MODELO_CSV], { type: "text/csv;charset=utf-8;" });

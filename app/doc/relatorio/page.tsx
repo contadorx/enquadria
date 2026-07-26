@@ -40,8 +40,67 @@ export default async function Relatorio() {
   const { count: laudos } = await supabase
     .from("laudos")
     .select("id", { count: "exact", head: true });
-  const { data: termos } = await supabase.from("termos").select("assinado_em");
-  const assinados = (termos ?? []).filter((x) => x.assinado_em).length;
+  const { data: termos } = await supabase.from("termos").select("assinado_em, assinatura_status");
+  const assinados = (termos ?? []).filter(
+    (x) => x.assinatura_status === "assinado" || x.assinado_em
+  ).length;
+
+  /**
+   * ANEXO — o serviço invisível vira lista visível.
+   * O trabalho de decidir cliente a cliente não aparece em lugar nenhum quando
+   * é bem feito. Esta lista é o que o escritório mostra para justificar o
+   * honorário — e para provar, depois, que avaliou e comunicou cada empresa.
+   */
+  const { data: linhasAnalise } = await supabase
+    .from("analises")
+    .select("id, empresa_id, saida, calculado_em")
+    .order("calculado_em", { ascending: false })
+    .limit(300);
+
+  const idsAnalise = (linhasAnalise ?? []).map((a) => a.id);
+  const { data: empresasDoc } = idsAnalise.length
+    ? await supabase
+        .from("empresas")
+        .select("id, razao_social, cnpj")
+        .in("id", (linhasAnalise ?? []).map((a) => a.empresa_id))
+    : { data: [] as { id: string; razao_social: string; cnpj: string }[] };
+  const { data: laudosDoc } = idsAnalise.length
+    ? await supabase.from("laudos").select("analise_id, numero").in("analise_id", idsAnalise)
+    : { data: [] as { analise_id: string; numero: number }[] };
+  const { data: termosDoc } = idsAnalise.length
+    ? await supabase
+        .from("termos")
+        .select("analise_id, assinatura_status, assinado_em")
+        .in("analise_id", idsAnalise)
+    : { data: [] as { analise_id: string; assinatura_status: string | null; assinado_em: string | null }[] };
+
+  const mapaEmp = new Map((empresasDoc ?? []).map((e) => [e.id, e]));
+  const mapaLaudo = new Map((laudosDoc ?? []).map((l) => [l.analise_id, l]));
+  const mapaTermo = new Map((termosDoc ?? []).map((x) => [x.analise_id, x]));
+
+  const anexo = (linhasAnalise ?? [])
+    .map((a) => {
+      const e = mapaEmp.get(a.empresa_id);
+      if (!e) return null;
+      const l = mapaLaudo.get(a.id);
+      const tm = mapaTermo.get(a.id);
+      return {
+        nome: e.razao_social,
+        cnpj: e.cnpj,
+        saida: a.saida as Saida | null,
+        laudo: l?.numero ?? null,
+        assinado: tm ? tm.assinatura_status === "assinado" || !!tm.assinado_em : false,
+        temTermo: !!tm,
+      };
+    })
+    .filter(Boolean) as {
+    nome: string;
+    cnpj: string;
+    saida: Saida | null;
+    laudo: number | null;
+    assinado: boolean;
+    temTermo: boolean;
+  }[];
 
   const total = empresas?.length ?? 0;
   const fila = contagem.A + contagem.B;
@@ -106,11 +165,49 @@ export default async function Relatorio() {
           </tbody>
         </table>
 
+        {anexo.length > 0 && (
+          <>
+            <div className="sec quebra">Anexo — decisões registradas</div>
+            <p className="anexoint">
+              Relação das empresas avaliadas nesta carteira, com a recomendação registrada, o
+              laudo emitido e a ciência do cliente. É o registro do que foi analisado e comunicado.
+            </p>
+            <table className="tb anexo">
+              <thead>
+                <tr>
+                  <th>Empresa</th>
+                  <th>CNPJ</th>
+                  <th>Recomendação</th>
+                  <th className="c">Laudo</th>
+                  <th className="c">Ciência</th>
+                </tr>
+              </thead>
+              <tbody>
+                {anexo.map((x, i) => (
+                  <tr key={i}>
+                    <td>{x.nome}</td>
+                    <td className="mono">{x.cnpj}</td>
+                    <td>{x.saida ? `${x.saida} · ${SAIDAS[x.saida].titulo}` : "—"}</td>
+                    <td className="c mono">{x.laudo ? String(x.laudo).padStart(4, "0") : "—"}</td>
+                    <td className="c">
+                      {x.assinado ? "assinada" : x.temTermo ? "pendente" : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {anexo.length >= 300 && (
+              <p className="anexoint">Exibindo as 300 análises mais recentes.</p>
+            )}
+          </>
+        )}
+
         <div className="foot">
           Visão consolidada gerada pelo Enquadria a partir das análises registradas até a data.
           Cada recomendação é estimativa de cenário sob premissas informadas; a responsabilidade
           técnica é do contador responsável. Percentuais e classificações servem à priorização
-          do trabalho, não substituem apuração com dados fiscais efetivos.
+          do trabalho, não substituem apuração com dados fiscais efetivos. Cada laudo listado pode
+          ser conferido em enquadria.com.br/verificar.
         </div>
       </div>
 
@@ -126,6 +223,12 @@ export default async function Relatorio() {
         h1 { font-size: 19px; color: #0F172A; letter-spacing: -.02em; margin: 0 0 4px; }
         .meta { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #64748B; margin-bottom: 18px; }
         .sec { font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: #0E7490; margin: 20px 0 7px; }
+        .anexoint { font-size: 11.5px; color: #64748B; margin: 0 0 8px; }
+        .anexo { font-size: 11px; }
+        .anexo th, .anexo td { padding: 4px 6px; }
+        .anexo .c { text-align: center; }
+        .anexo .mono { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; }
+        @media print { .quebra { break-before: page; } }
         .tbl { width: 100%; border-collapse: collapse; }
         .tbl td { padding: 7px 0; border-bottom: 1px solid #EEF2F7; }
         .tbl .n { text-align: right; font-family: 'IBM Plex Mono', monospace; }
