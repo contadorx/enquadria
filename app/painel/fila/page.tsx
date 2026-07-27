@@ -85,75 +85,77 @@ export default async function Fila() {
           para montar a fila.
         </div>
       ) : (
-        <table className="mt-4 w-full border-collapse text-[13.5px]">
-          <thead>
-            <tr>
-              {["Empresa", "Atividade", "Faixa", "Repasse", "Estado", ""].map((h) => (
-                <th
-                  key={h}
-                  className="border-b border-line px-2.5 pb-2 text-left font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-muted"
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {fila.map((e) => {
-              const a = porEmpresa.get(e.id);
-              const f = (e.faixa ?? "B") as Faixa;
-              const status = a?.status ?? "pendente";
-              return (
-                <tr key={e.id}>
-                  <td className="border-b border-linesoft px-2.5 py-2.5">
-                    <div className="font-semibold">{e.razao_social}</div>
-                    <div className="font-mono text-[10.5px] text-muted">
-                      {mascararCnpj(e.cnpj)}
-                    </div>
-                  </td>
-                  <td className="border-b border-linesoft px-2.5 py-2.5 font-mono text-[11.5px] text-muted">
-                    {e.cnae_principal ?? "—"}
-                  </td>
-                  <td className="border-b border-linesoft px-2.5 py-2.5">
-                    <span
-                      className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${
-                        PILL[f] ?? "bg-neutrowash text-neutro"
+        <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+          <table className="mt-4 w-full border-collapse text-[13.5px] min-w-[680px] md:min-w-0">
+            <thead>
+              <tr>
+                {["Empresa", "Atividade", "Faixa", "Repasse", "Estado", ""].map((h) => (
+                  <th
+                    key={h}
+                    className="border-b border-line px-2.5 pb-2 text-left font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-muted"
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {fila.map((e) => {
+                const a = porEmpresa.get(e.id);
+                const f = (e.faixa ?? "B") as Faixa;
+                const status = a?.status ?? "pendente";
+                return (
+                  <tr key={e.id}>
+                    <td className="border-b border-linesoft px-2.5 py-2.5">
+                      <div className="font-semibold">{e.razao_social}</div>
+                      <div className="font-mono text-[10.5px] text-muted">
+                        {mascararCnpj(e.cnpj)}
+                      </div>
+                    </td>
+                    <td className="border-b border-linesoft px-2.5 py-2.5 font-mono text-[11.5px] text-muted">
+                      {e.cnae_principal ?? "—"}
+                    </td>
+                    <td className="border-b border-linesoft px-2.5 py-2.5">
+                      <span
+                        className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${
+                          PILL[f] ?? "bg-neutrowash text-neutro"
+                        }`}
+                      >
+                        {e.prioridade_maxima ? "Prioridade" : f === "A" ? "Urgente" : "Avaliar"}
+                      </span>
+                    </td>
+                    <td className="border-b border-linesoft px-2.5 py-2.5 text-right font-mono">
+                      {a?.re != null ? pct(Number(a.re)) : "—"}
+                    </td>
+                    <td
+                      className={`border-b border-linesoft px-2.5 py-2.5 font-mono text-[11px] ${
+                        STATUS_COR[status]
                       }`}
                     >
-                      {e.prioridade_maxima ? "Prioridade" : f === "A" ? "Urgente" : "Avaliar"}
-                    </span>
-                  </td>
-                  <td className="border-b border-linesoft px-2.5 py-2.5 text-right font-mono">
-                    {a?.re != null ? pct(Number(a.re)) : "—"}
-                  </td>
-                  <td
-                    className={`border-b border-linesoft px-2.5 py-2.5 font-mono text-[11px] ${
-                      STATUS_COR[status]
-                    }`}
-                  >
-                    {STATUS_ROTULO[status]}
-                  </td>
-                  <td className="border-b border-linesoft px-2.5 py-2.5 text-right">
-                    <div className="flex justify-end gap-1.5">
-                      <Link
-                        href={`/painel/empresa/${e.id}`}
-                        className="rounded-sm border border-line px-3 py-1.5 text-[12.5px] font-semibold text-muted"
-                      >
-                        Dossiê
-                      </Link>
-                      <Link
-                        href={`/painel/motor?empresa=${e.id}`}
-                        className="rounded-sm border border-line px-3 py-1.5 text-[12.5px] font-semibold text-slate2"
-                      >
-                        {a ? "Rever" : "Analisar"}
-                      </Link>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                      {STATUS_ROTULO[status]}
+                    </td>
+                    <td className="border-b border-linesoft px-2.5 py-2.5 text-right">
+                      <div className="flex justify-end gap-1.5">
+                        <Link
+                          href={`/painel/empresa/${e.id}`}
+                          className="rounded-sm border border-line px-3 py-1.5 text-[12.5px] font-semibold text-muted"
+                        >
+                          Dossiê
+                        </Link>
+                        <Link
+                          href={`/painel/motor?empresa=${e.id}`}
+                          className="rounded-sm border border-line px-3 py-1.5 text-[12.5px] font-semibold text-slate2"
+                        >
+                          {a ? "Rever" : "Analisar"}
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

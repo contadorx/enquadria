@@ -156,65 +156,67 @@ export default async function Revisao() {
             </div>
           )}
 
-          <table className="mt-4 w-full border-collapse text-[13.5px]">
-            <thead>
-              <tr>
-                {["Empresa", "Antes", "Agora", "Repasse", "Variação", ""].map((h) => (
-                  <th
-                    key={h}
-                    className="border-b border-line px-2.5 pb-2 text-left font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-muted"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {ordenadas.map((l) => (
-                <tr key={l.empresaId} className={l.mudou ? "bg-accentwash/40" : ""}>
-                  <td className="border-b border-linesoft px-2.5 py-2.5">
-                    <div className="font-semibold">{l.nome}</div>
-                    <div className="font-mono text-[10.5px] text-muted">
-                      {mascararCnpj(l.cnpj)}
-                      {l.semRbt12 && <span className="ml-1.5 text-amarelo">· sem RBT12</span>}
-                    </div>
-                  </td>
-                  <td className="border-b border-linesoft px-2.5 py-2.5">
-                    <span className={`font-mono text-[11.5px] ${l.antes ? COR_SAIDA[SAIDAS[l.antes].cor] : "text-muted"}`}>
-                      {l.antes ?? "—"}
-                    </span>
-                  </td>
-                  <td className="border-b border-linesoft px-2.5 py-2.5">
-                    <span className={`font-mono text-[11.5px] font-semibold ${COR_SAIDA[SAIDAS[l.depois].cor]}`}>
-                      {l.depois}
-                    </span>
-                    {l.mudou && <span className="ml-1.5 font-mono text-[10px] text-accentdeep">mudou</span>}
-                  </td>
-                  <td className="border-b border-linesoft px-2.5 py-2.5 text-right font-mono text-[12px]">
-                    {l.reDepois != null ? pct(l.reDepois) : "—"}
-                  </td>
-                  <td className="border-b border-linesoft px-2.5 py-2.5 text-right font-mono text-[12px]">
-                    {l.deltaRe == null ? (
-                      "—"
-                    ) : (
-                      <span className={l.deltaRe > 0 ? "text-vermelho" : l.deltaRe < 0 ? "text-verde" : "text-muted"}>
-                        {l.deltaRe > 0 ? "+" : ""}
-                        {(l.deltaRe * 100).toFixed(1).replace(".", ",")} p.p.
-                      </span>
-                    )}
-                  </td>
-                  <td className="border-b border-linesoft px-2.5 py-2.5 text-right">
-                    <Link
-                      href={`/painel/empresa/${l.empresaId}`}
-                      className="rounded-sm border border-line px-3 py-1.5 text-[12.5px] font-semibold text-slate2"
+          <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+            <table className="mt-4 w-full border-collapse text-[13.5px] min-w-[680px] md:min-w-0">
+              <thead>
+                <tr>
+                  {["Empresa", "Antes", "Agora", "Repasse", "Variação", ""].map((h) => (
+                    <th
+                      key={h}
+                      className="border-b border-line px-2.5 pb-2 text-left font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-muted"
                     >
-                      Dossiê
-                    </Link>
-                  </td>
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {ordenadas.map((l) => (
+                  <tr key={l.empresaId} className={l.mudou ? "bg-accentwash/40" : ""}>
+                    <td className="border-b border-linesoft px-2.5 py-2.5">
+                      <div className="font-semibold">{l.nome}</div>
+                      <div className="font-mono text-[10.5px] text-muted">
+                        {mascararCnpj(l.cnpj)}
+                        {l.semRbt12 && <span className="ml-1.5 text-amarelo">· sem RBT12</span>}
+                      </div>
+                    </td>
+                    <td className="border-b border-linesoft px-2.5 py-2.5">
+                      <span className={`font-mono text-[11.5px] ${l.antes ? COR_SAIDA[SAIDAS[l.antes].cor] : "text-muted"}`}>
+                        {l.antes ?? "—"}
+                      </span>
+                    </td>
+                    <td className="border-b border-linesoft px-2.5 py-2.5">
+                      <span className={`font-mono text-[11.5px] font-semibold ${COR_SAIDA[SAIDAS[l.depois].cor]}`}>
+                        {l.depois}
+                      </span>
+                      {l.mudou && <span className="ml-1.5 font-mono text-[10px] text-accentdeep">mudou</span>}
+                    </td>
+                    <td className="border-b border-linesoft px-2.5 py-2.5 text-right font-mono text-[12px]">
+                      {l.reDepois != null ? pct(l.reDepois) : "—"}
+                    </td>
+                    <td className="border-b border-linesoft px-2.5 py-2.5 text-right font-mono text-[12px]">
+                      {l.deltaRe == null ? (
+                        "—"
+                      ) : (
+                        <span className={l.deltaRe > 0 ? "text-vermelho" : l.deltaRe < 0 ? "text-verde" : "text-muted"}>
+                          {l.deltaRe > 0 ? "+" : ""}
+                          {(l.deltaRe * 100).toFixed(1).replace(".", ",")} p.p.
+                        </span>
+                      )}
+                    </td>
+                    <td className="border-b border-linesoft px-2.5 py-2.5 text-right">
+                      <Link
+                        href={`/painel/empresa/${l.empresaId}`}
+                        className="rounded-sm border border-line px-3 py-1.5 text-[12.5px] font-semibold text-slate2"
+                      >
+                        Dossiê
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           <NovaRodada totalAnalises={linhas.length} />
 

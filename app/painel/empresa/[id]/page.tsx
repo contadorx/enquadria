@@ -148,23 +148,25 @@ export default async function Dossie({ params }: { params: { id: string } }) {
             </span>
           </div>
           <p className="text-[13px] text-slate2">{empresa.motivo_triagem}</p>
-          <table className="mt-3 w-full border-collapse text-[13px]">
-            <tbody>
-              {[
-                ["Regime", empresa.regime ?? "—"],
-                ["Porte", empresa.porte ?? "—"],
-                ["Situação", empresa.situacao ?? "—"],
-                ["RBT12", empresa.rbt12 != null ? moeda(Number(empresa.rbt12)) : "não informada"],
-                ["Contato", empresa.contato_nome ?? "não informado"],
-                ["E-mail", empresa.contato_email ?? "não informado"],
-              ].map(([k, v]) => (
-                <tr key={k}>
-                  <td className="border-b border-linesoft py-1.5 text-muted">{k}</td>
-                  <td className="border-b border-linesoft py-1.5 text-right font-mono text-[12px]">{v}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+            <table className="mt-3 w-full border-collapse text-[13px] min-w-[600px] md:min-w-0">
+              <tbody>
+                {[
+                  ["Regime", empresa.regime ?? "—"],
+                  ["Porte", empresa.porte ?? "—"],
+                  ["Situação", empresa.situacao ?? "—"],
+                  ["RBT12", empresa.rbt12 != null ? moeda(Number(empresa.rbt12)) : "não informada"],
+                  ["Contato", empresa.contato_nome ?? "não informado"],
+                  ["E-mail", empresa.contato_email ?? "não informado"],
+                ].map(([k, v]) => (
+                  <tr key={k}>
+                    <td className="border-b border-linesoft py-1.5 text-muted">{k}</td>
+                    <td className="border-b border-linesoft py-1.5 text-right font-mono text-[12px]">{v}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           <EditarEmpresa
             empresaId={empresa.id}
@@ -198,21 +200,23 @@ export default async function Dossie({ params }: { params: { id: string } }) {
                 </div>
                 <div className="bg-surface px-3.5 py-3 text-[13px] text-slate2">{saida.descricao}</div>
               </div>
-              <table className="mt-3 w-full border-collapse text-[13px]">
-                <tbody>
-                  {[
-                    ["Repasse necessário", a.re != null ? pct(Number(a.re)) : "—"],
-                    ["Ganho do comprador", a.fc != null ? pct(Number(a.fc)) : "—"],
-                    ["Receita qualificada", a.rq != null ? pct(Number(a.rq)) : "—"],
-                    ["Calculada em", a.calculado_em ? new Date(a.calculado_em).toLocaleDateString("pt-BR") : "—"],
-                  ].map(([k, v]) => (
-                    <tr key={k}>
-                      <td className="border-b border-linesoft py-1.5 text-muted">{k}</td>
-                      <td className="border-b border-linesoft py-1.5 text-right font-mono text-[12px]">{v}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+                <table className="mt-3 w-full border-collapse text-[13px] min-w-[600px] md:min-w-0">
+                  <tbody>
+                    {[
+                      ["Repasse necessário", a.re != null ? pct(Number(a.re)) : "—"],
+                      ["Ganho do comprador", a.fc != null ? pct(Number(a.fc)) : "—"],
+                      ["Receita qualificada", a.rq != null ? pct(Number(a.rq)) : "—"],
+                      ["Calculada em", a.calculado_em ? new Date(a.calculado_em).toLocaleDateString("pt-BR") : "—"],
+                    ].map(([k, v]) => (
+                      <tr key={k}>
+                        <td className="border-b border-linesoft py-1.5 text-muted">{k}</td>
+                        <td className="border-b border-linesoft py-1.5 text-right font-mono text-[12px]">{v}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
               {a.prioridade && (
                 <div className="mt-2.5 rounded-sm bg-vermelhowash px-2.5 py-2 font-mono text-[10.5px] tracking-wide text-vermelho">
                   PRIORIDADE — a decisão saiu do campo fiscal.

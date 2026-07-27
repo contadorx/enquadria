@@ -1,10 +1,23 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Enquadria — decisão de enquadramento IBS/CBS",
   description:
     "Triagem da carteira, decisão de regime e prova documental para a janela de opção do Simples Nacional.",
+};
+
+/**
+ * Declarado explicitamente por dois motivos: `viewportFit: "cover"` é o que faz
+ * o `env(safe-area-inset-bottom)` da barra inferior valer alguma coisa no
+ * iPhone com faixa inferior, e o themeColor pinta a barra do navegador com o
+ * mesmo tom do cabeçalho em vez do cinza padrão.
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#0B1220",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

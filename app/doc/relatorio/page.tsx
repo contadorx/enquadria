@@ -28,7 +28,7 @@ export default async function Relatorio() {
   }
 
   const { data: analises } = await supabase.from("analises").select("saida, status");
-  const porSaida: Record<string, number> = { S1: 0, S2: 0, S3: 0, S4: 0 };
+  const porSaida: Record<string, number> = { S1: 0, S2: 0, S3: 0, S4: 0, S5: 0 };
   for (const a of analises ?? []) {
     const s = a.saida as Saida | null;
     if (s) porSaida[s]++;
@@ -156,7 +156,7 @@ export default async function Relatorio() {
         <div className="sec">Recomendações emitidas</div>
         <table className="tbl">
           <tbody>
-            {(["S4", "S3", "S2", "S1"] as Saida[]).map((s) => (
+            {(["S5", "S4", "S3", "S2", "S1"] as Saida[]).map((s) => (
               <tr key={s}>
                 <td>{s} · {SAIDAS[s].titulo}</td>
                 <td className="n">{porSaida[s]}</td>

@@ -2,30 +2,10 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
 import { Regua } from "@/components/Regua";
 import { BotaoSair } from "@/components/BotaoSair";
+import { NavMobile } from "@/components/NavMobile";
+import { NAV } from "@/lib/nav";
 
 const JANELA = { abre: "2026-09-01", fecha: "2026-09-30" };
-
-const LINKS = [
-  { grupo: "Janela atual", itens: [
-    { href: "/painel", label: "Painel" },
-    { href: "/painel/importar", label: "Importar" },
-    { href: "/painel/carteira", label: "Carteira" },
-    { href: "/painel/fila", label: "Fila de análise" },
-    { href: "/painel/lote", label: "Análise em lote" },
-    { href: "/painel/entrega", label: "Entrega" },
-    { href: "/painel/janela", label: "Painel da janela" },
-  ]},
-  { grupo: "Acompanhamento", itens: [
-    { href: "/painel/radar", label: "Radar da transição" },
-    { href: "/painel/revisao", label: "Revisão da carteira" },
-    { href: "/painel/comparativo", label: "Comparativo de regimes" },
-  ]},
-  { grupo: "Escritório", itens: [
-    { href: "/painel/equipe", label: "Equipe" },
-    { href: "/painel/planos", label: "Planos" },
-    { href: "/painel/config", label: "Configurações" },
-  ]},
-];
 
 export default async function PainelLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
@@ -43,18 +23,40 @@ export default async function PainelLayout({ children }: { children: React.React
     if (nome) escritorio = nome;
   }
 
+  // calculado aqui, no servidor: o NavMobile é componente de cliente e usar
+  // Date lá dentro faria servidor e navegador renderizarem valores diferentes
+  const ini = new Date(JANELA.abre).getTime();
+  const fim = new Date(JANELA.fecha).getTime();
+  const agora = Date.now();
+  const diasRestantes = Math.max(Math.ceil((fim - agora) / 86400000), 0);
+  const posDaJanela = Math.round(Math.min(Math.max((agora - ini) / (fim - ini), 0), 1) * 100);
+
   return (
     <div className="min-h-screen">
-      <header className="flex items-center gap-5 bg-ink px-5 py-3 text-white">
-        <div className="text-[15px] font-extrabold tracking-tight">
-          ENQUADRIA<span className="text-accentbright">.</span>
+      {/* No desktop, marca + régua. No celular essa barra some inteira: a régua
+          não cabe em 390px e duas faixas escuras empilhadas comiam 90px de tela.
+          O celular ganha uma barra única e fixa, montada no NavMobile. */}
+      <header className="hidden bg-ink text-white md:block">
+        <div className="flex items-center gap-5 px-5 py-3">
+          <div className="text-[15px] font-extrabold tracking-tight">
+            ENQUADRIA<span className="text-accentbright">.</span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <Regua abre={JANELA.abre} fecha={JANELA.fecha} />
+          </div>
         </div>
-        <Regua abre={JANELA.abre} fecha={JANELA.fecha} />
       </header>
+
+      <NavMobile
+        escritorio={escritorio}
+        email={user?.email}
+        dias={diasRestantes}
+        posPct={posDaJanela}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-[186px_1fr]">
         <aside className="hidden border-r border-linesoft bg-surface2 py-4 md:block">
-          {LINKS.map((g) => (
+          {NAV.map((g) => (
             <div key={g.grupo}>
               <div className="px-[18px] py-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-slate-400">
                 {g.grupo}
@@ -77,7 +79,8 @@ export default async function PainelLayout({ children }: { children: React.React
           </div>
         </aside>
 
-        <main className="min-w-0 px-6 py-6">{children}</main>
+        {/* pb-20 no celular: a barra inferior não pode cobrir o fim do conteúdo */}
+        <main className="min-w-0 px-4 pb-20 pt-5 md:px-6 md:pb-6 md:pt-6">{children}</main>
       </div>
     </div>
   );

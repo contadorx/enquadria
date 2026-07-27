@@ -282,106 +282,108 @@ export default function Entrega() {
         </button>
       )}
 
-      <table className="mt-4 w-full border-collapse text-[13.5px]">
-        <thead>
-          <tr>
-            {["Empresa", "Contato", "Decisão", "Etapa", "Documentos"].map((h) => (
-              <th
-                key={h}
-                className="border-b border-line px-2.5 pb-2 text-left font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-muted"
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {visiveis.map((l) => (
-            <tr key={l.empresa_id}>
-              <td className="border-b border-linesoft px-2.5 py-2.5">
-                <Link href={`/painel/empresa/${l.empresa_id}`} className="font-semibold text-ink hover:text-accentdeep">
-                  {l.nome}
-                </Link>
-                <div className="font-mono text-[10.5px] text-muted">{mascararCnpj(l.cnpj)}</div>
-              </td>
-              <td className="border-b border-linesoft px-2.5 py-2.5 text-[12px]">
-                {l.contato_email ? (
-                  <>
-                    <div>{l.contato_nome}</div>
-                    <div className="font-mono text-[10.5px] text-muted">{l.contato_email}</div>
-                  </>
-                ) : (
-                  <span className="text-amarelo">sem contato</span>
-                )}
-              </td>
-              <td className="border-b border-linesoft px-2.5 py-2.5">
-                {l.saida ? (
-                  <span className="font-mono text-[11.5px]">
-                    {l.saida}{" "}
-                    <span className="text-[11px] text-muted">
-                      {SAIDAS[l.saida].titulo.split(" —")[0]}
-                    </span>
-                  </span>
-                ) : (
-                  <span className="text-[12px] text-muted">—</span>
-                )}
-              </td>
-              <td className="border-b border-linesoft px-2.5 py-2.5">
-                <span
-                  className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${COR_ETAPA[l.etapa]}`}
+      <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+        <table className="mt-4 w-full border-collapse text-[13.5px] min-w-[600px] md:min-w-0">
+          <thead>
+            <tr>
+              {["Empresa", "Contato", "Decisão", "Etapa", "Documentos"].map((h) => (
+                <th
+                  key={h}
+                  className="border-b border-line px-2.5 pb-2 text-left font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-muted"
                 >
-                  {ROTULO_ETAPA[l.etapa]}
-                </span>
-                {l.assinado_em && (
-                  <div className="mt-0.5 font-mono text-[10px] text-muted">
-                    {new Date(l.assinado_em).toLocaleDateString("pt-BR")}
-                  </div>
-                )}
-              </td>
-              <td className="border-b border-linesoft px-2.5 py-2.5">
-                <div className="flex flex-wrap justify-end gap-1.5">
-                  {l.laudo_id && (
-                    <a
-                      href={`/doc/laudo/${l.laudo_id}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-sm border border-line px-2.5 py-1 text-[11.5px] font-semibold text-slate2"
-                    >
-                      Laudo {String(l.numero).padStart(4, "0")}
-                    </a>
-                  )}
-                  {l.token && !l.assinado && (
-                    <button
-                      onClick={() => copiar(l.token!)}
-                      className="rounded-sm border border-accentdeep px-2.5 py-1 text-[11.5px] font-semibold text-accentdeep"
-                    >
-                      {copiado === l.token ? "Copiado ✓" : "Copiar link"}
-                    </button>
-                  )}
-                  {l.termo_id && (
-                    <a
-                      href={`/doc/termo/${l.termo_id}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-sm border border-line px-2.5 py-1 text-[11.5px] font-semibold text-slate2"
-                    >
-                      Termo
-                    </a>
-                  )}
-                  {!l.analise_id && (
-                    <Link
-                      href={`/painel/motor?empresa=${l.empresa_id}`}
-                      className="rounded-sm border border-line px-2.5 py-1 text-[11.5px] font-semibold text-slate2"
-                    >
-                      Analisar
-                    </Link>
-                  )}
-                </div>
-              </td>
+                  {h}
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {visiveis.map((l) => (
+              <tr key={l.empresa_id}>
+                <td className="border-b border-linesoft px-2.5 py-2.5">
+                  <Link href={`/painel/empresa/${l.empresa_id}`} className="font-semibold text-ink hover:text-accentdeep">
+                    {l.nome}
+                  </Link>
+                  <div className="font-mono text-[10.5px] text-muted">{mascararCnpj(l.cnpj)}</div>
+                </td>
+                <td className="border-b border-linesoft px-2.5 py-2.5 text-[12px]">
+                  {l.contato_email ? (
+                    <>
+                      <div>{l.contato_nome}</div>
+                      <div className="font-mono text-[10.5px] text-muted">{l.contato_email}</div>
+                    </>
+                  ) : (
+                    <span className="text-amarelo">sem contato</span>
+                  )}
+                </td>
+                <td className="border-b border-linesoft px-2.5 py-2.5">
+                  {l.saida ? (
+                    <span className="font-mono text-[11.5px]">
+                      {l.saida}{" "}
+                      <span className="text-[11px] text-muted">
+                        {SAIDAS[l.saida].titulo.split(" —")[0]}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="text-[12px] text-muted">—</span>
+                  )}
+                </td>
+                <td className="border-b border-linesoft px-2.5 py-2.5">
+                  <span
+                    className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${COR_ETAPA[l.etapa]}`}
+                  >
+                    {ROTULO_ETAPA[l.etapa]}
+                  </span>
+                  {l.assinado_em && (
+                    <div className="mt-0.5 font-mono text-[10px] text-muted">
+                      {new Date(l.assinado_em).toLocaleDateString("pt-BR")}
+                    </div>
+                  )}
+                </td>
+                <td className="border-b border-linesoft px-2.5 py-2.5">
+                  <div className="flex flex-wrap justify-end gap-1.5">
+                    {l.laudo_id && (
+                      <a
+                        href={`/doc/laudo/${l.laudo_id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-sm border border-line px-2.5 py-1 text-[11.5px] font-semibold text-slate2"
+                      >
+                        Laudo {String(l.numero).padStart(4, "0")}
+                      </a>
+                    )}
+                    {l.token && !l.assinado && (
+                      <button
+                        onClick={() => copiar(l.token!)}
+                        className="rounded-sm border border-accentdeep px-2.5 py-1 text-[11.5px] font-semibold text-accentdeep"
+                      >
+                        {copiado === l.token ? "Copiado ✓" : "Copiar link"}
+                      </button>
+                    )}
+                    {l.termo_id && (
+                      <a
+                        href={`/doc/termo/${l.termo_id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-sm border border-line px-2.5 py-1 text-[11.5px] font-semibold text-slate2"
+                      >
+                        Termo
+                      </a>
+                    )}
+                    {!l.analise_id && (
+                      <Link
+                        href={`/painel/motor?empresa=${l.empresa_id}`}
+                        className="rounded-sm border border-line px-2.5 py-1 text-[11.5px] font-semibold text-slate2"
+                      >
+                        Analisar
+                      </Link>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <p className="mt-4 max-w-[80ch] text-[11px] leading-relaxed text-muted">
         O envio automático usa o e-mail cadastrado de cada empresa. Sem serviço de e-mail

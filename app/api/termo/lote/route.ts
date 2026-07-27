@@ -1,3 +1,4 @@
+import { ehOptar } from "@/lib/motor";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { conteudoCanonico, sha256, novoToken, CLAUSULAS_CIENCIA } from "@/lib/esign";
@@ -91,7 +92,7 @@ export async function POST(req: Request) {
       continue;
     }
 
-    const decisao: "optar" | "permanecer" = a.saida === "S4" ? "optar" : "permanecer";
+    const decisao: "optar" | "permanecer" = ehOptar(a.saida) ? "optar" : "permanecer";
     const hash = sha256(
       conteudoCanonico({
         empresa: e.razao_social,

@@ -160,37 +160,39 @@ export default function Equipe() {
         <div className="mb-2 text-[15px] font-bold">
           Na equipe <span className="font-normal text-muted">({membros.length})</span>
         </div>
-        <table className="w-full border-collapse text-[13.5px]">
-          <thead>
-            <tr>
-              {["Pessoa", "E-mail", "Papel"].map((h) => (
-                <th
-                  key={h}
-                  className="border-b border-line px-2.5 pb-2 text-left font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-muted"
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {membros.map((m) => (
-              <tr key={m.id}>
-                <td className="border-b border-linesoft px-2.5 py-2.5 font-semibold">
-                  {m.nome ?? "—"}
-                </td>
-                <td className="border-b border-linesoft px-2.5 py-2.5 font-mono text-[12px] text-muted">
-                  {m.email}
-                </td>
-                <td className="border-b border-linesoft px-2.5 py-2.5">
-                  <span className="rounded-full bg-surface2 px-2.5 py-1 text-[11.5px] font-semibold text-slate2">
-                    {ROTULO_PAPEL[m.role] ?? m.role}
-                  </span>
-                </td>
+        <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+          <table className="w-full border-collapse text-[13.5px] min-w-[380px] md:min-w-0">
+            <thead>
+              <tr>
+                {["Pessoa", "E-mail", "Papel"].map((h) => (
+                  <th
+                    key={h}
+                    className="border-b border-line px-2.5 pb-2 text-left font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-muted"
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {membros.map((m) => (
+                <tr key={m.id}>
+                  <td className="border-b border-linesoft px-2.5 py-2.5 font-semibold">
+                    {m.nome ?? "—"}
+                  </td>
+                  <td className="border-b border-linesoft px-2.5 py-2.5 font-mono text-[12px] text-muted">
+                    {m.email}
+                  </td>
+                  <td className="border-b border-linesoft px-2.5 py-2.5">
+                    <span className="rounded-full bg-surface2 px-2.5 py-1 text-[11.5px] font-semibold text-slate2">
+                      {ROTULO_PAPEL[m.role] ?? m.role}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {convites.length > 0 && (
@@ -198,32 +200,34 @@ export default function Equipe() {
           <div className="mb-2 text-[15px] font-bold">
             Convites pendentes <span className="font-normal text-muted">({convites.length})</span>
           </div>
-          <table className="w-full border-collapse text-[13.5px]">
-            <tbody>
-              {convites.map((c) => (
-                <tr key={c.id}>
-                  <td className="border-b border-linesoft px-2.5 py-2.5 font-mono text-[12px]">
-                    {c.email}
-                  </td>
-                  <td className="border-b border-linesoft px-2.5 py-2.5 text-[12px] text-muted">
-                    {ROTULO_PAPEL[c.papel] ?? c.papel} · expira em{" "}
-                    {new Date(c.expira_em).toLocaleDateString("pt-BR")}
-                  </td>
-                  <td className="border-b border-linesoft px-2.5 py-2.5 text-right">
-                    {podeConvidar && (
-                      <button
-                        onClick={() => revogar(c.id)}
-                        disabled={ocupado}
-                        className="rounded-sm border border-line px-3 py-1.5 text-[12.5px] font-semibold text-slate2 disabled:opacity-40"
-                      >
-                        Revogar
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+            <table className="w-full border-collapse text-[13.5px] min-w-[600px] md:min-w-0">
+              <tbody>
+                {convites.map((c) => (
+                  <tr key={c.id}>
+                    <td className="border-b border-linesoft px-2.5 py-2.5 font-mono text-[12px]">
+                      {c.email}
+                    </td>
+                    <td className="border-b border-linesoft px-2.5 py-2.5 text-[12px] text-muted">
+                      {ROTULO_PAPEL[c.papel] ?? c.papel} · expira em{" "}
+                      {new Date(c.expira_em).toLocaleDateString("pt-BR")}
+                    </td>
+                    <td className="border-b border-linesoft px-2.5 py-2.5 text-right">
+                      {podeConvidar && (
+                        <button
+                          onClick={() => revogar(c.id)}
+                          disabled={ocupado}
+                          className="rounded-sm border border-line px-3 py-1.5 text-[12.5px] font-semibold text-slate2 disabled:opacity-40"
+                        >
+                          Revogar
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

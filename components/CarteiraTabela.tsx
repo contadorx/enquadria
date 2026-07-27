@@ -152,68 +152,70 @@ export function CarteiraTabela({ empresas }: { empresas: EmpresaCarteira[] }) {
           )}
         </div>
       ) : (
-        <table className="mt-2 w-full border-collapse text-[13.5px]">
-          <thead>
-            <tr>
-              {["Empresa", "CNAE", "RBT12", "Faixa", "Por quê", ""].map((h) => (
-                <th
-                  key={h}
-                  className="border-b border-line px-2.5 pb-2 text-left font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-muted"
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {lista.map((e) => {
-              const f = (e.faixa ?? "C") as Faixa;
-              return (
-                <tr key={e.id}>
-                  <td className="border-b border-linesoft px-2.5 py-2.5">
-                    <div className="font-semibold">{e.razao_social}</div>
-                    <div className="font-mono text-[10.5px] text-muted">{formatarCnpj(e.cnpj)}</div>
-                  </td>
-                  <td className="border-b border-linesoft px-2.5 py-2.5 font-mono text-[12px]">
-                    {e.cnae_principal ?? "—"}
-                  </td>
-                  <td className="border-b border-linesoft px-2.5 py-2.5 font-mono text-[11.5px]">
-                    {e.rbt12 != null ? (
-                      Number(e.rbt12).toLocaleString("pt-BR", {
-                        style: "currency",
-                        currency: "BRL",
-                        maximumFractionDigits: 0,
-                      })
-                    ) : (
-                      <span className="text-amarelo">informar</span>
-                    )}
-                  </td>
-                  <td className="border-b border-linesoft px-2.5 py-2.5">
-                    <span
-                      className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${PILL[f]}`}
-                    >
-                      {ROTULO_FAIXA[f]}
-                    </span>
-                    {e.prioridade_maxima && (
-                      <span className="ml-1.5 font-mono text-[10px] text-vermelho">· prioridade</span>
-                    )}
-                  </td>
-                  <td className="border-b border-linesoft px-2.5 py-2.5 text-[12px] text-muted">
-                    {e.motivo_triagem}
-                  </td>
-                  <td className="border-b border-linesoft px-2.5 py-2.5 text-right">
-                    <Link
-                      href={`/painel/empresa/${e.id}`}
-                      className="whitespace-nowrap rounded-sm border border-line px-3 py-1.5 text-[12.5px] font-semibold text-slate2"
-                    >
-                      Dossiê
-                    </Link>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+          <table className="mt-2 w-full border-collapse text-[13.5px] min-w-[680px] md:min-w-0">
+            <thead>
+              <tr>
+                {["Empresa", "CNAE", "RBT12", "Faixa", "Por quê", ""].map((h) => (
+                  <th
+                    key={h}
+                    className="border-b border-line px-2.5 pb-2 text-left font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-muted"
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {lista.map((e) => {
+                const f = (e.faixa ?? "C") as Faixa;
+                return (
+                  <tr key={e.id}>
+                    <td className="border-b border-linesoft px-2.5 py-2.5">
+                      <div className="font-semibold">{e.razao_social}</div>
+                      <div className="font-mono text-[10.5px] text-muted">{formatarCnpj(e.cnpj)}</div>
+                    </td>
+                    <td className="border-b border-linesoft px-2.5 py-2.5 font-mono text-[12px]">
+                      {e.cnae_principal ?? "—"}
+                    </td>
+                    <td className="border-b border-linesoft px-2.5 py-2.5 font-mono text-[11.5px]">
+                      {e.rbt12 != null ? (
+                        Number(e.rbt12).toLocaleString("pt-BR", {
+                          style: "currency",
+                          currency: "BRL",
+                          maximumFractionDigits: 0,
+                        })
+                      ) : (
+                        <span className="text-amarelo">informar</span>
+                      )}
+                    </td>
+                    <td className="border-b border-linesoft px-2.5 py-2.5">
+                      <span
+                        className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${PILL[f]}`}
+                      >
+                        {ROTULO_FAIXA[f]}
+                      </span>
+                      {e.prioridade_maxima && (
+                        <span className="ml-1.5 font-mono text-[10px] text-vermelho">· prioridade</span>
+                      )}
+                    </td>
+                    <td className="border-b border-linesoft px-2.5 py-2.5 text-[12px] text-muted">
+                      {e.motivo_triagem}
+                    </td>
+                    <td className="border-b border-linesoft px-2.5 py-2.5 text-right">
+                      <Link
+                        href={`/painel/empresa/${e.id}`}
+                        className="whitespace-nowrap rounded-sm border border-line px-3 py-1.5 text-[12.5px] font-semibold text-slate2"
+                      >
+                        Dossiê
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

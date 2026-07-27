@@ -339,31 +339,33 @@ function ComparativoInterno() {
             {r.regimes.map((x) => (
               <div key={x.regime} className="rounded border border-line bg-surface p-4 shadow-card">
                 <div className="mb-2 text-[13px] font-bold">{x.nome}</div>
-                <table className="w-full border-collapse text-[12.5px]">
-                  <tbody>
-                    {x.composicao.map((l) => (
-                      <tr key={l.rotulo}>
-                        <td className="border-b border-linesoft py-1.5 pr-2">
-                          <div>{l.rotulo}</div>
-                          <div className="text-[10.5px] leading-tight text-muted">{l.origem}</div>
-                        </td>
-                        <td
-                          className={`border-b border-linesoft py-1.5 text-right align-top font-mono ${
-                            l.valor < 0 ? "text-verde" : ""
-                          }`}
-                        >
-                          {moeda(l.valor)}
+                <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+                  <table className="w-full border-collapse text-[12.5px] min-w-[600px] md:min-w-0">
+                    <tbody>
+                      {x.composicao.map((l) => (
+                        <tr key={l.rotulo}>
+                          <td className="border-b border-linesoft py-1.5 pr-2">
+                            <div>{l.rotulo}</div>
+                            <div className="text-[10.5px] leading-tight text-muted">{l.origem}</div>
+                          </td>
+                          <td
+                            className={`border-b border-linesoft py-1.5 text-right align-top font-mono ${
+                              l.valor < 0 ? "text-verde" : ""
+                            }`}
+                          >
+                            {moeda(l.valor)}
+                          </td>
+                        </tr>
+                      ))}
+                      <tr>
+                        <td className="pt-2 font-bold">Total</td>
+                        <td className="pt-2 text-right font-mono font-bold text-accentdeep">
+                          {moeda(x.total)}
                         </td>
                       </tr>
-                    ))}
-                    <tr>
-                      <td className="pt-2 font-bold">Total</td>
-                      <td className="pt-2 text-right font-mono font-bold text-accentdeep">
-                        {moeda(x.total)}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                    </tbody>
+                  </table>
+                </div>
                 {x.credito_ao_cliente > 0 && (
                   <p className="mt-2 rounded-sm bg-surface2 px-2.5 py-1.5 text-[11.5px] text-slate2">
                     Crédito transferido ao cliente PJ:{" "}

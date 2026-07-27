@@ -93,36 +93,38 @@ export default async function Janela() {
 
       <div className="mt-6 h-px bg-linesoft" />
       <div className="mt-5 text-[15px] font-bold">O que ainda depende de você</div>
-      <table className="mt-3 w-full border-collapse text-[13.5px]">
-        <thead>
-          <tr>
-            {["Frente", "Pendência", ""].map((h) => (
-              <th
-                key={h}
-                className="border-b border-line px-2.5 pb-2 text-left font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-muted"
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {pendencias.map((p) => (
-            <tr key={p.empresa}>
-              <td className="border-b border-linesoft px-2.5 py-2.5 font-semibold">{p.empresa}</td>
-              <td className="border-b border-linesoft px-2.5 py-2.5 text-muted">{p.pend}</td>
-              <td className="border-b border-linesoft px-2.5 py-2.5 text-right">
-                <Link
-                  href="/painel/fila"
-                  className="rounded-sm border border-line px-3 py-1.5 text-[12.5px] font-semibold text-slate2"
+      <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+        <table className="mt-3 w-full border-collapse text-[13.5px] min-w-[380px] md:min-w-0">
+          <thead>
+            <tr>
+              {["Frente", "Pendência", ""].map((h) => (
+                <th
+                  key={h}
+                  className="border-b border-line px-2.5 pb-2 text-left font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-muted"
                 >
-                  {p.rec}
-                </Link>
-              </td>
+                  {h}
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {pendencias.map((p) => (
+              <tr key={p.empresa}>
+                <td className="border-b border-linesoft px-2.5 py-2.5 font-semibold">{p.empresa}</td>
+                <td className="border-b border-linesoft px-2.5 py-2.5 text-muted">{p.pend}</td>
+                <td className="border-b border-linesoft px-2.5 py-2.5 text-right">
+                  <Link
+                    href="/painel/fila"
+                    className="rounded-sm border border-line px-3 py-1.5 text-[12.5px] font-semibold text-slate2"
+                  >
+                    {p.rec}
+                  </Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-5 rounded border border-[#A5F3FC] bg-accentwash px-4 py-4">
         <p className="max-w-[52ch] text-[13.5px] text-slate2">

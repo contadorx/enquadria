@@ -16,7 +16,12 @@
  *   por isso o valor vive em `parametros_exercicio`, nunca no código.
  */
 
-export type Saida = "S1" | "S2" | "S3" | "S4";
+export type Saida = "S1" | "S2" | "S3" | "S4" | "S5";
+
+/** S4 e S5 são recomendações de OPTAR; diferem no motivo, não no destino. */
+export function ehOptar(s?: Saida | string | null): boolean {
+  return s === "S4" || s === "S5";
+}
 
 export interface Respostas {
   /** Q1 · fração da receita vendida a PJ */
@@ -42,8 +47,14 @@ export interface Parametros {
   aliquota: number;
   /** parcela de PIS/Cofins embutida no DAS, em fração (0.012) */
   das: number;
-  /** múltiplo de corte para "não optar sem dúvida" */
+  /**
+   * OBSOLETO. Ficou inerte quando a árvore foi reordenada (26/07/2026): o corte
+   * superior agora é o próprio `fronteiraMax`. Mantido só para não quebrar
+   * registros antigos que gravaram o parâmetro.
+   */
   corteS1?: number;
+  /** receita qualificada mínima para a decisão depender de repasse */
+  rqMin?: number;
   /** largura da zona de fronteira, em torno de FC */
   fronteiraMin?: number;
   fronteiraMax?: number;
@@ -69,9 +80,9 @@ export interface Resultado {
 export const PARAMETROS_2027: Parametros = {
   aliquota: 0.088,
   das: 0.01473,
-  corteS1: 1.5,
   fronteiraMin: 0.8,
   fronteiraMax: 1.2,
+  rqMin: 0.3,
 };
 
 /**
@@ -185,6 +196,12 @@ export interface DDAS {
   rbt12: number | null;
   /** "efetiva" = calculada da RBT12 real · "conservador" = topo da faixa (nominal) */
   fonte: "efetiva" | "conservador";
+  /**
+   * RBT12 acima do teto do Simples (R$ 4,8 mi). Antes isso virava faixa 6 em
+   * silêncio; a empresa está EXCLUÍDA do Simples e não tem decisão de setembro.
+   * Quem consome precisa avisar em vez de calcular.
+   */
+  acimaDoTeto?: boolean;
 }
 
 /**
@@ -207,10 +224,17 @@ export function dDASefetivo(
     const f = faixaDe(a, rbt12) as number;
     const faixa = tabela[f - 1];
     const efetiva = Math.max((rbt12 * faixa.nominal - faixa.deduzir) / rbt12, 0);
-    return { das: efetiva * faixa.sharePC, faixa: f, anexo: a, aliquota: efetiva, sharePC: faixa.sharePC, rbt12, fonte: "efetiva" };
+    const acimaDoTeto = rbt12 > tabela[tabela.length - 1].teto;
+    return { das: efetiva * faixa.sharePC, faixa: f, anexo: a, aliquota: efetiva, sharePC: faixa.sharePC, rbt12, fonte: "efetiva", acimaDoTeto };
   }
 
-  const f = faixaFallback && tabela[faixaFallback - 1] ? faixaFallback : 3;
+  // FALLBACK — mudou em 26/07/2026, depois da validação externa.
+  // Antes caía na faixa 3, e isso NÃO era conservador: um comércio realmente na
+  // faixa 1 recebia `das` de 1,4725% em vez de 0,6200% — 2,4× o valor real. E
+  // `das` maior significa `cl` menor, ou seja, o erro empurrava para OPTAR, que
+  // é a direção perigosa. A faixa 1 é o menor `das` possível do anexo, portanto
+  // o maior `cl`, portanto o viés contra optar. Melhor ainda é exigir a RBT12.
+  const f = faixaFallback && tabela[faixaFallback - 1] ? faixaFallback : 1;
   const faixa = tabela[f - 1];
   return { das: faixa.nominal * faixa.sharePC, faixa: f, anexo: a, aliquota: faixa.nominal, sharePC: faixa.sharePC, rbt12: null, fonte: "conservador" };
 }
@@ -227,15 +251,40 @@ export const DAS_POR_ANEXO_FAIXA: Record<number, Record<number, number>> = Objec
   ])
 );
 
-/** resolve o dDAS conservador de uma empresa; cai no anexo I faixa 3 se faltar dado */
+/** resolve o dDAS conservador de uma empresa; cai no anexo I faixa 1 se faltar dado */
 export function dasDe(anexo?: number | null, faixa?: number | null): number {
   return dDASefetivo(anexo, null, faixa).das;
 }
 
+/**
+ * ÁRVORE DE DECISÃO — reordenada em 26/07/2026 após validação externa.
+ *
+ * A ordem anterior tinha três defeitos medidos num grid de 16.800 combinações:
+ *
+ *  1. `cl <= 0` decidia ANTES da qualificação. 12,9% dos casos caíam nessa regra
+ *     e 4,5% recebiam "optar, condicionado a repasse" com `rq < 0,3` — empresa
+ *     sem a quem transferir crédito, com repasse infinito no laudo, e que a
+ *     triagem da carteira teria descartado. Agora a qualificação vem primeiro, e
+ *     quem paga menos imposto sem depender de negociação tem saída PRÓPRIA (S5).
+ *
+ *  2. `preco` só era consultado quando `re < 0,8·fc`, ou seja, exatamente onde
+ *     menos importava. Uma empresa SEM poder de renegociar e com a conta
+ *     apertada (re/fc 0,85) recebia S3 "leve os dois cenários ao empresário",
+ *     enquanto a mesma empresa com a conta mais FOLGADA (0,76) recebia S2 "a
+ *     negociação não fecha". Economia melhor, recomendação pior. Agora o teste
+ *     de `preco` vem antes da banda de fronteira: quem não consegue renegociar
+ *     não está em fronteira nenhuma.
+ *
+ *  3. `corteS1` era inerte: com a banda capturando [0,8·fc ; 1,2·fc], tudo acima
+ *     de 1,2 virava S1 com ou sem ele. O corte superior agora é o próprio
+ *     `fronteiraMax`, que é o mesmo número com significado.
+ *
+ * A ordem abaixo é significativa. Ler de cima para baixo.
+ */
 export function decidir(r: Respostas, p: Parametros = PARAMETROS_2027): Resultado {
-  const corteS1 = p.corteS1 ?? 1.5;
   const fMin = p.fronteiraMin ?? 0.8;
   const fMax = p.fronteiraMax ?? 1.2;
+  const rqMin = p.rqMin ?? 0.3;
 
   const rq = r.b2b * r.qual;
   const ch = p.aliquota * (1 - r.cred);
@@ -244,13 +293,32 @@ export function decidir(r: Respostas, p: Parametros = PARAMETROS_2027): Resultad
   const fc = p.aliquota - p.das;
 
   let saida: Saida;
-  if (cl <= 0) saida = "S4";
-  else if (rq < 0.3) saida = "S1";
-  else if (re > fc * corteS1) saida = "S1";
-  else if (re >= fc * fMin && re <= fc * fMax) saida = "S3";
-  else if (re > fc) saida = "S1";
-  else if (r.preco <= 1) saida = "S2";
-  else saida = "S4";
+
+  if (rq < rqMin) {
+    // Sem receita qualificada não há a quem transferir crédito. Vale inclusive
+    // quando o híbrido sairia mais barato: o ganho não compensa a apuração por
+    // fora numa empresa que vende para consumidor final ou para o Simples.
+    saida = "S1";
+  } else if (cl <= 0) {
+    // O híbrido custa MENOS em termos absolutos. Optar não depende de
+    // renegociar preço nenhum — e por isso não é o mesmo conselho que o S4.
+    saida = "S5";
+  } else if (fc <= 0) {
+    // Guarda para exercícios futuros: se o que sai do DAS alcançar a alíquota,
+    // o comprador não ganha crédito extra e as bandas de fronteira se invertem.
+    saida = "S1";
+  } else if (re > fc * fMax) {
+    // O repasse necessário estoura o ganho do comprador. Não fecha para ninguém.
+    saida = "S1";
+  } else if (r.preco <= 1) {
+    // A conta fecha, a negociação não. Preparar a janela seguinte.
+    saida = "S2";
+  } else if (re >= fc * fMin) {
+    // Cabe, mas por pouco: o motor não decide, o empresário decide.
+    saida = "S3";
+  } else {
+    saida = "S4";
+  }
 
   // Prioridade é um SELO, não uma saída: uma empresa pode ser prioridade
   // e ainda assim receber "não optar". Descoberta da validação de 22/07.
@@ -282,6 +350,12 @@ export const SAIDAS: Record<Saida, { titulo: string; descricao: string; cor: str
     titulo: "Optar, condicionado a repasse",
     descricao:
       "Optar é vantajoso para os dois lados desde que o preço seja renegociado antes do fim da janela.",
+    cor: "verde",
+  },
+  S5: {
+    titulo: "Optar por vantagem direta",
+    descricao:
+      "No regime regular a empresa paga menos, pelos créditos das próprias compras — sem depender de renegociar preço com ninguém. Confirme se o custo de apurar por fora cabe no ganho.",
     cor: "verde",
   },
 };

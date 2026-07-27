@@ -178,7 +178,7 @@ export default function Lote() {
         {[
           { n: previa.length, l: "empresas na fila", cor: "" },
           { n: novas.length, l: "sem análise ainda", cor: "text-accentdeep" },
-          { n: porSaida.S4 ?? 0, l: "tendem a optar", cor: "text-verde" },
+          { n: (porSaida.S4 ?? 0) + (porSaida.S5 ?? 0), l: "tendem a optar", cor: "text-verde" },
           { n: revisar, l: "exigem revisão atenta", cor: revisar ? "text-amarelo" : "" },
         ].map((c) => (
           <div key={c.l} className="rounded border border-line bg-surface p-3.5">
@@ -189,59 +189,61 @@ export default function Lote() {
       </div>
 
       {/* PRÉVIA */}
-      <table className="mt-5 w-full border-collapse text-[13.5px]">
-        <thead>
-          <tr>
-            {["Empresa", "Perfil aplicado", "Confiança", "Resultado", "Repasse", ""].map((h) => (
-              <th
-                key={h}
-                className="border-b border-line px-2.5 pb-2 text-left font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-muted"
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {previa.slice(0, 60).map(({ e, p, r, jaTem, semRbt12 }) => (
-            <tr key={e.id} className={jaTem ? "opacity-55" : ""}>
-              <td className="border-b border-linesoft px-2.5 py-2.5">
-                <div className="font-semibold">{e.razao_social}</div>
-                <div className="font-mono text-[10.5px] text-muted">
-                  {mascararCnpj(e.cnpj)}
-                  {jaTem && <span className="ml-1.5 text-accentdeep">· já analisada</span>}
-                  {semRbt12 && <span className="ml-1.5 text-amarelo">· sem RBT12</span>}
-                </div>
-              </td>
-              <td className="border-b border-linesoft px-2.5 py-2.5 text-[12px] text-muted">
-                {p.justificativa}
-              </td>
-              <td className="border-b border-linesoft px-2.5 py-2.5">
-                <span className={`font-mono text-[11.5px] font-semibold ${COR_CONFIANCA[p.confianca as Confianca]}`}>
-                  {ROTULO_CONFIANCA[p.confianca as Confianca]}
-                </span>
-              </td>
-              <td className="border-b border-linesoft px-2.5 py-2.5">
-                <span className={`font-mono text-[11.5px] font-semibold ${COR_SAIDA[SAIDAS[r.saida as Saida].cor]}`}>
-                  {r.saida}
-                </span>{" "}
-                <span className="text-[12px] text-muted">{SAIDAS[r.saida as Saida].titulo}</span>
-              </td>
-              <td className="border-b border-linesoft px-2.5 py-2.5 text-right font-mono text-[12px]">
-                {isFinite(r.re) ? pct(r.re) : "—"}
-              </td>
-              <td className="border-b border-linesoft px-2.5 py-2.5 text-right">
-                <Link
-                  href={`/painel/motor?empresa=${e.id}`}
-                  className="whitespace-nowrap rounded-sm border border-line px-3 py-1.5 text-[12.5px] font-semibold text-slate2"
+      <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+        <table className="mt-5 w-full border-collapse text-[13.5px] min-w-[680px] md:min-w-0">
+          <thead>
+            <tr>
+              {["Empresa", "Perfil aplicado", "Confiança", "Resultado", "Repasse", ""].map((h) => (
+                <th
+                  key={h}
+                  className="border-b border-line px-2.5 pb-2 text-left font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-muted"
                 >
-                  Revisar
-                </Link>
-              </td>
+                  {h}
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {previa.slice(0, 60).map(({ e, p, r, jaTem, semRbt12 }) => (
+              <tr key={e.id} className={jaTem ? "opacity-55" : ""}>
+                <td className="border-b border-linesoft px-2.5 py-2.5">
+                  <div className="font-semibold">{e.razao_social}</div>
+                  <div className="font-mono text-[10.5px] text-muted">
+                    {mascararCnpj(e.cnpj)}
+                    {jaTem && <span className="ml-1.5 text-accentdeep">· já analisada</span>}
+                    {semRbt12 && <span className="ml-1.5 text-amarelo">· sem RBT12</span>}
+                  </div>
+                </td>
+                <td className="border-b border-linesoft px-2.5 py-2.5 text-[12px] text-muted">
+                  {p.justificativa}
+                </td>
+                <td className="border-b border-linesoft px-2.5 py-2.5">
+                  <span className={`font-mono text-[11.5px] font-semibold ${COR_CONFIANCA[p.confianca as Confianca]}`}>
+                    {ROTULO_CONFIANCA[p.confianca as Confianca]}
+                  </span>
+                </td>
+                <td className="border-b border-linesoft px-2.5 py-2.5">
+                  <span className={`font-mono text-[11.5px] font-semibold ${COR_SAIDA[SAIDAS[r.saida as Saida].cor]}`}>
+                    {r.saida}
+                  </span>{" "}
+                  <span className="text-[12px] text-muted">{SAIDAS[r.saida as Saida].titulo}</span>
+                </td>
+                <td className="border-b border-linesoft px-2.5 py-2.5 text-right font-mono text-[12px]">
+                  {isFinite(r.re) ? pct(r.re) : "—"}
+                </td>
+                <td className="border-b border-linesoft px-2.5 py-2.5 text-right">
+                  <Link
+                    href={`/painel/motor?empresa=${e.id}`}
+                    className="whitespace-nowrap rounded-sm border border-line px-3 py-1.5 text-[12.5px] font-semibold text-slate2"
+                  >
+                    Revisar
+                  </Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       {previa.length > 60 && (
         <p className="mt-2 text-[12px] text-muted">+ {previa.length - 60} empresas na fila</p>
       )}

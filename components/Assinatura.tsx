@@ -127,17 +127,20 @@ export function Assinatura({ token, empresa, cnpj, decisao, clausulas, hash }: P
           <div>
             <label className="mb-1 block text-[12.5px] font-semibold text-slate2">Nome completo</label>
             <input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Quem está dando ciência"
+              autoComplete="name"
               className="w-full rounded-sm border border-line px-3 py-2 text-[14px] outline-none focus:border-accent" />
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
             <div className="flex-1">
               <label className="mb-1 block text-[12.5px] font-semibold text-slate2">CPF <span className="font-normal text-muted">(opcional)</span></label>
               <input value={cpf} onChange={(e) => setCpf(e.target.value)} placeholder="000.000.000-00"
+                inputMode="numeric" autoComplete="off"
                 className="w-full rounded-sm border border-line px-3 py-2 text-[14px] outline-none focus:border-accent" />
             </div>
             <div className="flex-1">
               <label className="mb-1 block text-[12.5px] font-semibold text-slate2">E-mail</label>
               <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="email@empresa.com"
+                inputMode="email" autoComplete="email" autoCapitalize="none" spellCheck={false}
                 className="w-full rounded-sm border border-line px-3 py-2 text-[14px] outline-none focus:border-accent" />
             </div>
           </div>
@@ -157,9 +160,9 @@ export function Assinatura({ token, empresa, cnpj, decisao, clausulas, hash }: P
             <div>
               <label className="mb-1 block text-[12.5px] font-semibold text-slate2">Código enviado ao seu e-mail</label>
               <input value={codigo} onChange={(e) => setCodigo(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                inputMode="numeric" placeholder="000000"
+                inputMode="numeric" autoComplete="one-time-code" placeholder="000000"
                 className="w-full rounded-sm border border-line px-3 py-2 text-center font-mono text-[20px] tracking-[6px] outline-none focus:border-accent" />
-              <button onClick={reenviar} disabled={carregando} className="mt-1 text-[12px] text-accentdeep">Reenviar código</button>
+              <button onClick={reenviar} disabled={carregando} className="mt-1 py-2 text-[13px] font-semibold text-accentdeep">Reenviar código</button>
             </div>
           )}
           <label className="flex items-start gap-2.5 rounded-sm border border-line bg-surface2 px-3 py-3 text-[13px] text-slate2">
@@ -170,7 +173,7 @@ export function Assinatura({ token, empresa, cnpj, decisao, clausulas, hash }: P
             className="w-full rounded-sm bg-accent px-4 py-3 text-sm font-bold text-[#04212B] disabled:opacity-40">
             {carregando ? "Assinando..." : "Assinar o termo"}
           </button>
-          <button onClick={() => setEtapa("form")} className="w-full text-center text-[12px] text-muted">Voltar</button>
+          <button onClick={() => setEtapa("form")} className="w-full py-2.5 text-center text-[13px] text-muted">Voltar</button>
         </div>
       )}
     </div>

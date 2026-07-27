@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
-import { decidir, dDASefetivo, pct, moeda, SAIDAS, PARAMETROS_2027, type Respostas } from "@/lib/motor";
+import { decidir, dDASefetivo, pct, moeda, SAIDAS, PARAMETROS_2027, ehOptar, type Respostas } from "@/lib/motor";
 import { anexoPorCnae } from "@/lib/triagem";
 import { parseValorBRL } from "@/lib/csv";
 import { Gauge } from "@/components/Gauge";
@@ -184,7 +184,7 @@ function MotorInterno() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           analise_id: analiseId,
-          decisao: res.saida === "S4" ? "optar" : "permanecer",
+          decisao: ehOptar(res.saida) ? "optar" : "permanecer",
           nome: termoNome,
           email: termoEmail,
           empresa: empresa?.razao_social,
@@ -346,28 +346,30 @@ function MotorInterno() {
             <div className="mb-3 font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
               Como o número se forma
             </div>
-            <table className="w-full border-collapse text-[13px]">
-              <tbody>
-                {[
-                  ["IBS/CBS no regime regular sobre a base", pct(res.ch)],
-                  ["Compras que geram crédito", pct(r.cred)],
-                  [
-                    `Sai do DAS — PIS/Cofins (efetiva ${pct(ddas.aliquota)} × ${pct(ddas.sharePC)})`,
-                    "−" + pct(ddas.das),
-                  ],
-                  ["Receita vendida a quem aproveita crédito", pct(res.rq)],
-                ].map(([k, v]) => (
-                  <tr key={k}>
-                    <td className="border-b border-linesoft py-2">{k}</td>
-                    <td className="border-b border-linesoft py-2 text-right font-mono">{v}</td>
+            <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+              <table className="w-full border-collapse text-[13px] min-w-[600px] md:min-w-0">
+                <tbody>
+                  {[
+                    ["IBS/CBS no regime regular sobre a base", pct(res.ch)],
+                    ["Compras que geram crédito", pct(r.cred)],
+                    [
+                      `Sai do DAS — PIS/Cofins (efetiva ${pct(ddas.aliquota)} × ${pct(ddas.sharePC)})`,
+                      "−" + pct(ddas.das),
+                    ],
+                    ["Receita vendida a quem aproveita crédito", pct(res.rq)],
+                  ].map(([k, v]) => (
+                    <tr key={k}>
+                      <td className="border-b border-linesoft py-2">{k}</td>
+                      <td className="border-b border-linesoft py-2 text-right font-mono">{v}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td className="pt-3 font-bold">Custo líquido / repasse necessário</td>
+                    <td className="pt-3 text-right font-mono font-bold text-accentdeep">{pct(res.re)}</td>
                   </tr>
-                ))}
-                <tr>
-                  <td className="pt-3 font-bold">Custo líquido / repasse necessário</td>
-                  <td className="pt-3 text-right font-mono font-bold text-accentdeep">{pct(res.re)}</td>
-                </tr>
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
             <p className="mt-3 text-[11.5px] leading-relaxed text-muted">
               {ddas.fonte === "efetiva" ? (
                 <>
@@ -488,7 +490,7 @@ function MotorInterno() {
                   </div>
                 ) : (
                   <p className="mt-2 text-[11px] text-muted">
-                    Decisão registrada: {res.saida === "S4" ? "optar pelo híbrido" : "permanecer no tradicional"}.
+                    Decisão registrada: {ehOptar(res.saida) ? "optar pelo híbrido" : "permanecer no tradicional"}.
                     Ao gerar, sai o link de assinatura eletrônica para enviar ao cliente.
                   </p>
                 )}

@@ -67,6 +67,7 @@ export default function Login() {
               <input
                 value={escritorio}
                 onChange={(e) => setEscritorio(e.target.value)}
+                autoComplete="organization"
                 className="w-full rounded-sm border border-line px-3 py-2 text-sm outline-none focus:border-accent"
                 placeholder="Marcatto Contabilidade"
               />
@@ -77,6 +78,10 @@ export default function Login() {
             <span className="mb-1 block text-[12.5px] font-semibold">E-mail</span>
             <input
               type="email"
+              inputMode="email"
+              autoComplete="email"
+              autoCapitalize="none"
+              spellCheck={false}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full rounded-sm border border-line px-3 py-2 text-sm outline-none focus:border-accent"
@@ -87,6 +92,7 @@ export default function Login() {
             <span className="mb-1 block text-[12.5px] font-semibold">Senha</span>
             <input
               type="password"
+              autoComplete={modo === "criar" ? "new-password" : "current-password"}
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
               className="w-full rounded-sm border border-line px-3 py-2 text-sm outline-none focus:border-accent"

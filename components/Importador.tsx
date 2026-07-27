@@ -211,19 +211,21 @@ export function Importador() {
             Quais colunas o Enquadria entende?
           </summary>
           <div className="mt-2.5 overflow-hidden rounded-sm border border-linesoft">
-            <table className="w-full border-collapse text-[12px]">
-              <tbody>
-                {CAMPOS.map((c) => (
-                  <tr key={c.chave}>
-                    <td className="border-b border-linesoft bg-surface2 px-2.5 py-1.5 font-semibold">
-                      {c.rotulo}
-                      {c.essencial && <span className="ml-1 text-vermelho">*</span>}
-                    </td>
-                    <td className="border-b border-linesoft px-2.5 py-1.5 text-muted">{c.papel}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+              <table className="w-full border-collapse text-[12px] min-w-[600px] md:min-w-0">
+                <tbody>
+                  {CAMPOS.map((c) => (
+                    <tr key={c.chave}>
+                      <td className="border-b border-linesoft bg-surface2 px-2.5 py-1.5 font-semibold">
+                        {c.rotulo}
+                        {c.essencial && <span className="ml-1 text-vermelho">*</span>}
+                      </td>
+                      <td className="border-b border-linesoft px-2.5 py-1.5 text-muted">{c.papel}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
           <p className="mt-2 text-[11.5px] text-muted">
             * obrigatórios. Nomes diferentes são aceitos: &quot;documento&quot;, &quot;nome
@@ -322,38 +324,40 @@ export function Importador() {
           </div>
 
           <div className="mt-4 overflow-hidden rounded border border-line">
-            <table className="w-full border-collapse text-[13px]">
-              <thead>
-                <tr>
-                  {["Empresa", "CNPJ", "CNAE", "Origem"].map((h) => (
-                    <th
-                      key={h}
-                      className="border-b border-line bg-surface2 px-3 py-2 text-left font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-muted"
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {parse.linhas.slice(0, 8).map((l) => (
-                  <tr key={l.cnpj}>
-                    <td className="border-b border-linesoft px-3 py-2 font-medium">
-                      {l.razao_social}
-                    </td>
-                    <td className="border-b border-linesoft px-3 py-2 font-mono text-[11.5px] text-muted">
-                      {l.cnpj}
-                    </td>
-                    <td className="border-b border-linesoft px-3 py-2 font-mono text-[11.5px]">
-                      {l.cnae_principal ?? "—"}
-                    </td>
-                    <td className="border-b border-linesoft px-3 py-2 text-[12px] text-muted">
-                      {l.cnae_principal ? "arquivo" : "via Receita"}
-                    </td>
+            <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+              <table className="w-full border-collapse text-[13px] min-w-[520px] md:min-w-0">
+                <thead>
+                  <tr>
+                    {["Empresa", "CNPJ", "CNAE", "Origem"].map((h) => (
+                      <th
+                        key={h}
+                        className="border-b border-line bg-surface2 px-3 py-2 text-left font-mono text-[9.5px] font-medium uppercase tracking-[0.12em] text-muted"
+                      >
+                        {h}
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {parse.linhas.slice(0, 8).map((l) => (
+                    <tr key={l.cnpj}>
+                      <td className="border-b border-linesoft px-3 py-2 font-medium">
+                        {l.razao_social}
+                      </td>
+                      <td className="border-b border-linesoft px-3 py-2 font-mono text-[11.5px] text-muted">
+                        {l.cnpj}
+                      </td>
+                      <td className="border-b border-linesoft px-3 py-2 font-mono text-[11.5px]">
+                        {l.cnae_principal ?? "—"}
+                      </td>
+                      <td className="border-b border-linesoft px-3 py-2 text-[12px] text-muted">
+                        {l.cnae_principal ? "arquivo" : "via Receita"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             {parse.linhas.length > 8 && (
               <div className="bg-surface2 px-3 py-2 text-[12px] text-muted">
                 + {parse.linhas.length - 8} empresas
