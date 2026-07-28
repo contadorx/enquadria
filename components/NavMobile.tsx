@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { NAV, ATALHOS, tituloDaRota } from "@/lib/nav";
+import { navDe, ATALHOS, tituloDaRota } from "@/lib/nav";
 import { BotaoSair } from "./BotaoSair";
 
 /**
@@ -24,14 +24,18 @@ export function NavMobile({
   email,
   dias,
   posPct,
+  ehSuperadmin = false,
 }: {
   escritorio: string;
   email?: string;
+  /** o dono da plataforma vê o grupo Negócio também no celular */
+  ehSuperadmin?: boolean;
   /** dias restantes da janela, calculados no servidor */
   dias: number;
   /** posição na régua, 0 a 100, calculada no servidor */
   posPct: number;
 }) {
+  const menu = navDe(ehSuperadmin);
   const [aberto, setAberto] = useState(false);
   const pathname = usePathname() || "/painel";
 
@@ -112,7 +116,7 @@ export function NavMobile({
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto py-2">
-              {NAV.map((g) => (
+              {menu.map((g) => (
                 <div key={g.grupo} className="mb-1">
                   <div className="px-4 py-2 font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
                     {g.grupo}

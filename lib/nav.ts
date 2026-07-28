@@ -49,6 +49,26 @@ export const NAV: GrupoNav[] = [
   },
 ];
 
+/**
+ * Grupo do DONO da plataforma. Fora do NAV principal de propósito: só aparece
+ * para quem tem is_superadmin, e o painel do contador não pode sequer saber
+ * que ele existe.
+ */
+export const NAV_PLATAFORMA: GrupoNav = {
+  grupo: "Plataforma",
+  itens: [
+    { href: "/painel/negocio", label: "Negócio", curto: "Negócio" },
+    { href: "/painel/negocio/cobrancas", label: "Cobranças" },
+    { href: "/painel/negocio/emails", label: "E-mails proativos" },
+    { href: "/painel/negocio/planos", label: "Planos & Asaas" },
+  ],
+};
+
+/** O menu que a pessoa realmente vê. */
+export function navDe(ehSuperadmin: boolean): GrupoNav[] {
+  return ehSuperadmin ? [...NAV, NAV_PLATAFORMA] : NAV;
+}
+
 /** Os quatro destinos da barra inferior do celular — o caminho do trabalho. */
 export const ATALHOS: ItemNav[] = [
   { href: "/painel", label: "Painel", curto: "Painel" },
@@ -59,7 +79,7 @@ export const ATALHOS: ItemNav[] = [
 
 /** Nome da tela atual, para o cabeçalho do celular saber onde a pessoa está. */
 export function tituloDaRota(pathname: string): string {
-  const todos = NAV.flatMap((g) => g.itens);
+  const todos = [...NAV, NAV_PLATAFORMA].flatMap((g) => g.itens);
   // a rota mais específica que casa com o caminho vence
   const achado = todos
     .filter((i) => pathname === i.href || pathname.startsWith(i.href + "/"))

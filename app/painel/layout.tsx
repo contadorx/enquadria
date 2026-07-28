@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase-server";
 import { Regua } from "@/components/Regua";
 import { BotaoSair } from "@/components/BotaoSair";
 import { NavMobile } from "@/components/NavMobile";
-import { NAV } from "@/lib/nav";
+import { navDe } from "@/lib/nav";
 
 const JANELA = { abre: "2026-09-01", fecha: "2026-09-30" };
 
@@ -12,16 +12,19 @@ export default async function PainelLayout({ children }: { children: React.React
   const { data: { user } } = await supabase.auth.getUser();
 
   let escritorio = "Escritório";
+  let ehSuperadmin = false;
   if (user) {
     const { data } = await supabase
       .from("profiles")
-      .select("tenant_id, tenants(nome)")
+      .select("tenant_id, is_superadmin, tenants(nome)")
       .eq("id", user.id)
       .maybeSingle();
     const t = data?.tenants as { nome?: string } | { nome?: string }[] | null;
     const nome = Array.isArray(t) ? t[0]?.nome : t?.nome;
     if (nome) escritorio = nome;
+    ehSuperadmin = !!(data as { is_superadmin?: boolean } | null)?.is_superadmin;
   }
+  const menu = navDe(ehSuperadmin);
 
   // calculado aqui, no servidor: o NavMobile é componente de cliente e usar
   // Date lá dentro faria servidor e navegador renderizarem valores diferentes
@@ -52,11 +55,12 @@ export default async function PainelLayout({ children }: { children: React.React
         email={user?.email}
         dias={diasRestantes}
         posPct={posDaJanela}
+        ehSuperadmin={ehSuperadmin}
       />
 
       <div className="grid grid-cols-1 md:grid-cols-[186px_1fr]">
         <aside className="hidden border-r border-linesoft bg-surface2 py-4 md:block">
-          {NAV.map((g) => (
+          {menu.map((g) => (
             <div key={g.grupo}>
               <div className="px-[18px] py-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-slate-400">
                 {g.grupo}

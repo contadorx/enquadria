@@ -86,3 +86,150 @@ export async function criarCobranca(params: {
     return { ativo: true };
   }
 }
+
+// ============================================================================
+// DIAGNÓSTICO E RECONCILIAÇÃO — o que a aba Negócio → Planos usa.
+//
+// Princípio: nunca dizer "está integrado" sem ter perguntado ao Asaas.
+// ============================================================================
+
+function baseUrl(): string {
+  const env = (process.env.ASAAS_ENV as "sandbox" | "production") ?? "sandbox";
+  return BASE[env];
+}
+
+export interface StatusAsaas {
+  conectado: boolean;
+  ambiente: "sandbox" | "production";
+  tem_chave: boolean;
+  url_webhook: string;
+  conta?: { nome?: string; email?: string; cpfCnpj?: string };
+  saldo_centavos?: number;
+  erro?: string;
+}
+
+/** Bate na API do Asaas para confirmar que a chave funciona de verdade. */
+export async function statusAsaas(): Promise<StatusAsaas> {
+  const ambiente = ((process.env.ASAAS_ENV as "sandbox" | "production") ?? "sandbox");
+  const key = process.env.ASAAS_API_KEY;
+  const app =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://app.enquadria.com.br");
+
+  const base_: StatusAsaas = {
+    conectado: false,
+    ambiente,
+    tem_chave: !!key,
+    url_webhook: `${app.replace(/\/$/, "")}/api/asaas`,
+  };
+  if (!key) return { ...base_, erro: "ASAAS_API_KEY não está no ambiente." };
+
+  try {
+    const resp = await fetch(`${baseUrl()}/myAccount`, {
+      headers: { access_token: key },
+      cache: "no-store",
+    });
+    if (!resp.ok) {
+      return { ...base_, erro: `Asaas respondeu ${resp.status}. A chave é do ambiente certo (${ambiente})?` };
+    }
+    const j = (await resp.json()) as { name?: string; email?: string; cpfCnpj?: string };
+
+    let saldo: number | undefined;
+    try {
+      const b = await fetch(`${baseUrl()}/finance/balance`, { headers: { access_token: key }, cache: "no-store" });
+      if (b.ok) {
+        const jb = (await b.json()) as { balance?: number };
+        saldo = Math.round(Number(jb.balance || 0) * 100);
+      }
+    } catch { /* saldo é informativo */ }
+
+    return {
+      ...base_,
+      conectado: true,
+      saldo_centavos: saldo,
+      conta: { nome: j.name, email: j.email, cpfCnpj: j.cpfCnpj },
+    };
+  } catch (e) {
+    return { ...base_, erro: `não consegui falar com o Asaas: ${e instanceof Error ? e.message : "rede"}` };
+  }
+}
+
+const PAGO = new Set(["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"]);
+
+/**
+ * Puxa do Asaas o estado real de uma cobrança e alinha o banco.
+ *
+ * Existe porque webhook falha: cai a rede, o deploy está no ar, o token muda.
+ * Sem isto, um pagamento perdido deixa um cliente pagante sem acesso — e é
+ * exatamente o cliente que a gente menos pode perder.
+ */
+/**
+ * Tipo mínimo do client. Tentar espelhar o tipo do supabase-js aqui faz o
+ * TypeScript entrar em recursão profunda ("type instantiation is excessively
+ * deep") — o cliente é genérico sobre o schema inteiro. Só precisamos de
+ * from().select()/update(), então é isso que pedimos.
+ */
+type DbSimples = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  from: (tabela: string) => any;
+};
+
+export async function reconciliarAssinatura(
+  db: DbSimples,
+  assinaturaId: string
+): Promise<{ status?: string; pago?: boolean; valido_ate?: string; erro?: string }> {
+  const key = process.env.ASAAS_API_KEY;
+  if (!key) return { erro: "ASAAS_API_KEY não está no ambiente." };
+
+  const { data: assin } = await db
+    .from("assinaturas")
+    .select("id, asaas_id, plano_id, status")
+    .eq("id", assinaturaId)
+    .maybeSingle();
+  const a = assin as { asaas_id?: string; plano_id?: string } | null;
+  if (!a?.asaas_id) return { erro: "esta assinatura não tem cobrança no Asaas." };
+
+  let pagamento: { status?: string; paymentDate?: string; confirmedDate?: string; dueDate?: string };
+  try {
+    const resp = await fetch(`${baseUrl()}/payments/${a.asaas_id}`, {
+      headers: { access_token: key },
+      cache: "no-store",
+    });
+    if (!resp.ok) return { erro: resp.status === 404 ? "cobrança não existe mais no Asaas." : `Asaas ${resp.status}` };
+    pagamento = (await resp.json()) as typeof pagamento;
+  } catch (e) {
+    return { erro: e instanceof Error ? e.message : "falha de rede" };
+  }
+
+  const pago = PAGO.has(pagamento.status ?? "");
+  if (!pago) {
+    const novo = pagamento.status === "OVERDUE" ? "pendente" : "pendente";
+    await db.from("assinaturas").update({ status: novo }).eq("id", assinaturaId);
+    return { status: pagamento.status, pago: false };
+  }
+
+  // quantos dias o plano concede — o conserto do "365 dias para todo mundo"
+  const { data: plano } = await db
+    .from("planos")
+    .select("dias_acesso")
+    .eq("id", a.plano_id ?? "")
+    .maybeSingle();
+  const diasAcesso = Number((plano as { dias_acesso?: number } | null)?.dias_acesso ?? 365);
+
+  const base_ = pagamento.confirmedDate || pagamento.paymentDate || pagamento.dueDate;
+  const inicio = base_ ? new Date(base_) : new Date();
+  inicio.setDate(inicio.getDate() + diasAcesso);
+  const validoAte = inicio.toISOString().slice(0, 10);
+
+  await db
+    .from("assinaturas")
+    .update({
+      status: "ativa",
+      valido_ate: validoAte,
+      vencimento: validoAte,
+      pago_em: new Date(base_ || Date.now()).toISOString(),
+    })
+    .eq("id", assinaturaId);
+
+  return { status: pagamento.status, pago: true, valido_ate: validoAte };
+}
