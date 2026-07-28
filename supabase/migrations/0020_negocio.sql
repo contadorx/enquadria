@@ -464,7 +464,7 @@ begin
         a.plano_id,
         pl.nome,
         pl.ciclo,
-        coalesce(a.status, 'gratis'),
+        coalesce(a.status::text, 'gratis'),   -- ::text ANTES: status pode ser enum
         a.valor_centavos,
         coalesce(a.vencimento, a.valido_ate),
         a.id,
@@ -472,7 +472,7 @@ begin
         a.asaas_id,
         (select count(*) from public.profiles p  where p.tenant_id = t.id),
         (select count(*) from public.empresas e  where e.tenant_id = t.id),
-        (select count(*) from public.empresas e  where e.tenant_id = t.id and e.faixa = 'A'),
+        (select count(*) from public.empresas e  where e.tenant_id = t.id and e.faixa::text = 'A'),
         (select count(*) from public.analises n  where n.tenant_id = t.id),
         (select count(*) from public.laudos   l  where l.tenant_id = t.id),
         (select count(*) from public.termos   m  join public.analises n2 on n2.id = m.analise_id where n2.tenant_id = t.id),
@@ -483,7 +483,7 @@ begin
       left join lateral (
         select x.* from public.assinaturas x
          where x.tenant_id = t.id
-         order by (x.status = 'ativa') desc, coalesce(x.vencimento, x.valido_ate) desc nulls last
+         order by (x.status::text = 'ativa') desc, coalesce(x.vencimento, x.valido_ate) desc nulls last
          limit 1
       ) a on true
       left join public.planos pl on pl.id = a.plano_id
@@ -538,20 +538,20 @@ begin
   into v_mrr, v_ass
   from public.assinaturas a
   join public.planos pl on pl.id = a.plano_id
-  where a.status = 'ativa'
+  where a.status::text = 'ativa'
     and coalesce(a.vencimento, a.valido_ate, current_date) >= current_date;
 
   select count(*) into v_gratis
     from public.tenants t
    where not exists (
      select 1 from public.assinaturas a
-      where a.tenant_id = t.id and a.status = 'ativa'
+      where a.tenant_id = t.id and a.status::text = 'ativa'
         and coalesce(a.vencimento, a.valido_ate, current_date) >= current_date
    );
 
   select coalesce(count(*), 0) into v_novos
     from public.assinaturas a
-   where a.status = 'ativa' and a.pago_em >= v_mes;
+   where a.status::text = 'ativa' and a.pago_em >= v_mes;
 
   insert into public.plataforma_mrr (mes, mrr_centavos, assinantes, gratuitos, novos, capturado_em)
   values (v_mes, coalesce(v_mrr,0), coalesce(v_ass,0), coalesce(v_gratis,0), coalesce(v_novos,0), now())
@@ -589,7 +589,7 @@ select
 from public.assinaturas a
 join public.planos pl on pl.id = a.plano_id
 join public.tenants t on t.id = a.tenant_id
-where a.status = 'ativa'
+where a.status::text = 'ativa'
   and pl.dias_acesso is not null
   and coalesce(a.vencimento, a.valido_ate) is not null
   and (coalesce(a.vencimento, a.valido_ate) - coalesce(a.pago_em::date, current_date)) > pl.dias_acesso + 5

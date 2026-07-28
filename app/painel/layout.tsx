@@ -14,15 +14,34 @@ export default async function PainelLayout({ children }: { children: React.React
   let escritorio = "Escritório";
   let ehSuperadmin = false;
   if (user) {
-    const { data } = await supabase
+    // Tentativa 1: com is_superadmin (existe a partir da migration 0020).
+    //
+    // O erro é CAPTURADO de propósito. Se a coluna ainda não existir, o
+    // Postgres derruba a consulta INTEIRA — e o layout perderia junto o nome do
+    // escritório, sem dizer por quê. Já aconteceu neste app com a coluna de
+    // impersonação; aqui a lição está aplicada: a segunda tentativa pede só o
+    // essencial, e o app segue funcionando sem a aba de plataforma.
+    const comFlag = await supabase
       .from("profiles")
       .select("tenant_id, is_superadmin, tenants(nome)")
       .eq("id", user.id)
       .maybeSingle();
-    const t = data?.tenants as { nome?: string } | { nome?: string }[] | null;
+
+    let perfil = comFlag.data as { tenant_id?: string; is_superadmin?: boolean; tenants?: unknown } | null;
+
+    if (comFlag.error) {
+      const semFlag = await supabase
+        .from("profiles")
+        .select("tenant_id, tenants(nome)")
+        .eq("id", user.id)
+        .maybeSingle();
+      perfil = semFlag.data as typeof perfil;
+    }
+
+    const t = perfil?.tenants as { nome?: string } | { nome?: string }[] | null;
     const nome = Array.isArray(t) ? t[0]?.nome : t?.nome;
     if (nome) escritorio = nome;
-    ehSuperadmin = !!(data as { is_superadmin?: boolean } | null)?.is_superadmin;
+    ehSuperadmin = !!perfil?.is_superadmin;
   }
   const menu = navDe(ehSuperadmin);
 
