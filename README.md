@@ -57,9 +57,10 @@ Build validado:
   assinatura. Integração ZapSign (`lib/zapsign.ts`) que degrada com elegância:
   sem token, o termo é impresso e assinado presencialmente; com token, cria o
   envelope e devolve o link de assinatura.
-- Painel da janela (`/painel/janela`): régua da contagem regressiva, progresso
-  e lista de pendências.
-- Ações no motor: "Emitir laudo" e "Gerar termo" após salvar a análise.
+- Régua da janela no cabeçalho e linha de produção no cockpit (a antiga tela
+  `/painel/janela` foi absorvida; o relatório do escritório continua em
+  `/doc/relatorio`, linkado do cockpit).
+- Ações de laudo e termo na própria linha da fila e na gaveta da empresa.
 
 ## RPCs (migration 0003)
 
@@ -86,12 +87,29 @@ Sem nenhuma delas o app funciona ponta a ponta.
   parâmetros usados (`analises.parametros`), com dDAS afinado pelo anexo.
 - Auditoria: cada carga vira um registro em `importacoes`.
 
-## Fluxo
+## Fluxo (a partir da simplificação de 28/07/2026)
 
     /painel/importar  → CSV → prévia da triagem → gravar
-    /painel           → mapa de risco (contagem por faixa)
-    /painel/fila      → fila A/B → "Analisar"
-    /painel/motor?empresa=ID → responder → "Salvar análise"
+    /painel           → COCKPIT: linha de produção + fila única
+                        cada linha traz a PRÓXIMA AÇÃO e executa ali:
+                        analisar → confirmar → emitir laudo → enviar termo
+                        → cobrar assinatura
+                        seleção múltipla = as mesmas ações em lote
+                        a empresa abre em GAVETA sobre a fila (dossiê,
+                        análise e comparativo), sem sair da lista
+    /painel/empresa/[id] → o mesmo dossiê como página, para link direto
+    /painel/config    → Escritório (configurações · equipe · planos ·
+                        abrir a próxima janela)
+
+O menu do contador tem TRÊS itens: Cockpit · Escritório · (Negócio, só
+superadmin). As rotas `carteira`, `fila`, `lote`, `entrega`, `janela`,
+`radar`, `revisao`, `comparativo` e `motor` foram APAGADAS — o que elas
+faziam acontece dentro do cockpit ou da gaveta. Radar e revisão da carteira
+viraram AVISOS no topo da fila, e cada aviso injeta as empresas atingidas na
+fila; aviso que não gera trabalho não aparece.
+
+Teste do núcleo (funções puras): `testes/cockpit.test.mjs` — instruções de
+execução no cabeçalho do arquivo.
 
 ## Contrato do endpoint da Receita (se for ligar)
 

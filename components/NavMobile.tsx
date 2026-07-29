@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { navDe, ATALHOS, tituloDaRota } from "@/lib/nav";
+import { navDe, atalhosDe, tituloDaRota } from "@/lib/nav";
 import { BotaoSair } from "./BotaoSair";
 
 /**
@@ -36,6 +36,7 @@ export function NavMobile({
   posPct: number;
 }) {
   const menu = navDe(ehSuperadmin);
+  const atalhos = atalhosDe(ehSuperadmin);
   const [aberto, setAberto] = useState(false);
   const pathname = usePathname() || "/painel";
 
@@ -149,7 +150,7 @@ export function NavMobile({
 
       {/* --------------------------------------------- barra inferior fixa */}
       <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden">
-        {ATALHOS.map((i) => (
+        {atalhos.map((i) => (
           <Link
             key={i.href}
             href={i.href}

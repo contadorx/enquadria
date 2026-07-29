@@ -4,8 +4,7 @@ import { Regua } from "@/components/Regua";
 import { BotaoSair } from "@/components/BotaoSair";
 import { NavMobile } from "@/components/NavMobile";
 import { navDe } from "@/lib/nav";
-
-const JANELA = { abre: "2026-09-01", fecha: "2026-09-30" };
+import { JANELA, estadoDaJanela } from "@/lib/janela";
 
 export default async function PainelLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
@@ -47,11 +46,7 @@ export default async function PainelLayout({ children }: { children: React.React
 
   // calculado aqui, no servidor: o NavMobile é componente de cliente e usar
   // Date lá dentro faria servidor e navegador renderizarem valores diferentes
-  const ini = new Date(JANELA.abre).getTime();
-  const fim = new Date(JANELA.fecha).getTime();
-  const agora = Date.now();
-  const diasRestantes = Math.max(Math.ceil((fim - agora) / 86400000), 0);
-  const posDaJanela = Math.round(Math.min(Math.max((agora - ini) / (fim - ini), 0), 1) * 100);
+  const { dias: diasRestantes, posPct: posDaJanela } = estadoDaJanela();
 
   return (
     <div className="min-h-screen">

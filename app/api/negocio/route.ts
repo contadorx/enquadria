@@ -155,7 +155,7 @@ export async function POST(req: Request) {
         link_pagamento: "https://exemplo.asaas.com/i/000000000000",
         link_app: APP_URL,
         link_planos: `${APP_URL}/painel/planos`,
-        link_carteira: `${APP_URL}/painel/carteira`,
+        link_carteira: `${APP_URL}/painel`,
       };
 
       const rr = r as { nome: string; assunto: string; corpo: string };

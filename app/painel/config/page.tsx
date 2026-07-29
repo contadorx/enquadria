@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
+import { AbasEscritorio } from "@/components/AbasEscritorio";
+import { NovaRodada } from "@/components/NovaRodada";
 
 export default function Config() {
   const [tenantId, setTenantId] = useState<string | null>(null);
@@ -11,6 +13,7 @@ export default function Config() {
   const [salvando, setSalvando] = useState(false);
   const [ok, setOk] = useState(false);
   const inputFile = useRef<HTMLInputElement>(null);
+  const [totalAnalises, setTotalAnalises] = useState(0);
 
   useEffect(() => {
     const supabase = createClient();
@@ -27,6 +30,9 @@ export default function Config() {
       setNome(t?.nome ?? "");
       setCrc(t?.crc ?? "");
       setLogoUrl(t?.logo_url ?? null);
+      // a próxima rodada recalcula a carteira a partir das respostas já dadas
+      const { count } = await supabase.from("analises").select("id", { count: "exact", head: true });
+      setTotalAnalises(count ?? 0);
     })();
   }, []);
 
@@ -64,6 +70,7 @@ export default function Config() {
 
   return (
     <div>
+      <AbasEscritorio />
       <h1 className="text-[19px] font-bold tracking-tight">Configurações do escritório</h1>
       <p className="mt-0.5 text-[13px] text-muted">
         Nome, CRC e logo aparecem na capa de cada laudo e termo. Nunca a marca do Enquadria.
@@ -134,6 +141,20 @@ export default function Config() {
             PNG ou SVG com fundo transparente, de preferência. Aparece no topo dos documentos.
           </p>
         </div>
+      </div>
+
+      {/* A JANELA É SEMESTRAL — abrir a próxima é ato de administração, não de
+          trabalho diário. Por isso vive aqui, e não no cockpit. */}
+      <div className="mt-6 max-w-xl rounded border border-line bg-surface p-5 shadow-card">
+        <div className="mb-2 font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
+          Próxima janela
+        </div>
+        <p className="mb-3 text-[12.5px] text-muted">
+          A opção vale por semestre. Quando o período seguinte for publicado, abra a rodada nova: a
+          carteira é recalculada a partir das respostas já dadas e as decisões anteriores ficam
+          intactas.
+        </p>
+        <NovaRodada totalAnalises={totalAnalises} />
       </div>
     </div>
   );

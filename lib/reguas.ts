@@ -203,7 +203,7 @@ export function planejar(ctx: Contexto): Envio[] {
       restantes: Math.max(limite - e.laudos, 0),
       link_app: APP_URL,
       link_planos: `${APP_URL}/painel/planos`,
-      link_carteira: `${APP_URL}/painel/carteira`,
+      link_carteira: `${APP_URL}/painel`,
       ...extra,
     };
 

@@ -46,7 +46,7 @@ export default async function ComparativoDoc({ params }: { params: { id: string 
   return (
     <div className="doc">
       <div className="no-print mb-4 flex items-center justify-between">
-        <Link href="/painel/comparativo" className="text-sm text-accentdeep">← voltar</Link>
+        <Link href="/painel" className="text-sm text-accentdeep">← voltar</Link>
         <BotaoImprimir />
       </div>
 

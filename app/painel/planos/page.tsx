@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { LIMITE_GRATIS } from "@/lib/plano";
+import { AbasEscritorio } from "@/components/AbasEscritorio";
 
 interface Plano {
   id: string;
@@ -72,6 +73,7 @@ export default function Planos() {
 
   return (
     <div>
+      <AbasEscritorio />
       <h1 className="text-[19px] font-bold tracking-tight">Planos</h1>
       <p className="mt-0.5 max-w-[70ch] text-[13px] text-muted">
         Uma análise cobrada do seu cliente paga o ano inteiro de Enquadria. O plano gratuito

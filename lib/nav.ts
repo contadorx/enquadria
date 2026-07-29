@@ -1,9 +1,12 @@
 /**
- * O mapa de navegação do painel, num lugar só.
+ * O MENU, num lugar só — e agora com três itens.
  *
- * Antes ele vivia dentro do layout, que é um componente de servidor — e por
- * isso o menu do celular (que precisa de estado) não tinha como reaproveitá-lo.
- * Duas listas separadas divergiriam na primeira tela nova.
+ * Eram treze rotas em três grupos, e sete delas eram a mesma carteira vista de
+ * ângulos diferentes. O contador não tem treze trabalhos: ele tem um (decidir a
+ * carteira) e uma administração (o escritório). O menu passou a dizer isso.
+ *
+ * Configurações, equipe e planos continuam existindo como rotas próprias, mas
+ * entram por Escritório — são abas de um assunto, não itens de navegação.
  */
 
 export interface ItemNav {
@@ -20,31 +23,10 @@ export interface GrupoNav {
 
 export const NAV: GrupoNav[] = [
   {
-    grupo: "Janela atual",
+    grupo: "Trabalho",
     itens: [
-      { href: "/painel", label: "Painel", curto: "Painel" },
-      { href: "/painel/importar", label: "Importar", curto: "Importar" },
-      { href: "/painel/carteira", label: "Carteira", curto: "Carteira" },
-      { href: "/painel/fila", label: "Fila de análise", curto: "Fila" },
-      { href: "/painel/lote", label: "Análise em lote", curto: "Lote" },
-      { href: "/painel/entrega", label: "Entrega", curto: "Entrega" },
-      { href: "/painel/janela", label: "Painel da janela", curto: "Janela" },
-    ],
-  },
-  {
-    grupo: "Acompanhamento",
-    itens: [
-      { href: "/painel/radar", label: "Radar da transição" },
-      { href: "/painel/revisao", label: "Revisão da carteira" },
-      { href: "/painel/comparativo", label: "Comparativo de regimes" },
-    ],
-  },
-  {
-    grupo: "Escritório",
-    itens: [
-      { href: "/painel/equipe", label: "Equipe" },
-      { href: "/painel/planos", label: "Planos" },
-      { href: "/painel/config", label: "Configurações" },
+      { href: "/painel", label: "Cockpit", curto: "Cockpit" },
+      { href: "/painel/config", label: "Escritório", curto: "Escritório" },
     ],
   },
 ];
@@ -64,27 +46,36 @@ export const NAV_PLATAFORMA: GrupoNav = {
   ],
 };
 
+/** As abas de Escritório — um assunto, não um grupo de menu. */
+export const ABAS_ESCRITORIO: ItemNav[] = [
+  { href: "/painel/config", label: "Configurações" },
+  { href: "/painel/equipe", label: "Equipe" },
+  { href: "/painel/planos", label: "Planos" },
+];
+
 /** O menu que a pessoa realmente vê. */
 export function navDe(ehSuperadmin: boolean): GrupoNav[] {
   return ehSuperadmin ? [...NAV, NAV_PLATAFORMA] : NAV;
 }
 
-/** Os quatro destinos da barra inferior do celular — o caminho do trabalho. */
-export const ATALHOS: ItemNav[] = [
-  { href: "/painel", label: "Painel", curto: "Painel" },
-  { href: "/painel/carteira", label: "Carteira", curto: "Carteira" },
-  { href: "/painel/fila", label: "Fila de análise", curto: "Fila" },
-  { href: "/painel/entrega", label: "Entrega", curto: "Entrega" },
-];
+/** A barra inferior do celular: os mesmos destinos do menu, ao alcance do polegar. */
+export function atalhosDe(ehSuperadmin: boolean): ItemNav[] {
+  const base: ItemNav[] = [
+    { href: "/painel", label: "Cockpit", curto: "Cockpit" },
+    { href: "/painel/config", label: "Escritório", curto: "Escritório" },
+  ];
+  return ehSuperadmin ? [...base, { href: "/painel/negocio", label: "Negócio", curto: "Negócio" }] : base;
+}
 
 /** Nome da tela atual, para o cabeçalho do celular saber onde a pessoa está. */
 export function tituloDaRota(pathname: string): string {
-  const todos = [...NAV, NAV_PLATAFORMA].flatMap((g) => g.itens);
+  if (pathname.startsWith("/painel/empresa")) return "Empresa";
+  if (pathname.startsWith("/painel/importar")) return "Importar carteira";
+  const todos = [...NAV, NAV_PLATAFORMA].flatMap((g) => g.itens).concat(ABAS_ESCRITORIO);
   // a rota mais específica que casa com o caminho vence
   const achado = todos
     .filter((i) => pathname === i.href || pathname.startsWith(i.href + "/"))
     .sort((a, b) => b.href.length - a.href.length)[0];
-  if (achado) return achado.label;
-  if (pathname.startsWith("/painel/empresa")) return "Empresa";
-  return "Painel";
+  if (achado) return achado.label === "Configurações" ? "Escritório" : achado.label;
+  return "Cockpit";
 }

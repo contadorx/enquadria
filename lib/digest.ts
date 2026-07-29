@@ -60,7 +60,7 @@ export function montarDigest(d: DadosDigest): Digest {
     destaques.push(
       `${d.radar_marcos} ${d.radar_marcos === 1 ? "marco da transição atinge" : "marcos da transição atingem"} ${d.radar_clientes} ${d.radar_clientes === 1 ? "cliente seu" : "clientes seus"}${d.radar_titulo ? `. O mais relevante: ${d.radar_titulo}` : ""}.`
     );
-    chamada = { texto: "Ver quais clientes são afetados", caminho: "/painel/radar" };
+    chamada = { texto: "Ver quais clientes são afetados", caminho: "/painel" };
   }
 
   // 2. prazo, quando ainda existe
@@ -68,12 +68,12 @@ export function montarDigest(d: DadosDigest): Digest {
     destaques.push(
       `Faltam ${d.dias_janela} dias para o fim da janela e ${semAnalise} ${semAnalise === 1 ? "empresa da sua carteira segue" : "empresas da sua carteira seguem"} sem decisão registrada — ${brl(potencial)} de honorário na mesa.`
     );
-    chamada = { texto: "Analisar em lote", caminho: "/painel/lote" };
+    chamada = { texto: "Analisar em lote", caminho: "/painel" };
   } else if (semAnalise > 0) {
     destaques.push(
       `${semAnalise} ${semAnalise === 1 ? "empresa segue" : "empresas seguem"} sem decisão registrada na sua carteira.`
     );
-    if (!chamada) chamada = { texto: "Ir para a fila", caminho: "/painel/fila" };
+    if (!chamada) chamada = { texto: "Abrir o cockpit", caminho: "/painel" };
   }
 
   // 3. o que está parado na esteira
@@ -81,13 +81,13 @@ export function montarDigest(d: DadosDigest): Digest {
     destaques.push(
       `${aguardandoAssinatura} ${aguardandoAssinatura === 1 ? "termo aguarda" : "termos aguardam"} assinatura do cliente. Documento não assinado não protege ninguém.`
     );
-    if (!chamada) chamada = { texto: "Cobrar assinatura", caminho: "/painel/entrega" };
+    if (!chamada) chamada = { texto: "Cobrar assinatura", caminho: "/painel" };
   }
   if (semLaudo > 0) {
     destaques.push(
       `${semLaudo} ${semLaudo === 1 ? "análise está" : "análises estão"} sem laudo emitido — trabalho feito que ainda não virou papel cobrável.`
     );
-    if (!chamada) chamada = { texto: "Emitir laudos", caminho: "/painel/entrega" };
+    if (!chamada) chamada = { texto: "Emitir laudos", caminho: "/painel" };
   }
 
   // 4. reconhecimento quando está tudo em dia (mas isso sozinho NÃO gera e-mail)

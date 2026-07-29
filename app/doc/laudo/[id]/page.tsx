@@ -85,7 +85,7 @@ export default async function LaudoDoc({ params }: { params: { id: string } }) {
   return (
     <div className="doc">
       <div className="no-print mb-4 flex items-center justify-between">
-        <Link href="/painel/fila" className="text-sm text-accentdeep">← voltar à fila</Link>
+        <Link href="/painel" className="text-sm text-accentdeep">← voltar ao cockpit</Link>
         <BotaoImprimir />
       </div>
 

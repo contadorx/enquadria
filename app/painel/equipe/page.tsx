@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
+import { AbasEscritorio } from "@/components/AbasEscritorio";
 
 /**
  * EQUIPE — o escritório inteiro na mesma carteira.
@@ -106,6 +107,7 @@ export default function Equipe() {
 
   return (
     <div>
+      <AbasEscritorio />
       <h1 className="text-[19px] font-bold tracking-tight">Equipe</h1>
       <p className="mt-0.5 max-w-[72ch] text-[13px] text-muted">
         Todo mundo do escritório trabalha na mesma carteira. Quem for convidado e se cadastrar com

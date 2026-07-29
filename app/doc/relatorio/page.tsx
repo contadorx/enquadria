@@ -109,7 +109,7 @@ export default async function Relatorio() {
   return (
     <div className="doc">
       <div className="no-print mb-4 flex items-center justify-between">
-        <Link href="/painel/janela" className="text-sm text-accentdeep">← voltar</Link>
+        <Link href="/painel" className="text-sm text-accentdeep">← voltar</Link>
         <BotaoImprimir rotulo="Baixar relatório em PDF" />
       </div>
 
