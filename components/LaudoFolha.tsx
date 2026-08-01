@@ -1,0 +1,541 @@
+import Link from "next/link";
+import { BotaoImprimir } from "@/components/BotaoImprimir";
+import { formatarCnpj } from "@/lib/cnpj";
+import { pct, moeda } from "@/lib/motor";
+import { ROTULO_FAIXA, type Faixa } from "@/lib/triagem";
+import {
+  premissasComOrigem,
+  memoriaDeCalculo,
+  quadroComparativo,
+  condicoesDeValidade,
+  riscosELimites,
+  tabelaDoAnexo,
+  recomendacao,
+  rotuloOrigem,
+  ehLaudoCurto,
+  BASE_LEGAL,
+  type AnaliseGravada,
+} from "@/lib/laudo";
+
+/**
+ * A FOLHA DO LAUDO — só apresentação.
+ *
+ * Separada da rota porque o documento é o produto: precisa poder ser montado a
+ * partir de dados de teste, revisado e impresso sem passar pelo banco. A rota
+ * busca e congela; aqui só se desenha o que foi congelado.
+ */
+
+const COR_HEX: Record<string, string> = {
+  vermelho: "#DC2626",
+  amarelo: "#D97706",
+  neutro: "#475569",
+  verde: "#059669",
+};
+
+export interface DadosLaudo {
+  numero: number;
+  emitido_em: string;
+  analise: AnaliseGravada;
+  empresa: {
+    razao_social?: string;
+    cnpj?: string;
+    anexo?: number;
+    regime?: string;
+    faixa?: string;
+    motivo_triagem?: string;
+  } | null;
+  escritorio: { nome?: string; crc?: string; logo_url?: string } | null;
+}
+
+export function LaudoFolha({ dados }: { dados: DadosLaudo }) {
+  const { analise, empresa, escritorio: t } = dados;
+  const laudo = { numero: dados.numero, emitido_em: dados.emitido_em };
+  const a = analise;
+  const p = a.parametros ?? {};
+  const rec = recomendacao(a);
+  const cor = COR_HEX[rec.cor];
+  const dataEmissao = new Date(laudo.emitido_em).toLocaleDateString("pt-BR");
+  const numero = String(laudo.numero).padStart(4, "0");
+  const faixa = (empresa?.faixa ?? "A") as Faixa;
+  const curto = ehLaudoCurto(faixa);
+
+  const premissas = premissasComOrigem(a);
+  const memoria = memoriaDeCalculo(a);
+  const quadro = quadroComparativo(a);
+  const condicoes = condicoesDeValidade(a);
+  const riscos = riscosELimites(a);
+  const anexoTab = tabelaDoAnexo(a);
+  const carimbo = p.carimbo ?? null;
+  const cenarios = p.cenarios ?? [];
+  const dinheiro = p.dinheiro ?? null;
+  const sens = p.sensibilidade ?? [];
+
+  const Cabecalho = (
+    <>
+      <div className="brand">
+        <div className="firmwrap">
+          {t?.logo_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={t.logo_url} alt="" className="logo" />
+          )}
+          <div>
+            <div className="firm">{t?.nome ?? "Escritório"}</div>
+            {t?.crc && <div className="crc">{t.crc}</div>}
+          </div>
+        </div>
+        <div className="wm">
+          LAUDO {numero}
+          <br />
+          {dataEmissao}
+        </div>
+      </div>
+
+      <h1>
+        {curto
+          ? "Laudo de enquadramento — documentação de descarte"
+          : "Laudo de enquadramento de IBS e CBS"}
+      </h1>
+
+      <div className="sec">1. Identificação</div>
+      <table className="ident">
+        <tbody>
+          <tr>
+            <td>Empresa</td>
+            <td>
+              {empresa?.razao_social} · {empresa?.cnpj ? formatarCnpj(empresa.cnpj) : ""}
+            </td>
+          </tr>
+          <tr>
+            <td>Regime e enquadramento</td>
+            <td>
+              {empresa?.regime ?? "Simples Nacional"}
+              {p.anexo || empresa?.anexo ? `, Anexo ${p.anexo ?? empresa?.anexo}` : ""}
+              {p.ddas?.faixa ? `, faixa ${p.ddas.faixa}` : ""}
+              {" · triagem: "}
+              {ROTULO_FAIXA[faixa]}
+            </td>
+          </tr>
+          <tr>
+            <td>Receita bruta dos 12 meses</td>
+            <td>{p.rbt12 != null ? moeda(p.rbt12) : "não informada"}</td>
+          </tr>
+          <tr>
+            <td>Exercício de referência</td>
+            <td>{p.exercicio ?? 2027}</td>
+          </tr>
+          <tr>
+            <td>Laudo</td>
+            <td>
+              nº {numero}, emitido em {dataEmissao}
+            </td>
+          </tr>
+          <tr>
+            <td>Responsável técnico</td>
+            <td>
+              {t?.nome ?? "—"}
+              {t?.crc ? ` · ${t.crc}` : ""}
+            </td>
+          </tr>
+          <tr>
+            <td>Verificação pública</td>
+            <td>
+              enquadria.com.br/verificar — código {numero} e o CNPJ da empresa
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div className="sec">2. Objeto e base legal</div>
+      <p className="txt">
+        {curto ? (
+          <>
+            Este laudo documenta a análise de <b>{empresa?.razao_social}</b> quanto à opção por apurar
+            IBS e CBS fora do documento único de arrecadação do Simples Nacional, na janela de 1º a 30
+            de setembro de 2026, e registra as razões pelas quais a opção <b>não se aplica</b> a esta
+            empresa.
+          </>
+        ) : (
+          <>
+            Este laudo analisa se <b>{empresa?.razao_social}</b> deve optar por apurar IBS e CBS fora do
+            documento único de arrecadação do Simples Nacional, na janela de 1º a 30 de setembro de
+            2026, com efeito de janeiro a junho de 2027 e cancelamento admitido até o último dia de
+            novembro de 2026.
+          </>
+        )}
+      </p>
+      <ul className="legal">
+        {BASE_LEGAL.map((b) => (
+          <li key={b.norma}>
+            <b>{b.norma}</b> — {b.papel}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+
+  const Rodape = (
+    <>
+      <div className="sec">{curto ? "5. Conclusão e responsabilidade técnica" : "9. Conclusão e responsabilidade técnica"}</div>
+      <p className="txt">
+        A análise foi conduzida com as premissas declaradas na seção {curto ? "3" : "3"} e com os
+        parâmetros congelados na data de emissão. Os valores apresentados são estimativa de cenário e
+        não constituem apuração fiscal nem garantia de resultado. A decisão de optar ou permanecer, e
+        a responsabilidade técnica sobre ela, são do profissional que assina este documento.
+      </p>
+
+      <div className="verif">
+        <b>Verificação de autenticidade.</b> Este laudo pode ser conferido em{" "}
+        <b>enquadria.com.br/verificar</b>, informando o número <b>{numero}</b> e o CNPJ da empresa. O
+        conteúdo foi congelado na emissão e não se altera por revisões posteriores da análise.
+      </div>
+
+      <div className="sign">
+        {t?.nome ?? "Contador responsável"}
+        {t?.crc ? ` — ${t.crc}` : ""}
+      </div>
+    </>
+  );
+
+  return (
+    <div className="doc">
+      <div className="no-print mb-4 flex items-center justify-between">
+        <Link href="/painel" className="text-sm text-accentdeep">
+          ← voltar ao cockpit
+        </Link>
+        <BotaoImprimir />
+      </div>
+
+      <div className="sheet">
+        {Cabecalho}
+
+        {/* ---------------------------------------------------- LAUDO CURTO */}
+        {curto ? (
+          <>
+            <div className="sec">3. Premissas e critério de triagem</div>
+            <p className="txt">
+              A classificação partiu da atividade econômica registrada e da situação cadastral da
+              empresa. {(empresa as { motivo_triagem?: string } | null)?.motivo_triagem ?? ""}
+            </p>
+            {premissas.length > 0 && (
+              <table className="prem">
+                <tbody>
+                  {/* só as três que sustentam o descarte: o resto seria enchimento */}
+                  {premissas.slice(0, 3).map((pr) => (
+                    <tr key={pr.pergunta}>
+                      <td>{pr.pergunta}</td>
+                      <td className="num">{pr.resposta}</td>
+                      <td className={`org ${pr.origem === "estimada" ? "est" : ""}`}>
+                        {rotuloOrigem(pr.origem)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            <div className="sec">4. Resultado</div>
+            <div className="box" style={{ borderColor: cor }}>
+              <b style={{ color: cor }}>{rec.titulo}.</b> {p.motivo ?? rec.descricao}
+            </div>
+            <p className="txt">
+              A opção por apurar IBS e CBS fora do DAS pressupõe cliente pessoa jurídica que aproveite
+              o crédito integral. Sem essa contrapartida, a apuração por fora acrescenta obrigação sem
+              retorno correspondente. Este documento registra a análise e o descarte, com a mesma
+              verificação pública dos demais laudos do escritório.
+            </p>
+            <ul className="riscos">
+              {riscos.slice(0, 3).map((r, i) => (
+                <li key={i}>{r}</li>
+              ))}
+            </ul>
+            {Rodape}
+          </>
+        ) : (
+          /* -------------------------------------------------- LAUDO COMPLETO */
+          <>
+            <div className="sec">3. Premissas declaradas</div>
+            <table className="prem">
+              <tbody>
+                {premissas.map((pr) => (
+                  <tr key={pr.pergunta}>
+                    <td>
+                      {pr.pergunta}
+                      {pr.composicao && <div className="comp">{pr.composicao}</div>}
+                    </td>
+                    <td className="num">{pr.resposta}</td>
+                    <td className={`org ${pr.origem === "estimada" ? "est" : ""}`}>
+                      {rotuloOrigem(pr.origem)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {carimbo && (
+              <div className="carimbo">
+                <b>Alíquota utilizada: {pct(carimbo.aliquota)} (IBS + CBS, exercício {p.exercicio ?? 2027}).</b>{" "}
+                {carimbo.fonte} Consulta em{" "}
+                {new Date(carimbo.consultado_em).toLocaleDateString("pt-BR")}. {carimbo.nota_alternativa}
+              </div>
+            )}
+
+            <div className="sec">4. Memória de cálculo</div>
+            <table className="mem">
+              <thead>
+                <tr>
+                  <th>Passo</th>
+                  <th>Fórmula</th>
+                  <th>Substituição</th>
+                  <th>Resultado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {memoria.map((m) => (
+                  <tr key={m.passo}>
+                    <td>{m.passo}</td>
+                    <td className="mono">{m.formula}</td>
+                    <td className="mono">{m.substituicao}</td>
+                    <td className="mono res">{m.resultado}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <div className="sec">5. Quadro comparativo</div>
+            <table className="quadro">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Dentro do DAS</th>
+                  <th>IBS/CBS por fora</th>
+                  <th>Diferença</th>
+                </tr>
+              </thead>
+              <tbody>
+                {quadro.map((l) => (
+                  <tr key={l.rotulo}>
+                    <td>{l.rotulo}</td>
+                    <td className="mono">{l.dentro}</td>
+                    <td className="mono">{l.fora}</td>
+                    <td className="mono res">{l.diferenca}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {cenarios.length > 1 && (
+              <table className="quadro">
+                <thead>
+                  <tr>
+                    <th>Cenário de alíquota</th>
+                    <th>Repasse necessário</th>
+                    <th>Ganho do comprador</th>
+                    <th>Saída</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cenarios.map((c) => (
+                    <tr key={c.aliquota}>
+                      <td>
+                        {pct(c.aliquota)} — {c.principal ? "estimativa de trabalho" : "sensibilidade"}
+                      </td>
+                      <td className="mono">
+                        {isFinite(c.resultado.re) ? pct(c.resultado.re) : "—"}
+                      </td>
+                      <td className="mono">{pct(c.resultado.fc)}</td>
+                      <td className="mono res">{c.resultado.saida}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            {dinheiro?.receita != null && (
+              <table className="quadro">
+                <tbody>
+                  <tr>
+                    <td>Ganho estimado no ano (folga × receita qualificada × receita)</td>
+                    <td className="mono res">
+                      {dinheiro.ganho_anual != null && dinheiro.ganho_anual > 0
+                        ? moeda(dinheiro.ganho_anual)
+                        : "sem ganho no cenário"}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Custo anual de apurar fora do DAS (premissa declarada pelo contador)</td>
+                    <td className="mono">
+                      {dinheiro.custo_anual != null ? moeda(dinheiro.custo_anual) : "não informado"}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Payback</td>
+                    <td className="mono">
+                      {dinheiro.payback_meses != null
+                        ? `${dinheiro.payback_meses.toFixed(1).replace(".", ",")} meses`
+                        : "não calculado — depende do custo de apuração, que não foi informado"}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Custo absorvido pela empresa se o repasse não for aceito</td>
+                    <td className="mono">
+                      {dinheiro.absorvido_anual != null ? moeda(dinheiro.absorvido_anual) : "—"}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            )}
+
+            <div className="sec">6. Análise de sensibilidade</div>
+            <table className="quadro">
+              <thead>
+                <tr>
+                  <th>Cenário</th>
+                  <th>Repasse</th>
+                  <th>Efeito na recomendação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sens.map((l) => (
+                  <tr key={l.titulo}>
+                    <td>
+                      {l.titulo}
+                      <div className="comp">{l.pergunta}</div>
+                    </td>
+                    <td className="mono">{l.re != null ? pct(l.re) : "—"}</td>
+                    <td>{l.efeito}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <div className="sec">7. Resultado e recomendação</div>
+            <div className="box" style={{ borderColor: cor }}>
+              <b style={{ color: cor }}>{rec.titulo}.</b> {rec.descricao}
+              {p.motivo && <div className="motivo">{p.motivo}</div>}
+              {p.banda_sublimite && (
+                <div className="motivo">
+                  A recomendação foi levada à zona de fronteira pela proximidade do sublimite: perto
+                  dele, o que já sai do DAS muda no curso do ano e a comparação se desloca.
+                </div>
+              )}
+              {a.prioridade && (
+                <div className="prio">
+                  Prioridade — há sinalização comercial do cliente ou da concorrência: a decisão saiu
+                  do campo estritamente fiscal.
+                </div>
+              )}
+            </div>
+            <p className="txt">
+              <b>Para que esta recomendação se mantenha, precisa continuar verdadeiro:</b>
+            </p>
+            <ul className="cond">
+              {condicoes.map((c, i) => (
+                <li key={i}>{c}</li>
+              ))}
+            </ul>
+
+            <div className="sec">8. Riscos e limites</div>
+            <ul className="riscos">
+              {riscos.map((r, i) => (
+                <li key={i}>{r}</li>
+              ))}
+            </ul>
+
+            {Rodape}
+
+            {anexoTab && (
+              <>
+                <div className="sec quebra">10. Anexo — tabela do Simples utilizada</div>
+                <p className="txt">
+                  Anexo {anexoTab.anexo} da Lei Complementar nº 123/2006. A faixa desta empresa está
+                  destacada; a coluna de partilha indica a fatia de PIS/Cofins da carga do Simples que
+                  migra para a CBS no regime híbrido.
+                </p>
+                <table className="quadro">
+                  <thead>
+                    <tr>
+                      <th>Faixa</th>
+                      <th>RBT12 até</th>
+                      <th>Alíquota nominal</th>
+                      <th>Parcela a deduzir</th>
+                      <th>Partilha PIS/Cofins</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {anexoTab.linhas.map((l) => (
+                      <tr key={l.faixa} className={l.faixa === anexoTab.faixaAtual ? "destaque" : ""}>
+                        <td className="mono">{l.faixa}</td>
+                        <td className="mono">{l.ate}</td>
+                        <td className="mono">{l.nominal}</td>
+                        <td className="mono">{l.deduzir}</td>
+                        <td className="mono">{l.sharePC}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
+          </>
+        )}
+      </div>
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        .doc { max-width: 820px; margin: 0 auto; padding: 24px; }
+        .sheet { background: #fff; border: 1px solid #E2E8F0; border-radius: 8px; padding: 44px 46px; color: #334155; font-size: 12.5px; line-height: 1.6; }
+        .brand { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0B1220; padding-bottom: 12px; margin-bottom: 20px; }
+        .firmwrap { display: flex; align-items: center; gap: 12px; }
+        .logo { max-height: 40px; max-width: 140px; object-fit: contain; }
+        .firm { font-weight: 800; font-size: 17px; color: #0F172A; letter-spacing: -.01em; }
+        .crc { font-size: 11px; color: #64748B; text-transform: uppercase; letter-spacing: .06em; margin-top: 3px; }
+        .wm { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #94A3B8; text-align: right; letter-spacing: .08em; }
+        h1 { font-size: 18px; color: #0F172A; letter-spacing: -.02em; margin: 0 0 6px; }
+        .sec { font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: #0E7490; margin: 20px 0 7px; border-bottom: 1px solid #EEF2F7; padding-bottom: 3px; }
+        .txt { margin: 0 0 8px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+        th { text-align: left; font-family: 'IBM Plex Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: .1em; color: #64748B; border-bottom: 1px solid #CBD5E1; padding: 3px 6px 4px 0; font-weight: 500; }
+        td { border-bottom: 1px solid #EEF2F7; padding: 5px 6px 5px 0; vertical-align: top; }
+        .ident td:first-child { color: #64748B; width: 34%; }
+        .prem td:first-child { width: 52%; }
+        .prem .num { font-family: 'IBM Plex Mono', monospace; text-align: right; white-space: nowrap; width: 16%; }
+        .prem .org { font-size: 10.5px; color: #64748B; text-align: right; width: 32%; }
+        .prem .org.est { color: #B45309; background: #FFFBEB; }
+        .comp { font-size: 10.5px; color: #64748B; line-height: 1.45; margin-top: 2px; }
+        .mem td { font-size: 11.5px; }
+        .mem td:first-child { width: 24%; }
+        .mono { font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+        .res { font-weight: 600; color: #0F172A; white-space: nowrap; }
+        .quadro td:first-child { color: #334155; }
+        .quadro .mono { text-align: right; white-space: nowrap; }
+        .destaque td { background: #ECFEFF; font-weight: 600; }
+        .legal { margin: 0 0 4px 16px; }
+        .legal li, .cond li, .riscos li { margin-bottom: 5px; }
+        .cond, .riscos { margin: 0 0 4px 16px; }
+        .riscos li { color: #475569; font-size: 11.5px; }
+        .box { border: 1px solid; background: #F8FAFC; border-radius: 6px; padding: 11px 13px; font-size: 13px; margin-bottom: 8px; }
+        .motivo { margin-top: 7px; padding-top: 7px; border-top: 1px solid #E2E8F0; font-size: 12px; color: #475569; }
+        .prio { border-left: 3px solid #DC2626; background: #FEF2F2; color: #A32D2D; padding: 7px 10px; font-size: 11.5px; margin-top: 8px; }
+        .carimbo { border: 1px dashed #CBD5E1; background: #F8FAFC; border-radius: 6px; padding: 9px 12px; font-size: 11px; color: #475569; line-height: 1.55; margin: 8px 0; }
+        .verif { margin-top: 12px; border: 1px dashed #A5F3FC; background: #ECFEFF; border-radius: 6px; padding: 9px 12px; font-size: 10.5px; color: #0E7490; line-height: 1.55; }
+        .sign { margin-top: 30px; padding-top: 8px; border-top: 1px solid #334155; width: 280px; font-size: 11px; color: #64748B; }
+        @media print {
+          /* o cinza do app não é papel: sem isto o fundo sai impresso nas
+             sobras de página quando o navegador imprime cores de fundo */
+          html, body { background: #fff !important; }
+          .no-print { display: none !important; }
+          .doc { padding: 0; max-width: none; }
+          .sheet { border: none; border-radius: 0; padding: 0; font-size: 10pt; line-height: 1.5; }
+          .sec { margin: 14px 0 5px; }
+          td { padding: 4px 6px 4px 0; }
+          .sign { margin-top: 24px; }
+          .quebra { page-break-before: always; }
+          /* a LINHA não parte no meio; a TABELA pode continuar na página
+             seguinte — travar a tabela inteira deixava meia página em branco */
+          tr, li { page-break-inside: avoid; }
+          thead { display: table-header-group; }
+          .sec { page-break-after: avoid; }
+          @page { margin: 18mm; }
+        }
+      ` }} />
+    </div>
+  );
+}

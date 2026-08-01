@@ -262,6 +262,8 @@ export function PainelEmpresa({
             cnae={e.cnae_principal}
             rbt12Inicial={e.rbt12 != null ? Number(e.rbt12) : null}
             respostasIniciais={(a?.respostas as unknown as Respostas) ?? null}
+            detalhesIniciais={a?.parametros?.detalhes ?? null}
+            custoInicial={a?.parametros?.custo_apuracao_anual ?? null}
             estimada={estimada}
             aoSalvar={() => mudou()}
           />

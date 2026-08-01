@@ -1,7 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { decidir, dDASefetivo, pct, moeda, SAIDAS, PARAMETROS_2027, type Respostas } from "@/lib/motor";
+import {
+  decidir,
+  dDASefetivo,
+  cenarios,
+  emReais,
+  sensibilidade,
+  alertaFatorR,
+  derivarQual,
+  derivarCred,
+  pct,
+  moeda,
+  SAIDAS,
+  ALIQUOTA_ALTERNATIVA,
+  PARAMETROS_2027,
+  type Respostas,
+  type DetalheQual,
+  type DetalheCred,
+} from "@/lib/motor";
 import { anexoPorCnae } from "@/lib/triagem";
 import { parseValorBRL } from "@/lib/csv";
 import { Gauge } from "@/components/Gauge";
@@ -9,57 +26,25 @@ import { Gauge } from "@/components/Gauge";
 /**
  * AS PERGUNTAS E A CONTA — agora um componente, não uma tela.
  *
- * Vive dentro da gaveta da fila e da página da empresa. Foi a última coisa que
- * obrigava o contador a sair da lista para trabalhar: analisar era um endereço.
- * A prévia roda no navegador só para ele ver o número mudar enquanto responde;
- * o valor que vale é sempre o que o servidor recalcula ao salvar.
+ * Vive dentro da gaveta da fila e da página da empresa. A prévia roda no
+ * navegador só para o contador ver o número mudar enquanto responde; o valor
+ * que vale é sempre o que o servidor recalcula ao salvar.
+ *
+ * DUAS PERGUNTAS FORAM DESDOBRADAS (fatia 7). "Quantos clientes aproveitam
+ * crédito" e "quanto das compras gera crédito" eram as respostas mais chutadas
+ * do questionário — e são as duas de maior alavanca no resultado. Agora cada
+ * uma é composta por perguntas que o contador consegue responder olhando a
+ * escrituração, e o valor final é DERIVADO. O motor continua consumindo `qual`
+ * e `cred`, então as análises antigas seguem válidas.
  */
 
-const PERGUNTAS: {
-  chave: keyof Respostas;
-  titulo: string;
-  dica?: string;
-  opcoes: [string, number][];
-}[] = [
-  {
-    chave: "b2b",
-    titulo: "Quanto do faturamento vem de vendas para outras empresas?",
-    opcoes: [["até 20%", 0.12], ["20–40%", 0.3], ["40–60%", 0.5], ["60–80%", 0.7], ["mais de 80%", 0.9]],
-  },
-  {
-    chave: "qual",
-    titulo: "Desses clientes empresa, quantos estão no Lucro Real ou Presumido?",
-    dica: "Cliente no Simples tradicional ou MEI não aproveita o crédito — é aqui que a maioria das análises erra.",
-    opcoes: [["quase nenhum", 0.1], ["menos da metade", 0.33], ["mais da metade", 0.65], ["quase todos", 0.92]],
-  },
-  {
-    chave: "cred",
-    titulo: "Quanto da receita corresponde a compras que geram crédito?",
-    dica: "Não entram folha, pró-labore, aluguel de pessoa física nem compras de fornecedor do Simples tradicional.",
-    opcoes: [["até 15%", 0.1], ["15–30%", 0.22], ["30–45%", 0.37], ["45–60%", 0.52], ["mais de 60%", 0.7]],
-  },
-  {
-    chave: "folha",
-    titulo: "A folha representa quanto do faturamento?",
-    dica: "Serve de conferência: folha alta com crédito alto costuma ser resposta inconsistente.",
-    opcoes: [["até 15%", 0.12], ["15–30%", 0.22], ["30–45%", 0.37], ["mais de 45%", 0.55]],
-  },
-  {
-    chave: "preco",
-    titulo: "A empresa consegue renegociar preço com os clientes empresa?",
-    opcoes: [["tem poder de preço", 3], ["com esforço", 2], ["contratos travados", 1], ["não, o mercado define", 0]],
-  },
-  {
-    chave: "conc",
-    titulo: "Os concorrentes diretos estão majoritariamente fora do Simples?",
-    opcoes: [["sim", 1], ["não", 0], ["não sei", 0]],
-  },
-  {
-    chave: "exig",
-    titulo: "Algum cliente já sinalizou que vai exigir crédito integral em 2027?",
-    opcoes: [["sim", 1], ["não", 0], ["não sei", 0]],
-  },
-];
+type Origem = "informada" | "estimada" | "padrao";
+
+const ROTULO_ORIGEM: Record<Origem, string> = {
+  informada: "informada pelo cliente",
+  estimada: "estimada pelo contador",
+  padrao: "padrão do sistema",
+};
 
 const CLASSE_SAIDA: Record<string, string> = {
   vermelho: "bg-vermelho",
@@ -78,12 +63,58 @@ export const RESPOSTAS_PADRAO: Respostas = {
   exig: 0,
 };
 
+const QUAL_PADRAO: DetalheQual = { fora_simples: 0.92, sem_aproveitamento: 0 };
+const CRED_PADRAO: DetalheCred = { insumos: 0.45, servicos: 0.15, outros: 0.1 };
+
+type Opcao = [string, number];
+
+function Escolha({
+  titulo,
+  dica,
+  opcoes,
+  valor,
+  onEscolher,
+}: {
+  titulo: string;
+  dica?: string;
+  opcoes: Opcao[];
+  valor: number;
+  onEscolher: (v: number) => void;
+}) {
+  return (
+    <div className="mb-3.5 border-b border-linesoft pb-3.5 last:mb-0 last:border-b-0 last:pb-0">
+      <div className="text-[13.5px] font-semibold">{titulo}</div>
+      {dica && <p className="mb-1 mt-0.5 text-[12px] text-muted">{dica}</p>}
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {opcoes.map(([rotulo, v]) => {
+          const ativo = Math.abs(valor - v) < 1e-9;
+          return (
+            <button
+              key={rotulo}
+              onClick={() => onEscolher(v)}
+              className={`min-h-[38px] rounded-sm border px-2.5 py-1.5 font-mono text-[11.5px] ${
+                ativo
+                  ? "border-ink bg-ink font-medium text-white"
+                  : "border-line bg-surface text-slate2 hover:border-accent"
+              }`}
+            >
+              {rotulo}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function FormAnalise({
   empresaId,
   anexo,
   cnae,
   rbt12Inicial,
   respostasIniciais,
+  detalhesIniciais,
+  custoInicial,
   estimada,
   aoSalvar,
 }: {
@@ -92,30 +123,80 @@ export function FormAnalise({
   cnae: string | null;
   rbt12Inicial: number | null;
   respostasIniciais: Respostas | null;
+  detalhesIniciais?: { qual?: DetalheQual; cred?: DetalheCred } | null;
+  custoInicial?: number | null;
   /** premissas vieram do lote por CNAE — o contador precisa confirmar antes do papel */
   estimada?: boolean;
   aoSalvar?: (analiseId: string) => void;
 }) {
-  const [r, setR] = useState<Respostas>(respostasIniciais ?? RESPOSTAS_PADRAO);
+  const inicial = respostasIniciais ?? RESPOSTAS_PADRAO;
+
+  const [r, setR] = useState<Respostas>(inicial);
+  // ao reabrir uma análise antiga sem detalhes, o desdobramento parte do valor
+  // agregado: fora_simples = qual, insumos = cred. Nada muda de resultado.
+  const [dq, setDq] = useState<DetalheQual>(
+    detalhesIniciais?.qual ?? { fora_simples: inicial.qual, sem_aproveitamento: 0 }
+  );
+  const [dc, setDc] = useState<DetalheCred>(
+    detalhesIniciais?.cred ?? { insumos: inicial.cred, servicos: 0, outros: 0 }
+  );
   const [rbt12, setRbt12] = useState(rbt12Inicial != null ? String(rbt12Inicial) : "");
+  const [custo, setCusto] = useState(custoInicial != null ? String(custoInicial) : "");
+  const [anexoSel, setAnexoSel] = useState<number>(anexo ?? anexoPorCnae(cnae) ?? 1);
+  const [anexoConfirmado, setAnexoConfirmado] = useState(false);
+  const [tocadas, setTocadas] = useState<Set<string>>(new Set());
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  const anexoEfetivo = anexo ?? anexoPorCnae(cnae) ?? 1;
+  function tocar(chave: string) {
+    setTocadas((s) => new Set(s).add(chave));
+  }
+
+  /** origem de cada premissa: quem não foi tocado é padrão (ou estimado, se veio do lote) */
+  function origemDe(chave: string): Origem {
+    if (tocadas.has(chave)) return "informada";
+    if (estimada) return "estimada";
+    if (respostasIniciais) return "informada";
+    return "padrao";
+  }
+
+  const qual = derivarQual(dq);
+  const cred = derivarCred(dc);
+  const respostas: Respostas = { ...r, qual, cred };
+
   const rbt12Num = parseValorBRL(rbt12) ?? null;
-  const ddas = dDASefetivo(anexoEfetivo, rbt12Num);
-  const res = decidir(r, { ...PARAMETROS_2027, das: ddas.das });
+  const custoNum = parseValorBRL(custo) ?? null;
+  const ddas = dDASefetivo(anexoSel, rbt12Num);
+  const base = { ...PARAMETROS_2027, das: ddas.das, rbt12: rbt12Num };
+
+  const res = decidir(respostas, base);
   const saida = SAIDAS[res.saida];
+  const dois = cenarios(respostas, base);
+  const dinheiro = emReais(res, rbt12Num, custoNum);
+  const sens = sensibilidade(respostas, base, dinheiro);
+  const alerta = alertaFatorR(anexoSel, r.folha);
 
   async function salvar() {
     setSalvando(true);
     setErro(null);
     try {
+      const origens = Object.fromEntries(
+        ["b2b", "qual", "cred", "folha", "preco", "conc", "exig"].map((k) => [k, origemDe(k)])
+      );
       const resp = await fetch("/api/analise", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ empresa_id: empresaId, respostas: r, rbt12: rbt12Num }),
+        body: JSON.stringify({
+          empresa_id: empresaId,
+          respostas,
+          rbt12: rbt12Num,
+          custo_apuracao_anual: custoNum,
+          detalhes: { qual: dq, cred: dc },
+          origens,
+          anexo: anexoSel,
+          anexo_confirmado: anexoConfirmado,
+        }),
       });
       const json = await resp.json();
       if (resp.ok && json.analise_id) {
@@ -142,16 +223,17 @@ export function FormAnalise({
         </div>
       )}
 
+      {/* ---------------------------------------------------- a empresa */}
       <div className="rounded border border-line bg-surface p-4">
         <div className="mb-3 font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
-          Premissas informadas
+          A empresa
         </div>
 
         <div className="mb-3.5 border-b border-linesoft pb-3.5">
           <div className="text-[13.5px] font-semibold">Receita bruta dos últimos 12 meses (RBT12)</div>
           <p className="mb-2 mt-0.5 text-[12px] text-muted">
-            É o que torna a alíquota do Simples EFETIVA, não a nominal do topo da faixa. Sem informar,
-            o cálculo usa a faixa {ddas.faixa} — estimativa conservadora.
+            Torna a alíquota do Simples EFETIVA, e é a única coisa que permite converter a decisão em
+            reais. Sem ela, o cálculo usa a faixa {ddas.faixa} e o laudo sai sem os valores anuais.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center rounded-sm border border-line px-2.5 focus-within:border-accent">
@@ -169,7 +251,7 @@ export function FormAnalise({
                 ddas.fonte === "efetiva" ? "bg-verdewash text-verde" : "bg-accentwash text-accentdeep"
               }`}
             >
-              Anexo {ddas.anexo} · faixa {ddas.faixa} ·{" "}
+              faixa {ddas.faixa} ·{" "}
               {ddas.fonte === "efetiva" ? `efetiva ${pct(ddas.aliquota)}` : `topo ${pct(ddas.aliquota)} (estimado)`}
             </span>
           </div>
@@ -179,34 +261,204 @@ export function FormAnalise({
               não tem decisão a tomar nesta janela.
             </p>
           )}
+          {res.banda_sublimite && (
+            <p className="mt-2 rounded-sm bg-amarelowash px-2.5 py-2 text-[12px] text-slate2">
+              RBT12 na faixa em torno do sublimite de {moeda(PARAMETROS_2027.sublimite ?? 3600000)}:
+              a decisão vai para o empresário com os dois cenários à vista.
+            </p>
+          )}
         </div>
 
-        {PERGUNTAS.map((p, i) => (
-          <div key={p.chave} className={i < PERGUNTAS.length - 1 ? "mb-3.5 border-b border-linesoft pb-3.5" : ""}>
-            <div className="text-[13.5px] font-semibold">{p.titulo}</div>
-            {p.dica && <p className="mb-2 mt-0.5 text-[12px] text-muted">{p.dica}</p>}
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {p.opcoes.map(([rotulo, valor]) => {
-                const ativo = Math.abs((r[p.chave] as number) - valor) < 1e-9;
-                return (
-                  <button
-                    key={rotulo}
-                    onClick={() => setR({ ...r, [p.chave]: valor })}
-                    className={`min-h-[38px] rounded-sm border px-2.5 py-1.5 font-mono text-[11.5px] ${
-                      ativo
-                        ? "border-ink bg-ink font-medium text-white"
-                        : "border-line bg-surface text-slate2 hover:border-accent"
-                    }`}
-                  >
-                    {rotulo}
-                  </button>
-                );
-              })}
-            </div>
+        <div className="mb-3.5 border-b border-linesoft pb-3.5">
+          <div className="text-[13.5px] font-semibold">Anexo do Simples</div>
+          <div className="mt-2 flex gap-1.5">
+            {[1, 2, 3, 4, 5].map((a) => (
+              <button
+                key={a}
+                onClick={() => setAnexoSel(a)}
+                className={`h-9 w-9 rounded-sm border font-mono text-[12px] ${
+                  anexoSel === a ? "border-ink bg-ink font-medium text-white" : "border-line bg-surface text-slate2"
+                }`}
+              >
+                {a}
+              </button>
+            ))}
           </div>
-        ))}
+          {alerta && (
+            <div className="mt-2.5 rounded-sm border border-amarelo bg-amarelowash px-3 py-2.5">
+              <div className="text-[12.5px] font-semibold text-ink">
+                Fator R e anexo declarado não batem
+              </div>
+              <p className="mt-0.5 text-[12.5px] text-slate2">{alerta.texto}</p>
+              <label className="mt-2 flex items-center gap-2 text-[12.5px] text-slate2">
+                <input
+                  type="checkbox"
+                  checked={anexoConfirmado}
+                  onChange={(e) => setAnexoConfirmado(e.target.checked)}
+                />
+                Confirmo que o Anexo {alerta.anexoDeclarado} é o correto para esta empresa
+              </label>
+              <p className="mt-1 text-[11px] text-muted">
+                Isto é um aviso, não um bloqueio: a folha aqui é uma faixa, não a apuração. A
+                confirmação fica registrada na análise.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div className="text-[13.5px] font-semibold">
+            Custo anual de apurar IBS/CBS fora do DAS <span className="font-normal text-muted">(opcional)</span>
+          </div>
+          <p className="mb-2 mt-0.5 text-[12px] text-muted">
+            Premissa sua, não do sistema: honorário adicional, sistema, obrigações acessórias. Sem
+            este valor o laudo não calcula payback — e diz que não calculou, em vez de estimar.
+          </p>
+          <div className="flex items-center rounded-sm border border-line px-2.5 focus-within:border-accent">
+            <span className="font-mono text-[12px] text-muted">R$</span>
+            <input
+              value={custo}
+              onChange={(e) => setCusto(e.target.value)}
+              inputMode="decimal"
+              placeholder="por ano"
+              className="w-36 bg-transparent px-2 py-1.5 font-mono text-[13px] outline-none"
+            />
+          </div>
+        </div>
       </div>
 
+      {/* ------------------------------------------------- para quem vende */}
+      <div className="rounded border border-line bg-surface p-4">
+        <div className="mb-3 font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
+          Para quem a empresa vende
+        </div>
+
+        <Escolha
+          titulo="Quanto do faturamento vem de vendas para outras empresas?"
+          opcoes={[["até 20%", 0.12], ["20–40%", 0.3], ["40–60%", 0.5], ["60–80%", 0.7], ["mais de 80%", 0.9]]}
+          valor={r.b2b}
+          onEscolher={(v) => {
+            setR({ ...r, b2b: v });
+            tocar("b2b");
+          }}
+        />
+
+        <Escolha
+          titulo="Desses clientes empresa, quantos estão fora do Simples (Lucro Real ou Presumido)?"
+          dica="Cliente no Simples tradicional ou MEI não aproveita o crédito integral."
+          opcoes={[["quase nenhum", 0.1], ["menos da metade", 0.33], ["mais da metade", 0.65], ["quase todos", 0.92]]}
+          valor={dq.fora_simples}
+          onEscolher={(v) => {
+            setDq({ ...dq, fora_simples: v });
+            tocar("qual");
+          }}
+        />
+
+        <Escolha
+          titulo="E desses, quantos ainda assim NÃO aproveitariam o crédito?"
+          dica="Órgão público, entidade imune, ou quem revende direto ao consumidor final e não usa o crédito na prática."
+          opcoes={[["nenhum", 0], ["poucos", 0.15], ["cerca de um terço", 0.33], ["mais da metade", 0.6]]}
+          valor={dq.sem_aproveitamento}
+          onEscolher={(v) => {
+            setDq({ ...dq, sem_aproveitamento: v });
+            tocar("qual");
+          }}
+        />
+
+        <p className="mt-2 rounded-sm bg-surface2 px-2.5 py-2 font-mono text-[11.5px] text-slate2">
+          receita qualificada = {pct(r.b2b)} × {pct(qual)} = <b>{pct(res.rq)}</b> da receita
+        </p>
+      </div>
+
+      {/* -------------------------------------------------- o que ela compra */}
+      <div className="rounded border border-line bg-surface p-4">
+        <div className="mb-3 font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
+          O que a empresa compra com crédito
+        </div>
+        <p className="mb-3 text-[12px] text-muted">
+          Três perguntas em vez de uma: somadas, dão a fatia da receita que gera crédito. Não entram
+          folha, pró-labore, aluguel de pessoa física nem compras de fornecedor do Simples.
+        </p>
+
+        <Escolha
+          titulo="Mercadorias e insumos comprados de fornecedor fora do Simples"
+          opcoes={[["nada", 0], ["até 10%", 0.07], ["10–20%", 0.15], ["20–35%", 0.27], ["mais de 35%", 0.45]]}
+          valor={dc.insumos}
+          onEscolher={(v) => {
+            setDc({ ...dc, insumos: v });
+            tocar("cred");
+          }}
+        />
+        <Escolha
+          titulo="Serviços tomados de pessoa jurídica fora do Simples"
+          opcoes={[["nada", 0], ["até 5%", 0.03], ["5–10%", 0.07], ["mais de 10%", 0.15]]}
+          valor={dc.servicos}
+          onEscolher={(v) => {
+            setDc({ ...dc, servicos: v });
+            tocar("cred");
+          }}
+        />
+        <Escolha
+          titulo="Energia, aluguel de PJ, fretes e demais insumos com crédito"
+          opcoes={[["nada", 0], ["até 5%", 0.03], ["5–10%", 0.07], ["mais de 10%", 0.13]]}
+          valor={dc.outros}
+          onEscolher={(v) => {
+            setDc({ ...dc, outros: v });
+            tocar("cred");
+          }}
+        />
+
+        <p className="mt-2 rounded-sm bg-surface2 px-2.5 py-2 font-mono text-[11.5px] text-slate2">
+          compras com crédito = {pct(dc.insumos)} + {pct(dc.servicos)} + {pct(dc.outros)} ={" "}
+          <b>{pct(cred)}</b> da receita
+        </p>
+      </div>
+
+      {/* ------------------------------------------------------ negociação */}
+      <div className="rounded border border-line bg-surface p-4">
+        <div className="mb-3 font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
+          Folha e poder de negociação
+        </div>
+        <Escolha
+          titulo="A folha representa quanto do faturamento?"
+          dica="Entra no fator R e serve de conferência do anexo declarado."
+          opcoes={[["até 15%", 0.12], ["15–30%", 0.22], ["30–45%", 0.37], ["mais de 45%", 0.55]]}
+          valor={r.folha}
+          onEscolher={(v) => {
+            setR({ ...r, folha: v });
+            tocar("folha");
+          }}
+        />
+        <Escolha
+          titulo="A empresa consegue renegociar preço com os clientes empresa?"
+          opcoes={[["tem poder de preço", 3], ["com esforço", 2], ["contratos travados", 1], ["não, o mercado define", 0]]}
+          valor={r.preco}
+          onEscolher={(v) => {
+            setR({ ...r, preco: v });
+            tocar("preco");
+          }}
+        />
+        <Escolha
+          titulo="Os concorrentes diretos estão majoritariamente fora do Simples?"
+          opcoes={[["sim", 1], ["não", 0]]}
+          valor={r.conc}
+          onEscolher={(v) => {
+            setR({ ...r, conc: v });
+            tocar("conc");
+          }}
+        />
+        <Escolha
+          titulo="Algum cliente já sinalizou que vai exigir crédito integral em 2027?"
+          opcoes={[["sim", 1], ["não", 0]]}
+          valor={r.exig}
+          onEscolher={(v) => {
+            setR({ ...r, exig: v });
+            tocar("exig");
+          }}
+        />
+      </div>
+
+      {/* --------------------------------------------------------- resultado */}
       <div className="rounded border border-line bg-surface p-4">
         <div className="mb-3 font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
           A decisão em uma linha
@@ -214,23 +466,12 @@ export function FormAnalise({
         <Gauge re={res.re} fc={res.fc} />
 
         <div className="mt-4 overflow-hidden rounded border border-line">
-          <div
-            className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-white ${
-              CLASSE_SAIDA[saida.cor]
-            }`}
-          >
+          <div className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-white ${CLASSE_SAIDA[saida.cor]}`}>
             <span className="font-mono text-[11px] tracking-[0.14em]">{res.saida}</span>
             <span className="text-[14.5px] font-bold">{saida.titulo}</span>
           </div>
           <div className="bg-surface px-4 py-3.5 text-[13.5px] text-slate2">
-            {saida.descricao}
-            {res.saida === "S4" && isFinite(res.re) && (
-              <>
-                {" "}
-                Repasse de {pct(res.re)} contra {pct(res.fc)} de ganho do comprador — folga de{" "}
-                {(res.folga * 100).toFixed(1).replace(".", ",")} pontos.
-              </>
-            )}
+            {res.motivo}
             {res.prioridade && (
               <div className="mt-2.5 rounded-sm bg-vermelhowash px-2.5 py-2 font-mono text-[11px] tracking-wide text-vermelho">
                 PRIORIDADE FORÇADA — a decisão já saiu do campo fiscal.
@@ -239,48 +480,115 @@ export function FormAnalise({
           </div>
         </div>
 
-        <table className="mt-3 w-full border-collapse text-[13px]">
-          <tbody>
-            {[
-              ["IBS/CBS no regime regular sobre a base", pct(res.ch)],
-              ["Compras que geram crédito", pct(r.cred)],
-              [`Sai do DAS — PIS/Cofins (${pct(ddas.aliquota)} × ${pct(ddas.sharePC)})`, "−" + pct(ddas.das)],
-              ["Receita vendida a quem aproveita crédito", pct(res.rq)],
-            ].map(([k, v]) => (
-              <tr key={k}>
-                <td className="border-b border-linesoft py-2 pr-2">{k}</td>
-                <td className="border-b border-linesoft py-2 text-right font-mono">{v}</td>
+        {/* OS DOIS CENÁRIOS */}
+        <div className="mt-4">
+          <div className="mb-1.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
+            Os dois cenários de alíquota
+          </div>
+          <table className="w-full border-collapse text-[13px]">
+            <thead>
+              <tr className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted">
+                <th className="border-b border-line pb-1 text-left">cenário</th>
+                <th className="border-b border-line pb-1 text-right">repasse</th>
+                <th className="border-b border-line pb-1 text-right">ganho do comprador</th>
+                <th className="border-b border-line pb-1 text-right">saída</th>
               </tr>
+            </thead>
+            <tbody>
+              {dois.map((c) => (
+                <tr key={c.aliquota}>
+                  <td className="border-b border-linesoft py-2 pr-2">
+                    {pct(c.aliquota)}
+                    <span className="ml-1.5 font-mono text-[10.5px] text-muted">
+                      {c.principal ? "estimativa de trabalho" : "sensibilidade"}
+                    </span>
+                  </td>
+                  <td className="border-b border-linesoft py-2 text-right font-mono">
+                    {isFinite(c.resultado.re) ? pct(c.resultado.re) : "—"}
+                  </td>
+                  <td className="border-b border-linesoft py-2 text-right font-mono">{pct(c.resultado.fc)}</td>
+                  <td className="border-b border-linesoft py-2 text-right font-mono font-semibold">
+                    {c.resultado.saida}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="mt-1.5 text-[11px] text-muted">
+            A alíquota de referência só é fixada por Resolução do Senado até 31/10/2026 — depois do
+            fechamento desta janela. O cenário de {pct(ALIQUOTA_ALTERNATIVA)} é sensibilidade
+            declarada, não norma publicada.
+          </p>
+        </div>
+
+        {/* EM REAIS */}
+        {dinheiro.receita != null && (
+          <div className="mt-4 rounded-sm bg-surface2 p-3">
+            <div className="mb-1.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
+              O que isso vale no ano
+            </div>
+            <table className="w-full border-collapse text-[13px]">
+              <tbody>
+                <tr>
+                  <td className="py-1 pr-2 text-muted">Ganho estimado (folga × receita qualificada × receita)</td>
+                  <td className="py-1 text-right font-mono font-semibold">
+                    {dinheiro.ganho_anual != null && dinheiro.ganho_anual > 0
+                      ? moeda(dinheiro.ganho_anual)
+                      : "sem ganho no cenário"}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-1 pr-2 text-muted">Custo de apurar por fora (premissa sua)</td>
+                  <td className="py-1 text-right font-mono">
+                    {dinheiro.custo_anual != null ? moeda(dinheiro.custo_anual) : "não informado"}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-1 pr-2 text-muted">Payback</td>
+                  <td className="py-1 text-right font-mono">
+                    {dinheiro.payback_meses != null
+                      ? `${dinheiro.payback_meses.toFixed(1).replace(".", ",")} meses`
+                      : "não calculado"}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="py-1 pr-2 text-muted">Se o repasse não for aceito, a empresa absorve</td>
+                  <td className="py-1 text-right font-mono text-vermelho">
+                    {dinheiro.absorvido_anual != null ? moeda(dinheiro.absorvido_anual) : "—"}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* SENSIBILIDADE */}
+        <div className="mt-4">
+          <div className="mb-1.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
+            Sensibilidade
+          </div>
+          <ul className="space-y-1.5 text-[12.5px] text-slate2">
+            {sens.map((l) => (
+              <li key={l.titulo} className="rounded-sm border border-linesoft px-2.5 py-2">
+                <b>{l.titulo}.</b> {l.efeito}
+              </li>
             ))}
-            <tr>
-              <td className="pt-3 font-bold">Custo líquido / repasse necessário</td>
-              <td className="pt-3 text-right font-mono font-bold text-accentdeep">{pct(res.re)}</td>
-            </tr>
-          </tbody>
-        </table>
+          </ul>
+        </div>
 
         <p className="mt-3 text-[11.5px] leading-relaxed text-muted">
-          {ddas.fonte === "efetiva" ? (
-            <>
-              dDAS pela alíquota EFETIVA do Simples sobre a RBT12 de {moeda(ddas.rbt12)} (Anexo {ddas.anexo},
-              faixa {ddas.faixa}).{" "}
-            </>
-          ) : (
-            <>
-              RBT12 não informada — dDAS pelo topo da faixa {ddas.faixa} do Anexo {ddas.anexo} (estimativa
-              conservadora). Informe a RBT12 para o número exato.{" "}
-            </>
-          )}
-          A alíquota de referência de IBS/CBS só é fixada por Resolução do Senado até 31/10/2026 — depois
-          do fechamento desta janela. Estimativa de cenário a partir das premissas informadas; não
-          substitui apuração com dados fiscais efetivos. A responsabilidade técnica é do contador que
-          assina.
+          {ddas.fonte === "efetiva"
+            ? `dDAS pela alíquota efetiva do Simples sobre a RBT12 de ${moeda(ddas.rbt12)} (Anexo ${ddas.anexo}, faixa ${ddas.faixa}). `
+            : `RBT12 não informada — dDAS pelo topo da faixa ${ddas.faixa} do Anexo ${ddas.anexo} (estimativa conservadora). `}
+          Estimativa de cenário a partir das premissas informadas; não substitui apuração com dados
+          fiscais efetivos. A decisão e a responsabilidade técnica são do contador que assina.
+        </p>
+        <p className="mt-1.5 font-mono text-[10.5px] text-muted">
+          origem das premissas: {ROTULO_ORIGEM[origemDe("b2b")]} · marcada por resposta no laudo
         </p>
       </div>
 
-      {erro && (
-        <p className="rounded-sm bg-vermelhowash px-3 py-2 text-[12.5px] text-vermelho">{erro}</p>
-      )}
+      {erro && <p className="rounded-sm bg-vermelhowash px-3 py-2 text-[12.5px] text-vermelho">{erro}</p>}
 
       <button
         onClick={salvar}

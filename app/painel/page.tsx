@@ -59,6 +59,15 @@ async function avisosDoRadar(
 export default async function Painel() {
   const supabase = createClient();
 
+  // o escritório identificado é o passo 1 da trilha — e o que vai na capa do laudo
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data: perfil } = user
+    ? await supabase.from("profiles").select("tenants(nome, crc)").eq("id", user.id).maybeSingle()
+    : { data: null };
+  const tt = perfil?.tenants as { nome?: string; crc?: string } | { nome?: string; crc?: string }[] | null;
+  const tenant = Array.isArray(tt) ? tt[0] : tt;
+  const temEscritorio = !!tenant?.nome && tenant.nome !== "Escritório" && !!tenant?.crc;
+
   const { data: empresas } = await supabase
     .from("empresas")
     .select(
@@ -173,6 +182,7 @@ export default async function Painel() {
         posPct={janela.posPct}
         avisos={avisos}
         totalCarteira={linhas.length}
+        temEscritorio={temEscritorio}
       />
     </div>
   );

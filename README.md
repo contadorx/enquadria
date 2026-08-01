@@ -108,8 +108,35 @@ faziam acontece dentro do cockpit ou da gaveta. Radar e revisão da carteira
 viraram AVISOS no topo da fila, e cada aviso injeta as empresas atingidas na
 fila; aviso que não gera trabalho não aparece.
 
-Teste do núcleo (funções puras): `testes/cockpit.test.mjs` — instruções de
-execução no cabeçalho do arquivo.
+Testes do núcleo (funções puras, sem banco): `testes/cockpit.test.mjs` (esteira
+e próxima ação) e `testes/motor.test.mjs` (cenários, reais, sensibilidade,
+sublimite, fator R, partilha por exercício e as seções do laudo). Instruções de
+execução no cabeçalho de cada arquivo.
+
+## O laudo (fatias 5, 6 e 7)
+
+O documento passou a ter DEZ seções e a sustentar honorário: identificação ·
+objeto e base legal (EC 132/2023, LC 214/2025, LC 227/2026 e Res. CGSN 186/2026)
+· premissas com a ORIGEM marcada · MEMÓRIA DE CÁLCULO com fórmula, substituição
+numérica e resultado em cada passo · quadro comparativo em % e em R$ ·
+sensibilidade · resultado com o que precisa continuar verdadeiro · riscos e
+limites · responsabilidade técnica · anexo do Simples com a faixa destacada.
+Sai em ~4 páginas mais o anexo.
+
+Faixas C, D, MEI e FORA recebem o LAUDO CURTO (2 páginas): documenta o descarte
+com a mesma numeração e a mesma verificação pública, sem simular uma decisão
+que não existe.
+
+Todo laudo traz DOIS CENÁRIOS de alíquota — 8,8% (estimativa de trabalho) e
+9,4% (sensibilidade declarada, sem norma) — porque a decisão é tomada antes de
+a alíquota existir: a Resolução do Senado tem prazo até 31/10/2026, depois do
+fechamento da janela. O carimbo da alíquota, com fonte e data de consulta, vai
+no corpo do documento.
+
+Nada disso exigiu migration: tudo o que o laudo imprime é congelado em
+`analises.parametros` (jsonb) no momento de salvar a análise, e `parametros` já
+é copiado para o snapshot do laudo na emissão. Revisar a análise depois NÃO
+altera um laudo já entregue.
 
 ## Contrato do endpoint da Receita (se for ligar)
 
@@ -126,3 +153,22 @@ efetiva — o que é o piso defensável. Para o laudo de máxima precisão, calc
 alíquota efetiva a partir da RBT12 de cada empresa (a coluna de faixa de
 faturamento entra numa próxima fatia). A interpretação do que sai do DAS no
 híbrido (só PIS/Cofins, ICMS/ISS até 2029) segue confirmada pela partilha oficial.
+
+## Documentos legais (fonte única)
+
+`lib/legal.json` guarda o texto de Termos de Uso, Política de Privacidade,
+Segurança e Políticas internas. Duas coisas leem esse arquivo:
+
+- o app, em `/termos`, `/privacidade`, `/seguranca` e `/politicas`
+  (componente `components/DocumentoLegal.tsx`), com `noindex` e canonical
+  apontando para o site — a versão pública é a do site;
+- o site estático, pelo gerador `ferramentas/gerar-legal.py`.
+
+    python3 ferramentas/gerar-legal.py ../enquadria-site
+
+Editou o JSON? Rode o gerador e recoloque os quatro HTML no site. **Nunca edite
+o texto direto no HTML**: texto jurídico escrito em dois lugares é texto
+jurídico que diverge, e divergir aqui é pior do que não ter documento.
+
+A tela de login exibe o aceite dos Termos ao criar conta, e o rodapé do app
+aponta para os quatro documentos.

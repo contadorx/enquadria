@@ -154,7 +154,7 @@ export default async function ComparativoDoc({ params }: { params: { id: string 
         <div className="sign">Contador responsável</div>
       </div>
 
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         .doc { max-width: 820px; margin: 0 auto; padding: 24px; }
         .sheet { background: #fff; border: 1px solid #E2E8F0; border-radius: 8px; padding: 44px 46px; color: #334155; font-size: 12.5px; line-height: 1.6; }
         .brand { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0B1220; padding-bottom: 12px; margin-bottom: 22px; }
@@ -187,7 +187,7 @@ export default async function ComparativoDoc({ params }: { params: { id: string 
           .sheet { border: none; border-radius: 0; padding: 0; }
           @page { margin: 18mm; }
         }
-      `}</style>
+      ` }} />
     </div>
   );
 }

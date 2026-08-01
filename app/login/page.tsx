@@ -116,6 +116,26 @@ export default function Login() {
 
         <p className="mt-4 text-[11.5px] leading-relaxed text-muted">
           O workspace do escritório é criado automaticamente no primeiro acesso.
+          {modo === "criar" ? (
+            <>
+              {" "}Ao criar a conta você concorda com os{" "}
+              <a href="/termos" className="underline underline-offset-2 hover:text-accentdeep">
+                Termos de Uso
+              </a>{" "}
+              e com a{" "}
+              <a href="/privacidade" className="underline underline-offset-2 hover:text-accentdeep">
+                Política de Privacidade
+              </a>
+              .
+            </>
+          ) : null}
+        </p>
+        <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
+          <a href="/termos" className="hover:text-accentdeep">Termos</a>
+          <a href="/privacidade" className="hover:text-accentdeep">Privacidade</a>
+          <a href="/seguranca" className="hover:text-accentdeep">Segurança</a>
+          <a href="/politicas" className="hover:text-accentdeep">Políticas internas</a>
+          <a href="/curso" className="hover:text-accentdeep">Curso gratuito</a>
         </p>
       </div>
     </main>

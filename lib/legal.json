@@ -1,0 +1,450 @@
+{
+  "_leia": "FONTE ÚNICA dos documentos legais. O app renderiza direto daqui (app/termos, app/privacidade, app/seguranca, app/politicas) e o site estático é gerado deste mesmo arquivo por ferramentas/gerar-legal.py. Editar em dois lugares é como texto jurídico diverge — e texto legal divergente é pior do que não ter.",
+  "empresa": {
+    "razao_social": "Produtize Produtos e Serviços Inteligentes Ltda.",
+    "cnpj": "48.417.292/0001-99",
+    "produto": "Enquadria",
+    "site": "enquadria.com.br",
+    "app": "app.enquadria.com.br",
+    "email_contato": "contato@enquadria.com.br",
+    "email_privacidade": "privacidade@enquadria.com.br",
+    "email_seguranca": "seguranca@enquadria.com.br",
+    "vigencia": "1º de agosto de 2026"
+  },
+  "documentos": [
+    {
+      "slug": "termos",
+      "arquivo": "termos.html",
+      "titulo": "Termos de Uso",
+      "resumo": "As regras do serviço, em português. O que a plataforma faz, o que ela não faz, de quem é cada responsabilidade e o que acontece quando o contrato termina.",
+      "secoes": [
+        {
+          "t": "1. Quem fornece o serviço",
+          "p": [
+            "O Enquadria é um serviço de software operado por Produtize Produtos e Serviços Inteligentes Ltda., inscrita no CNPJ sob o nº 48.417.292/0001-99, doravante “nós” ou “Enquadria”.",
+            "Estes Termos regem o uso do site enquadria.com.br, do aplicativo em app.enquadria.com.br, do curso gratuito publicado em enquadria.com.br/curso e de todos os documentos gerados pela plataforma.",
+            "Ao criar uma conta ou usar qualquer parte do serviço, você concorda com estes Termos. Se não concordar, não use."
+          ]
+        },
+        {
+          "t": "2. Definições",
+          "p": [
+            "**Plataforma**: o software Enquadria, incluindo site, aplicativo, APIs e documentos gerados.",
+            "**Assinante**: a pessoa jurídica — escritório contábil ou profissional autônomo — que contrata o serviço e responde pelo pagamento.",
+            "**Usuário**: cada pessoa física com acesso individual dentro da conta do Assinante.",
+            "**Empresa**: cada cliente do Assinante cadastrado na plataforma, identificado por CNPJ.",
+            "**Carteira**: o conjunto de Empresas cadastradas por um Assinante.",
+            "**Documento**: o laudo de enquadramento, o termo de ciência, o comparativo de regimes e o relatório do escritório gerados pela plataforma.",
+            "**Plano**: a modalidade de contratação vigente — Gratuito ou PRO."
+          ]
+        },
+        {
+          "t": "3. O que a plataforma faz",
+          "p": [
+            "A plataforma organiza a decisão de apuração de IBS e CBS dos clientes do Assinante: classifica a carteira por perfil de atividade, calcula cenários a partir de premissas informadas e produz documentos com a marca do Assinante.",
+            "A plataforma é uma ferramenta de organização e cálculo de cenário. **Ela não presta consultoria tributária, não faz apuração fiscal, não emite documento fiscal, não transmite obrigação acessória e não substitui o julgamento do profissional contábil.**"
+          ]
+        },
+        {
+          "t": "4. O que a plataforma não faz — e de quem é a responsabilidade",
+          "p": [
+            "Todo número exibido ou impresso é **estimativa de cenário** construída a partir de premissas informadas pelo Assinante ou pelo cliente dele. Não é apuração com dados fiscais efetivos.",
+            "A alíquota de referência de IBS e CBS utilizada nos cálculos ainda não foi fixada em norma. Cada documento traz esse aviso e apresenta mais de um cenário.",
+            "**A decisão sobre optar ou permanecer, a conferência das premissas e a responsabilidade técnica são exclusivamente do profissional que assina o documento.** O Enquadria não assume, em nenhuma hipótese, responsabilidade técnica por decisão tributária de terceiros.",
+            "Não prometemos economia, redução de carga tributária ou qualquer resultado financeiro."
+          ]
+        },
+        {
+          "t": "5. Licença de uso",
+          "p": [
+            "Enquanto o Plano estiver ativo e adimplente, concedemos ao Assinante uma licença não exclusiva, intransferível e revogável para usar a plataforma na sua atividade profissional.",
+            "A licença não autoriza revender, sublicenciar, disponibilizar a plataforma a terceiros como se fosse sua, nem extrair a base de conhecimento embutida (tabelas, parâmetros, textos e lógica de decisão) para produto concorrente."
+          ]
+        },
+        {
+          "t": "6. Cadastro, acesso e equipe",
+          "p": [
+            "O cadastro exige dados verdadeiros e um e-mail sob controle do Assinante. Cada Usuário deve ter acesso individual: senha compartilhada quebra a trilha de auditoria e é de risco exclusivo de quem compartilha.",
+            "O Assinante é responsável por conceder, revisar e revogar os acessos da própria equipe, e responde pelos atos praticados sob as credenciais da sua conta."
+          ]
+        },
+        {
+          "t": "7. Os dados da carteira são do Assinante",
+          "p": [
+            "A carteira, as análises, os documentos emitidos e todo o conteúdo inserido pertencem ao Assinante. Não usamos esse conteúdo para vender a terceiros, não o comercializamos e não o utilizamos para treinar modelos.",
+            "Podemos usar dados **agregados e não identificáveis** (por exemplo, distribuição de faixas de triagem no conjunto de todos os assinantes) para melhorar o produto e para conteúdo de mercado, sem jamais expor Assinante, Empresa ou número individual."
+          ]
+        },
+        {
+          "t": "8. Importação e enriquecimento de dados",
+          "p": [
+            "O Assinante importa a carteira por arquivo (CSV). Ao importar, declara que tem base legal para tratar aqueles dados e que os obteve de forma lícita.",
+            "Dados cadastrais faltantes podem ser complementados por consulta a base de dados públicos de CNPJ mantida por nós. Essa consulta usa apenas informação de acesso público e é feita para tornar a triagem mais precisa.",
+            "**Não nos conectamos a sistemas de gestão de terceiros, não lemos a escrituração do Assinante e não acessamos ambiente fiscal nenhum.**"
+          ]
+        },
+        {
+          "t": "9. Documentos emitidos e verificação pública",
+          "p": [
+            "Os documentos saem com a marca do Assinante (nome, CRC e logo) e são numerados sequencialmente por conta.",
+            "**O documento emitido é imutável.** Os valores ficam congelados na data da emissão: revisar a análise depois não altera um documento já entregue. É o que permite que o documento sirva de prova.",
+            "Cada laudo e cada termo recebem um código de verificação pública. Qualquer pessoa com o código e o CNPJ pode confirmar a autenticidade, sem login. A verificação confirma origem, número e data — **não expõe premissas, cálculos nem dados da Empresa**.",
+            "O termo de ciência é assinado eletronicamente nos termos da Lei nº 14.063/2020, com registro de data, hora, origem e hash do conteúdo assinado."
+          ]
+        },
+        {
+          "t": "10. Uso aceitável",
+          "p": [
+            "É vedado: usar a plataforma para fim ilícito; inserir dados de terceiros sem base legal; tentar burlar limites de plano, isolamento entre contas ou controles de acesso; automatizar acesso em volume que degrade o serviço; ou reproduzir os documentos alterando a autoria.",
+            "Também é vedado usar os documentos para prometer economia ou resultado a cliente final — a plataforma produz estimativa de cenário, e o texto do documento diz isso."
+          ]
+        },
+        {
+          "t": "11. O curso gratuito",
+          "p": [
+            "O curso publicado em enquadria.com.br/curso é gratuito e não exige cadastro para ser assistido. O e-mail é solicitado uma única vez, e apenas para liberar o download dos materiais.",
+            "O conteúdo do curso e os materiais são de uso profissional do participante. Não é permitido revender, republicar ou apresentar o material como próprio.",
+            "O curso é material educativo. Vale para ele a mesma regra da seção 4: nenhuma aula, planilha ou modelo substitui o julgamento do profissional que assina."
+          ]
+        },
+        {
+          "t": "12. Planos, preços e pagamento",
+          "p": [
+            "O Plano Gratuito permite cadastrar a carteira inteira, ver a triagem completa e emitir até 2 laudos. O limite incide sobre a **emissão** do documento, nunca sobre analisar.",
+            "O Plano PRO custa R$ 47 por mês, ou R$ 470 por ano, e libera laudos e termos ilimitados. Os valores podem ser reajustados com aviso prévio de 30 dias; reajuste não retroage a período já pago.",
+            "A cobrança é processada por intermediador de pagamentos. O não pagamento suspende a emissão de novos documentos; **os documentos já emitidos continuam acessíveis e verificáveis**."
+          ]
+        },
+        {
+          "t": "13. Cancelamento e arrependimento",
+          "p": [
+            "O Assinante cancela quando quiser, sem multa e sem fidelidade, pela própria plataforma ou por e-mail.",
+            "Nos 7 dias corridos seguintes à primeira contratação, o Assinante pode desistir e receber a devolução integral, conforme o art. 49 do Código de Defesa do Consumidor.",
+            "No plano anual cancelado após esse prazo, devolvemos proporcionalmente os meses inteiros não usados."
+          ]
+        },
+        {
+          "t": "14. Encerramento e devolução dos dados",
+          "p": [
+            "Encerrado o contrato, o Assinante tem **30 dias** para exportar a carteira e os documentos. Passado esse prazo, o conteúdo é eliminado em até 90 dias, ressalvado o que precisamos manter por obrigação legal.",
+            "Podemos suspender ou encerrar o acesso, com aviso, em caso de violação destes Termos, de uso que ameace a segurança da plataforma ou de inadimplência superior a 30 dias."
+          ]
+        },
+        {
+          "t": "15. Disponibilidade e suporte",
+          "p": [
+            "Trabalhamos para manter a plataforma disponível 99,5% do tempo no mês, excluídas janelas de manutenção comunicadas e falhas de terceiros fora do nosso controle.",
+            "O suporte é por e-mail, em dias úteis, com resposta em até 1 dia útil. Não há atendimento telefônico."
+          ]
+        },
+        {
+          "t": "16. Propriedade intelectual",
+          "p": [
+            "A plataforma, a marca Enquadria, o modelo de decisão, os textos, as tabelas de parâmetros e o material do curso são nossos.",
+            "O conteúdo que o Assinante insere é do Assinante. Os documentos gerados são do Assinante, e ele pode usá-los livremente na relação com os clientes dele."
+          ]
+        },
+        {
+          "t": "17. Limitação de responsabilidade",
+          "p": [
+            "Nossa responsabilidade total, por qualquer causa, fica limitada ao valor pago pelo Assinante nos 12 meses anteriores ao evento.",
+            "Não respondemos por lucros cessantes, perda de oportunidade, autuação fiscal, penalidade administrativa ou decisão tributária tomada pelo Assinante ou por cliente dele.",
+            "Nada nestes Termos afasta responsabilidade por dolo ou por direito indisponível do consumidor."
+          ]
+        },
+        {
+          "t": "18. Proteção de dados",
+          "p": [
+            "O tratamento de dados pessoais segue a Lei nº 13.709/2018 (LGPD) e está detalhado na nossa Política de Privacidade, que integra estes Termos.",
+            "Em relação aos dados dos clientes do Assinante inseridos na plataforma, **o Assinante é o controlador e o Enquadria é o operador**."
+          ]
+        },
+        {
+          "t": "19. Alterações destes Termos",
+          "p": [
+            "Podemos alterar estes Termos. Alteração relevante é comunicada por e-mail com 30 dias de antecedência, e o uso continuado depois desse prazo significa concordância.",
+            "A versão vigente fica sempre publicada em enquadria.com.br/termos, com a data de vigência no topo."
+          ]
+        },
+        {
+          "t": "20. Lei aplicável, foro e contato",
+          "p": [
+            "Aplica-se a lei brasileira. Fica eleito o foro da comarca de Santo André, São Paulo, salvo direito do consumidor de eleger o foro do seu domicílio.",
+            "Contato geral: contato@enquadria.com.br · Privacidade: privacidade@enquadria.com.br · Segurança: seguranca@enquadria.com.br."
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "privacidade",
+      "arquivo": "privacidade.html",
+      "titulo": "Política de Privacidade",
+      "resumo": "Que dados tratamos, com que base legal, por quanto tempo, com quem compartilhamos e como você exerce os seus direitos. Em relação aos clientes do seu escritório, o controlador é você — nós somos operador.",
+      "secoes": [
+        {
+          "t": "1. Quem é quem neste tratamento",
+          "p": [
+            "Esta política vale para o site, o app e o curso do Enquadria, operados por Produtize Produtos e Serviços Inteligentes Ltda., CNPJ 48.417.292/0001-99.",
+            "**Somos controladores** dos dados de quem contrata (cadastro, cobrança, uso da plataforma) e de quem se inscreve para baixar os materiais do curso.",
+            "**Somos operadores** dos dados que o escritório insere sobre os clientes dele. Nesses dados, quem decide a finalidade é o escritório — nós apenas processamos conforme as instruções dele.",
+            "Encarregado (DPO): a definir. Até a designação, os pedidos de titular são recebidos e respondidos em privacidade@enquadria.com.br."
+          ]
+        },
+        {
+          "t": "2. Dados que tratamos",
+          "p": [
+            "**Cadastro do assinante**: nome, e-mail, CNPJ do escritório, CRC e telefone.",
+            "**Equipe**: nome, e-mail e permissões de cada usuário da conta.",
+            "**Uso da plataforma**: registros técnicos de acesso e histórico das ações realizadas na conta (quem fez, o quê, quando).",
+            "**Carteira do escritório**: CNPJ, razão social, CNAE, porte, situação cadastral e receita bruta das empresas clientes; nome, e-mail e telefone do contato indicado para assinar o termo.",
+            "**Análises e documentos**: as premissas informadas, os resultados calculados e os documentos emitidos, com o respectivo hash e trilha de assinatura.",
+            "**Curso**: apenas o endereço de e-mail informado para liberar os materiais, com a data e a origem.",
+            "**Cobrança**: dados necessários à emissão e liquidação da assinatura, tratados pelo intermediador de pagamentos. **Não armazenamos número de cartão.**"
+          ]
+        },
+        {
+          "t": "3. Bases legais",
+          "p": [
+            "**Execução de contrato** (art. 7º, V): cadastro, operação da plataforma, emissão de documentos, cobrança e suporte.",
+            "**Cumprimento de obrigação legal** (art. 7º, II): guarda de registros de acesso pelo prazo do Marco Civil da Internet e retenção fiscal.",
+            "**Legítimo interesse** (art. 7º, IX): segurança da plataforma, prevenção a fraude e melhoria do produto com dados agregados.",
+            "**Consentimento** (art. 7º, I): o e-mail do curso e as comunicações de marketing. Pode ser revogado a qualquer momento, com um clique.",
+            "Em relação à carteira, a base legal do tratamento é definida pelo escritório controlador — nós tratamos como operador."
+          ]
+        },
+        {
+          "t": "4. Para que usamos",
+          "p": [
+            "Para fornecer o serviço contratado, gerar os documentos, cobrar a assinatura, dar suporte, avisar sobre mudanças relevantes e — quando houver consentimento — enviar as aulas e materiais do curso.",
+            "**Não vendemos, não alugamos e não cedemos dados pessoais a terceiros para fins comerciais.**",
+            "Não usamos o conteúdo da carteira, as análises ou os documentos para treinar modelos de inteligência artificial."
+          ]
+        },
+        {
+          "t": "5. Com quem compartilhamos (subprocessadores)",
+          "p": [
+            "**Supabase** — banco de dados, autenticação e armazenamento de arquivos.",
+            "**Vercel** — hospedagem e entrega da aplicação.",
+            "**Asaas** — processamento de pagamentos e emissão de cobrança.",
+            "**Brevo** — envio de e-mails transacionais (convite de assinatura, código de verificação, digest).",
+            "**Provedor de assinatura eletrônica** — apenas quando o Assinante opta por usá-lo; por padrão, a assinatura é processada pela própria plataforma.",
+            "**Base de dados públicos de CNPJ** mantida por nós, usada para complementar cadastro.",
+            "Cada um trata apenas o necessário à sua função, sob contrato. Publicamos alterações desta lista nesta página."
+          ]
+        },
+        {
+          "t": "6. Por quanto tempo guardamos",
+          "p": [
+            "**Conteúdo da conta** (carteira, análises, documentos): enquanto o contrato durar. Encerrado, você tem 30 dias para exportar e eliminamos em até 90 dias.",
+            "**Documentos emitidos e trilha de assinatura**: mantidos enquanto o contrato durar, porque servem de prova. Após o encerramento seguem a mesma regra acima — exporte antes.",
+            "**Registros de acesso**: 6 meses após o término, conforme o art. 15 da Lei nº 12.965/2014.",
+            "**Histórico de ações**: durante o contrato.",
+            "**Dados fiscais e de cobrança**: pelos prazos legais aplicáveis.",
+            "**E-mail do curso**: até você pedir a remoção, ou após 24 meses sem qualquer interação."
+          ]
+        },
+        {
+          "t": "7. Transferência internacional",
+          "p": [
+            "Alguns subprocessadores mantêm infraestrutura fora do Brasil. Quando isso ocorre, a transferência se apoia em cláusulas contratuais e nas garantias exigidas pelo art. 33 da LGPD.",
+            "Preferimos, sempre que disponível, região de processamento no Brasil."
+          ]
+        },
+        {
+          "t": "8. Segurança",
+          "p": [
+            "Isolamento entre contas no próprio banco de dados, tráfego cifrado, controle de acesso por papel e permissão, e histórico de alterações somente-inclusão.",
+            "O detalhamento técnico e o que ainda **não** temos estão publicados, com franqueza, na página de Segurança."
+          ]
+        },
+        {
+          "t": "9. Cookies",
+          "p": [
+            "O site institucional e o curso **não usam cookies de rastreamento, pixel de rede social nem publicidade comportamental.**",
+            "O aplicativo usa cookies estritamente necessários para manter a sua sessão autenticada. Sem eles, não há como você permanecer logado.",
+            "A página do curso guarda no seu navegador, apenas durante a visita, a informação de que os materiais já foram liberados — para não pedir o e-mail duas vezes na mesma sessão."
+          ]
+        },
+        {
+          "t": "10. Seus direitos",
+          "p": [
+            "Você pode pedir confirmação de tratamento, acesso, correção, anonimização, portabilidade, eliminação, informação sobre compartilhamento e revogação de consentimento.",
+            "Peça em **privacidade@enquadria.com.br**. Respondemos em até 15 dias.",
+            "Se o pedido for sobre dados de um cliente do escritório, encaminhe ao escritório: nesse caso ele é o controlador, e nós o apoiamos no atendimento."
+          ]
+        },
+        {
+          "t": "11. Incidentes",
+          "p": [
+            "Em caso de incidente de segurança com risco relevante, comunicamos os afetados e a Autoridade Nacional de Proteção de Dados em prazo razoável, com o que se sabe, o que foi feito e o que recomendamos.",
+            "Nosso compromisso: comunicar mesmo quando for constrangedor."
+          ]
+        },
+        {
+          "t": "12. Alterações e contato",
+          "p": [
+            "Mudanças relevantes nesta política são comunicadas por e-mail com 30 dias de antecedência. A versão vigente fica em enquadria.com.br/privacidade.",
+            "Privacidade: privacidade@enquadria.com.br · Segurança: seguranca@enquadria.com.br · Geral: contato@enquadria.com.br."
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "seguranca",
+      "arquivo": "seguranca.html",
+      "titulo": "Segurança",
+      "resumo": "O que protege os dados da sua carteira, em linguagem verificável — e, no fim, a lista honesta do que ainda não temos.",
+      "secoes": [
+        {
+          "t": "1. Isolamento entre escritórios",
+          "p": [
+            "Cada conta enxerga apenas os próprios dados. A separação é feita no banco de dados, com Row Level Security do PostgreSQL aplicada em toda tabela relevante — não é filtro de tela.",
+            "Filtro de tela é aparência de segurança: quem chama a API direto passa por cima. Regra no banco não."
+          ]
+        },
+        {
+          "t": "2. Acesso e identidade",
+          "p": [
+            "Autenticação gerenciada, com senha de no mínimo 8 caracteres. Convite por e-mail para entrar numa conta existente — não há como se autoincluir num escritório.",
+            "Cada usuário tem acesso individual e papel definido. O responsável pela conta concede e revoga."
+          ]
+        },
+        {
+          "t": "3. O que fica registrado",
+          "p": [
+            "Histórico somente-inclusão das ações relevantes: quem fez, o quê e quando. Ninguém apaga esse histórico — nem nós.",
+            "Cada documento emitido guarda o instante da emissão, o conteúdo congelado e o hash. Cada assinatura guarda data, hora, origem e método."
+          ]
+        },
+        {
+          "t": "4. Criptografia",
+          "p": [
+            "Todo o tráfego trafega por TLS. Os dados em repouso são cifrados pela infraestrutura do banco.",
+            "Segredos de integração e chaves de API vivem apenas em variáveis de ambiente do servidor, nunca no banco e nunca no navegador."
+          ]
+        },
+        {
+          "t": "5. O documento emitido não muda",
+          "p": [
+            "Ao emitir um laudo, a plataforma congela o conteúdo num registro imutável. Atualizar o modelo de cálculo depois **não reescreve** documento já entregue.",
+            "É o que faz o documento valer como prova: o que foi assinado é o que continua lá."
+          ]
+        },
+        {
+          "t": "6. Os seus dados são seus",
+          "p": [
+            "Você exporta a carteira e os documentos pela própria interface, a qualquer momento.",
+            "Não usamos conteúdo de conta para treinar modelo, não revendemos e não abrimos para terceiros."
+          ]
+        },
+        {
+          "t": "7. O que a nossa equipe enxerga",
+          "p": [
+            "No dia a dia, a equipe acessa apenas dados de assinatura e o necessário para suporte. Carteira, análises e documentos ficam protegidos pelas mesmas regras de isolamento.",
+            "Acesso de suporte a uma conta só acontece a pedido do Assinante, é temporário e fica registrado."
+          ]
+        },
+        {
+          "t": "8. Terceiros",
+          "p": [
+            "Supabase (banco, autenticação, arquivos), Vercel (hospedagem), Asaas (pagamentos), Brevo (e-mail) e a nossa base de dados públicos de CNPJ.",
+            "A lista completa, com finalidade de cada um, está na Política de Privacidade. **Não usamos provedor de inteligência artificial no processamento da sua carteira.**"
+          ]
+        },
+        {
+          "t": "9. Como publicamos mudanças",
+          "p": [
+            "Toda publicação passa por compilação e verificação automáticas. Alterações de banco vão em migrações versionadas e idempotentes — que podem rodar duas vezes sem estragar nada.",
+            "As regras puras de cálculo têm testes automatizados. Número errado aqui vira número errado em documento assinado por contador: é o erro que não tem conserto."
+          ]
+        },
+        {
+          "t": "10. Disponibilidade e backup",
+          "p": [
+            "Alvo de 99,5% de disponibilidade mensal. Backups automáticos geridos pela infraestrutura do banco, com recuperação a ponto no tempo.",
+            "Monitoramento externo independente está no plano, e ainda não está no ar."
+          ]
+        },
+        {
+          "t": "11. O que ainda não temos (a lista honesta)",
+          "p": [
+            "Não temos certificação SOC 2 nem ISO 27001. Não temos teste de intrusão por empresa independente. Não temos autenticação de dois fatores no produto. Não temos SSO. Não temos exclusão de conta em autosserviço — hoje é por e-mail, com resposta em até 5 dias úteis.",
+            "Preferimos publicar esta lista a deixar você descobrir depois. Ela encolhe com o tempo, e a data de vigência no topo diz quando foi revista."
+          ]
+        },
+        {
+          "t": "12. Encontrou uma falha?",
+          "p": [
+            "Escreva para **seguranca@enquadria.com.br**. Respondemos em até 2 dias úteis.",
+            "Não tomamos nenhuma medida contra quem reporta de boa-fé e não divulga a falha antes da correção."
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "politicas",
+      "arquivo": "politicas.html",
+      "titulo": "Políticas internas",
+      "resumo": "As regras que a gente segue por dentro. Publicadas porque política que ninguém pode ler não obriga ninguém.",
+      "secoes": [
+        {
+          "t": "1. Política de Segurança da Informação",
+          "p": [
+            "Protegemos confidencialidade, integridade e disponibilidade dos dados dos escritórios clientes.",
+            "Princípios: isolamento no banco de dados; menor privilégio por padrão; segredo fora do código; e nada de dado real em ambiente de teste."
+          ]
+        },
+        {
+          "t": "2. Política de Controle de Acesso",
+          "p": [
+            "Acesso é individual e nominal — não existe conta compartilhada da equipe interna.",
+            "Revisão de permissões a cada trimestre e revogação no mesmo dia do desligamento."
+          ]
+        },
+        {
+          "t": "3. Plano de Resposta a Incidentes",
+          "p": [
+            "Diante de acesso não autorizado, indisponibilidade prolongada ou exposição de dados: conter, registrar, avaliar risco e comunicar os afetados em até 48 horas.",
+            "Toda comunicação diz o que aconteceu, o que já foi feito e o que a pessoa deve fazer."
+          ]
+        },
+        {
+          "t": "4. Política de Gestão de Mudanças",
+          "p": [
+            "Nada vai ao ar sem compilação e verificação automáticas.",
+            "Mudança em regra de acesso exige teste específico. Mudança em regra de cálculo exige teste do cenário afetado antes da publicação."
+          ]
+        },
+        {
+          "t": "5. Continuidade e Recuperação",
+          "p": [
+            "Backups automáticos com recuperação a ponto no tempo; objetivo de recuperação de 4 horas.",
+            "Você consegue exportar os seus dados sem depender de nós — é a melhor garantia de continuidade que existe."
+          ]
+        },
+        {
+          "t": "6. Política de Fornecedores",
+          "p": [
+            "Todo subprocessador tem contrato e cláusula de tratamento de dados, e aparece na lista pública da Política de Privacidade.",
+            "Fornecedor novo que trate dado pessoal passa por avaliação antes de entrar."
+          ]
+        },
+        {
+          "t": "7. Política de Conteúdo e Cálculo",
+          "p": [
+            "Nenhum parâmetro fiscal entra no produto sem fonte normativa identificada. Exercício sem parâmetro publicado **não é projetado**: a plataforma recusa o cálculo e diz por quê.",
+            "Todo documento gerado carrega a origem de cada premissa, o aviso de estimativa de cenário e a responsabilidade técnica de quem assina.",
+            "Não citamos marca de sistema, ERP ou concorrente em nenhum material — nem para comparar, nem para elogiar."
+          ]
+        },
+        {
+          "t": "8. O que não é coberto",
+          "p": [
+            "Não temos auditoria independente, teste de intrusão externo, dois fatores no produto nem segregação completa de funções — a empresa é pequena e a mesma pessoa desenvolve e publica.",
+            "Está escrito aqui para você decidir com a informação certa."
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,13 +1,30 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
-import { decidir, dDASefetivo, PARAMETROS_2027, type Respostas } from "@/lib/motor";
+import {
+  decidir,
+  dDASefetivo,
+  cenarios,
+  emReais,
+  sensibilidade,
+  carimboAliquota,
+  alertaFatorR,
+  sharePCDe,
+  PARAMETROS_2027,
+  type Respostas,
+  type DetalheQual,
+  type DetalheCred,
+} from "@/lib/motor";
 import { anexoPorCnae } from "@/lib/triagem";
 
 /**
  * Persiste uma análise: recebe empresa + respostas, recalcula o motor NO
  * SERVIDOR (nunca confia no número que veio do cliente) e grava congelando
- * os parâmetros usados. Congelar é o que impede um laudo de agosto virar
- * mentira quando a alíquota mudar em outubro.
+ * TUDO o que o laudo vai precisar imprimir — cenários, carimbo da alíquota,
+ * conversão em reais, sensibilidade e a origem de cada premissa.
+ *
+ * Congelar em `parametros` é o que impede um laudo de agosto virar mentira
+ * quando a alíquota mudar em outubro. E é também o que evita uma migration:
+ * `analises.parametros` já é jsonb e já é copiado para o snapshot do laudo.
  */
 export async function POST(req: Request) {
   const supabase = createClient();
@@ -24,7 +41,19 @@ export async function POST(req: Request) {
   const tenantId = perfil?.tenant_id;
   if (!tenantId) return NextResponse.json({ erro: "workspace não encontrado" }, { status: 400 });
 
-  let corpo: { empresa_id: string; janela_id?: string; respostas: Respostas; rbt12?: number | null };
+  let corpo: {
+    empresa_id: string;
+    janela_id?: string;
+    respostas: Respostas;
+    rbt12?: number | null;
+    /** premissa declarada pelo contador; sem ela o laudo não calcula payback */
+    custo_apuracao_anual?: number | null;
+    detalhes?: { qual?: DetalheQual; cred?: DetalheCred };
+    origens?: Record<string, string>;
+    /** anexo corrigido na tela (alerta de fator R) */
+    anexo?: number | null;
+    anexo_confirmado?: boolean;
+  };
   try {
     corpo = await req.json();
   } catch {
@@ -48,36 +77,87 @@ export async function POST(req: Request) {
     .eq("id", corpo.empresa_id)
     .maybeSingle();
 
-  // RBT12 informado na tela tem prioridade; persiste para reuso e para o laudo
+  // RBT12 informada na tela tem prioridade; persiste para reuso e para o laudo
   const rbt12Informado =
     corpo.rbt12 != null && Number.isFinite(corpo.rbt12) && Number(corpo.rbt12) > 0
       ? Number(corpo.rbt12)
       : null;
+
+  const anexoInformado =
+    corpo.anexo != null && Number(corpo.anexo) >= 1 && Number(corpo.anexo) <= 5
+      ? Number(corpo.anexo)
+      : null;
+
+  const patch: Record<string, unknown> = {};
   if (rbt12Informado != null && rbt12Informado !== Number(empresa?.rbt12 ?? 0)) {
-    await supabase.from("empresas").update({ rbt12: rbt12Informado }).eq("id", corpo.empresa_id);
+    patch.rbt12 = rbt12Informado;
+  }
+  if (anexoInformado != null && anexoInformado !== Number(empresa?.anexo ?? 0)) {
+    patch.anexo = anexoInformado;
+  }
+  if (Object.keys(patch).length > 0) {
+    await supabase.from("empresas").update(patch).eq("id", corpo.empresa_id);
   }
 
-  const anexoEfetivo = empresa?.anexo ?? anexoPorCnae(empresa?.cnae_principal) ?? 1;
+  const anexoEfetivo = anexoInformado ?? empresa?.anexo ?? anexoPorCnae(empresa?.cnae_principal) ?? 1;
   const rbt12Efetivo = rbt12Informado ?? (empresa?.rbt12 != null ? Number(empresa.rbt12) : null);
 
   // dDAS EFETIVO por empresa: com RBT12 usa a alíquota efetiva; sem, topo da faixa
   const ddas = dDASefetivo(anexoEfetivo, rbt12Efetivo);
+  const partilha = sharePCDe(anexoEfetivo, ddas.faixa, 2027);
 
   const aliquota = param
     ? Number(param.aliquota_cbs) + Number(param.aliquota_ibs)
     : PARAMETROS_2027.aliquota;
 
-  const parametros = {
+  const base = {
+    ...PARAMETROS_2027,
     aliquota,
     das: ddas.das,
     corteS1: param ? Number(param.corte_s1) : PARAMETROS_2027.corteS1,
     fronteiraMin: param ? Number(param.fronteira_min) : PARAMETROS_2027.fronteiraMin,
     fronteiraMax: param ? Number(param.fronteira_max) : PARAMETROS_2027.fronteiraMax,
-    // rastreabilidade da premissa do dDAS, congelada com a análise
-    ddas,
+    rbt12: rbt12Efetivo,
   };
 
-  const r = decidir(corpo.respostas, parametros);
+  const agora = new Date().toISOString();
+  const r = decidir(corpo.respostas, base);
+  const doisCenarios = cenarios(corpo.respostas, base);
+  const custo =
+    corpo.custo_apuracao_anual != null && Number(corpo.custo_apuracao_anual) > 0
+      ? Number(corpo.custo_apuracao_anual)
+      : null;
+  const dinheiro = emReais(r, rbt12Efetivo, custo);
+  const linhasSensibilidade = sensibilidade(corpo.respostas, base, dinheiro);
+  const alerta = alertaFatorR(anexoEfetivo, corpo.respostas.folha);
+
+  const parametros = {
+    exercicio: 2027,
+    aliquota,
+    das: ddas.das,
+    corteS1: base.corteS1,
+    fronteiraMin: base.fronteiraMin,
+    fronteiraMax: base.fronteiraMax,
+    sublimite: base.sublimite,
+    bandaSublimite: base.bandaSublimite,
+    rbt12: rbt12Efetivo,
+    anexo: anexoEfetivo,
+    // rastreabilidade da premissa do dDAS, congelada com a análise
+    ddas,
+    partilha,
+    // por que esta saída, congelado com o resto: a seção 7 do laudo imprime isto
+    motivo: r.motivo,
+    banda_sublimite: !!r.banda_sublimite,
+    carimbo: carimboAliquota(aliquota, agora),
+    cenarios: doisCenarios,
+    dinheiro,
+    sensibilidade: linhasSensibilidade,
+    custo_apuracao_anual: custo,
+    detalhes: corpo.detalhes ?? null,
+    origens: corpo.origens ?? null,
+    fator_r: alerta,
+    anexo_confirmado: !!corpo.anexo_confirmado,
+  };
 
   const registro = {
     tenant_id: tenantId,
@@ -93,7 +173,7 @@ export async function POST(req: Request) {
     saida: r.saida,
     prioridade: r.prioridade,
     parametros,
-    calculado_em: new Date().toISOString(),
+    calculado_em: agora,
   };
 
   const { data, error } = await supabase
@@ -104,5 +184,5 @@ export async function POST(req: Request) {
 
   if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
 
-  return NextResponse.json({ ok: true, analise_id: data.id, resultado: r });
+  return NextResponse.json({ ok: true, analise_id: data.id, resultado: r, alerta_fator_r: alerta });
 }

@@ -58,6 +58,12 @@ export interface Parametros {
   /** largura da zona de fronteira, em torno de FC */
   fronteiraMin?: number;
   fronteiraMax?: number;
+  /** RBT12 da empresa, quando conhecida — só serve à banda do sublimite */
+  rbt12?: number | null;
+  /** sublimite de ICMS/ISS do Simples (R$ 3,6 mi) */
+  sublimite?: number;
+  /** largura da banda em torno do sublimite, em fração (0,05 = ±5%) */
+  bandaSublimite?: number;
 }
 
 export interface Resultado {
@@ -75,6 +81,10 @@ export interface Resultado {
   folga: number;
   saida: Saida;
   prioridade: boolean;
+  /** por que esta saída, em uma frase — vai para a seção 7 do laudo */
+  motivo: string;
+  /** true quando a banda do sublimite empurrou a decisão para o empresário */
+  banda_sublimite?: boolean;
 }
 
 export const PARAMETROS_2027: Parametros = {
@@ -83,7 +93,52 @@ export const PARAMETROS_2027: Parametros = {
   fronteiraMin: 0.8,
   fronteiraMax: 1.2,
   rqMin: 0.3,
+  sublimite: 3600000,
+  bandaSublimite: 0.05,
 };
+
+/**
+ * CENÁRIO ALTERNATIVO DE ALÍQUOTA — 9,4%.
+ *
+ * A decisão de setembro é tomada ANTES de a alíquota existir: a referência de
+ * IBS/CBS só é fixada por Resolução do Senado, e o prazo é 31/10/2026 — um mês
+ * DEPOIS de a janela fechar. Um laudo que traz um número só esconde do
+ * empresário o único risco que ele não pode controlar. Por isso todo laudo sai
+ * com as duas contas.
+ *
+ * 9,4% não tem norma: é sensibilidade declarada, e o documento diz isso.
+ */
+export const ALIQUOTA_ALTERNATIVA = 0.094;
+
+/** de onde vem a alíquota usada — vai impressa no corpo do laudo */
+export interface CarimboAliquota {
+  aliquota: number;
+  alternativa: number;
+  /** true só quando a Resolução do Senado tiver sido publicada */
+  fixada: boolean;
+  fixacao_ate: string;
+  fonte: string;
+  nota_alternativa: string;
+  consultado_em: string;
+}
+
+export function carimboAliquota(aliquota: number, consultadoEm: string): CarimboAliquota {
+  return {
+    aliquota,
+    alternativa: ALIQUOTA_ALTERNATIVA,
+    fixada: false,
+    fixacao_ate: "31/10/2026",
+    fonte:
+      "Estimativa de trabalho para 2027: CBS na alíquota de referência reduzida em 0,1 ponto " +
+      "percentual, somada ao IBS de 0,1% (0,05% estadual e 0,05% municipal), na forma da " +
+      "EC 132/2023 e da LC 214/2025. A alíquota de referência é fixada por Resolução do Senado " +
+      "Federal, com prazo até 31/10/2026 — depois do fechamento da janela de opção.",
+    nota_alternativa:
+      "O cenário de 9,4% não decorre de norma publicada: é sensibilidade declarada, para medir o " +
+      "efeito de a alíquota de referência ser fixada acima da estimativa de trabalho.",
+    consultado_em: consultadoEm,
+  };
+}
 
 /**
  * TABELA LEGAL DO SIMPLES NACIONAL — LC 123, Anexos I a V.
@@ -293,38 +348,78 @@ export function decidir(r: Respostas, p: Parametros = PARAMETROS_2027): Resultad
   const fc = p.aliquota - p.das;
 
   let saida: Saida;
+  let motivo: string;
 
   if (rq < rqMin) {
     // Sem receita qualificada não há a quem transferir crédito. Vale inclusive
     // quando o híbrido sairia mais barato: o ganho não compensa a apuração por
     // fora numa empresa que vende para consumidor final ou para o Simples.
     saida = "S1";
+    motivo = `Receita qualificada de ${pct(rq)} — abaixo do piso de ${pct(rqMin)}. Não há a quem transferir crédito em volume que justifique apurar por fora.`;
   } else if (cl <= 0) {
     // O híbrido custa MENOS em termos absolutos. Optar não depende de
     // renegociar preço nenhum — e por isso não é o mesmo conselho que o S4.
     saida = "S5";
+    motivo = `Custo líquido negativo (${pct(cl)}): no regime regular a empresa paga menos pelos créditos das próprias compras, sem depender de renegociar preço.`;
   } else if (fc <= 0) {
     // Guarda para exercícios futuros: se o que sai do DAS alcançar a alíquota,
     // o comprador não ganha crédito extra e as bandas de fronteira se invertem.
     saida = "S1";
+    motivo = "O que sai do DAS alcança a alíquota do regime regular: o comprador não teria crédito adicional a ganhar.";
   } else if (re > fc * fMax) {
     // O repasse necessário estoura o ganho do comprador. Não fecha para ninguém.
     saida = "S1";
+    motivo = `Repasse necessário de ${pct(re)} contra ganho de ${pct(fc)} do comprador: a conta não fecha para nenhum dos dois lados.`;
   } else if (r.preco <= 1) {
     // A conta fecha, a negociação não. Preparar a janela seguinte.
     saida = "S2";
+    motivo = "A conta fecha, a negociação não: sem poder de renegociar preço, o repasse não acontece a tempo desta janela.";
   } else if (re >= fc * fMin) {
     // Cabe, mas por pouco: o motor não decide, o empresário decide.
     saida = "S3";
+    motivo = `Repasse de ${pct(re)} contra ganho de ${pct(fc)}: dentro da banda de fronteira (${fMin}× a ${fMax}× o ganho do comprador). A conta cabe, mas por pouco.`;
   } else {
     saida = "S4";
+    motivo = `Repasse de ${pct(re)} bem abaixo do ganho de ${pct(fc)} do comprador: sobra folga de ${((fc - re) * 100).toFixed(1).replace(".", ",")} pontos para a negociação.`;
+  }
+
+  /**
+   * BANDA DO SUBLIMITE — R$ 3,6 milhões.
+   *
+   * Perto do sublimite, ICMS e ISS saem do DAS por força do próprio Simples, e
+   * a comparação entre ficar dentro e apurar por fora muda de natureza no meio
+   * do exercício. O motor não tem como saber de que lado a empresa vai fechar o
+   * ano — então devolve a decisão a quem tem: o empresário.
+   *
+   * Não vale para quem já caiu em S1 por falta de receita qualificada: ali não
+   * há decisão a tomar, o sublimite não cria uma.
+   */
+  const sublimite = p.sublimite ?? 0;
+  const banda = p.bandaSublimite ?? 0;
+  const rbt12 = p.rbt12 ?? null;
+  let bandaSublimite = false;
+  if (
+    sublimite > 0 &&
+    banda > 0 &&
+    rbt12 != null &&
+    rbt12 > 0 &&
+    Math.abs(rbt12 - sublimite) <= sublimite * banda &&
+    rq >= rqMin
+  ) {
+    bandaSublimite = true;
+    saida = "S3";
+    motivo =
+      `RBT12 de ${moeda(rbt12)}, dentro da faixa de ${moeda(sublimite * (1 - banda))} a ` +
+      `${moeda(sublimite * (1 + banda))} em torno do sublimite de ${moeda(sublimite)}. ` +
+      "Ultrapassar o sublimite no curso do ano muda o que já sai do DAS e desloca a conta — " +
+      "a decisão é do empresário, com os dois cenários à vista.";
   }
 
   // Prioridade é um SELO, não uma saída: uma empresa pode ser prioridade
   // e ainda assim receber "não optar". Descoberta da validação de 22/07.
   const prioridade = r.exig === 1 || (r.conc === 1 && rq > 0.7);
 
-  return { rq, ch, cl, re, fc, folga: fc - re, saida, prioridade };
+  return { rq, ch, cl, re, fc, folga: fc - re, saida, prioridade, motivo, banda_sublimite: bandaSublimite };
 }
 
 export const SAIDAS: Record<Saida, { titulo: string; descricao: string; cor: string }> = {
@@ -367,3 +462,273 @@ export const moeda = (x?: number | null) =>
   x == null || !isFinite(x)
     ? "—"
     : x.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+
+/* ==========================================================================
+ * FATIA 5 — o que faz o contador poder cobrar pelo laudo
+ * ========================================================================== */
+
+export interface Cenario {
+  rotulo: string;
+  aliquota: number;
+  resultado: Resultado;
+  /** true no cenário que sustenta a recomendação */
+  principal: boolean;
+}
+
+/**
+ * OS DOIS CENÁRIOS. A decisão é tomada antes de a alíquota existir; um laudo
+ * com um número só esconde do empresário o risco que ele não controla.
+ */
+export function cenarios(r: Respostas, p: Parametros = PARAMETROS_2027): Cenario[] {
+  return [
+    {
+      rotulo: `Estimativa de trabalho — ${pct(p.aliquota)}`,
+      aliquota: p.aliquota,
+      resultado: decidir(r, p),
+      principal: true,
+    },
+    {
+      rotulo: `Sensibilidade — ${pct(ALIQUOTA_ALTERNATIVA)}`,
+      aliquota: ALIQUOTA_ALTERNATIVA,
+      resultado: decidir(r, { ...p, aliquota: ALIQUOTA_ALTERNATIVA }),
+      principal: false,
+    },
+  ];
+}
+
+export interface Dinheiro {
+  /** receita usada na conversão — a RBT12 informada */
+  receita: number | null;
+  /** folga da negociação × receita qualificada × receita, em R$/ano */
+  ganho_anual: number | null;
+  /** custo declarado de apurar IBS/CBS fora do DAS, em R$/ano */
+  custo_anual: number | null;
+  /** meses até o ganho cobrir o custo; null quando não há como calcular */
+  payback_meses: number | null;
+  /** quanto a empresa absorve por ano se o repasse NÃO for aceito */
+  absorvido_anual: number | null;
+}
+
+/**
+ * O NÚMERO EM REAIS.
+ *
+ * O laudo dava percentual, e percentual não se compara com honorário nem com
+ * custo de apuração. Aqui vira R$/ano ao lado do custo de apurar por fora.
+ *
+ * HONESTIDADE EMBUTIDA: sem RBT12 não há receita, e sem receita não há R$ —
+ * devolve null em vez de estimar. Sem custo declarado, não há payback: o laudo
+ * omite a seção em vez de inventar a premissa.
+ */
+export function emReais(
+  res: Resultado,
+  receita?: number | null,
+  custoAnual?: number | null
+): Dinheiro {
+  const r = receita != null && isFinite(receita) && receita > 0 ? receita : null;
+  const c = custoAnual != null && isFinite(custoAnual) && custoAnual > 0 ? custoAnual : null;
+  const ganho = r != null && isFinite(res.folga) ? res.folga * res.rq * r : null;
+  const absorvido = r != null ? res.cl * r : null;
+  const payback = ganho != null && c != null && ganho > 0 ? (c / ganho) * 12 : null;
+  return {
+    receita: r,
+    ganho_anual: ganho,
+    custo_anual: c,
+    payback_meses: payback,
+    absorvido_anual: absorvido,
+  };
+}
+
+export interface LinhaSensibilidade {
+  titulo: string;
+  pergunta: string;
+  saida: Saida | null;
+  re: number | null;
+  fc: number | null;
+  folga: number | null;
+  efeito: string;
+}
+
+/**
+ * TRÊS LINHAS, não um estudo. O que muda se a premissa mais frágil ceder.
+ */
+export function sensibilidade(
+  r: Respostas,
+  p: Parametros = PARAMETROS_2027,
+  dinheiro?: Dinheiro
+): LinhaSensibilidade[] {
+  const base = decidir(r, p);
+  const linhas: LinhaSensibilidade[] = [];
+
+  // 1) receita qualificada 10 pontos menor
+  const rqBase = r.b2b * r.qual;
+  const rqMenor = Math.max(rqBase - 0.1, 0);
+  const qualMenor = r.b2b > 0 ? rqMenor / r.b2b : 0;
+  const cenarioRq = decidir({ ...r, qual: qualMenor }, p);
+  linhas.push({
+    titulo: "Receita qualificada 10 pontos menor",
+    pergunta: `E se, em vez de ${pct(rqBase)}, apenas ${pct(rqMenor)} da receita for vendida a quem aproveita crédito?`,
+    saida: cenarioRq.saida,
+    re: isFinite(cenarioRq.re) ? cenarioRq.re : null,
+    fc: cenarioRq.fc,
+    folga: isFinite(cenarioRq.folga) ? cenarioRq.folga : null,
+    efeito:
+      cenarioRq.saida === base.saida
+        ? "A recomendação não muda."
+        : `A recomendação muda de ${base.saida} para ${cenarioRq.saida}.`,
+  });
+
+  // 2) o repasse não é aceito
+  linhas.push({
+    titulo: "O repasse de preço não é aceito",
+    pergunta: "E se o cliente não aceitar o reajuste que equilibra a conta?",
+    saida: null,
+    re: null,
+    fc: null,
+    folga: null,
+    efeito:
+      `A empresa absorve o custo líquido de ${pct(base.cl)} da receita` +
+      (dinheiro?.absorvido_anual != null
+        ? `, o que representa ${moeda(dinheiro.absorvido_anual)} por ano na receita informada.`
+        : ". Informe a RBT12 para converter em reais.") +
+      " Sem repasse, a opção deixa de ser vantajosa.",
+  });
+
+  // 3) alíquota fixada acima da estimativa de trabalho
+  const alt = decidir(r, { ...p, aliquota: ALIQUOTA_ALTERNATIVA });
+  linhas.push({
+    titulo: `Alíquota fixada em ${pct(ALIQUOTA_ALTERNATIVA)}`,
+    pergunta: "E se a Resolução do Senado fixar a referência acima da estimativa de trabalho?",
+    saida: alt.saida,
+    re: isFinite(alt.re) ? alt.re : null,
+    fc: alt.fc,
+    folga: isFinite(alt.folga) ? alt.folga : null,
+    efeito:
+      alt.saida === base.saida
+        ? "A recomendação não muda."
+        : `A recomendação muda de ${base.saida} para ${alt.saida}.`,
+  });
+
+  return linhas;
+}
+
+/* ==========================================================================
+ * FATIA 7 — precisão
+ * ========================================================================== */
+
+/**
+ * PARTILHA PIS/COFINS POR EXERCÍCIO.
+ *
+ * `sharePC` estava fixo na tabela do anexo, e isso é verdade em 2027 e 2028 —
+ * só a fatia federal migra para a CBS. De 2029 em diante ICMS e ISS começam a
+ * sair do DAS em degraus anuais, e a fatia que deixa o DAS deixa de ser a
+ * mesma. Não há partilha publicada para esses exercícios, então a função
+ * RECUSA calcular em vez de projetar: número inventado em documento assinado
+ * por contador não tem conserto.
+ */
+export const EXERCICIOS_PARAMETRIZADOS = [2027, 2028];
+
+export function sharePCDe(
+  anexo: number | null | undefined,
+  faixa: number,
+  exercicio = 2027
+): { valor: number | null; motivo: string } {
+  const tabela = ANEXOS_SIMPLES[anexoValido(anexo)];
+  const f = tabela[faixa - 1];
+  if (!f) return { valor: null, motivo: `Faixa ${faixa} inexistente no Anexo ${anexoValido(anexo)}.` };
+  if (!EXERCICIOS_PARAMETRIZADOS.includes(exercicio)) {
+    return {
+      valor: null,
+      motivo:
+        `A partilha do DAS do exercício ${exercicio} não está parametrizada. ` +
+        "De 2029 em diante ICMS e ISS saem do DAS em degraus anuais e a fatia que migra para a " +
+        "CBS deixa de ser a de 2027 — o valor precisa vir de norma, não de projeção.",
+    };
+  }
+  return { valor: f.sharePC, motivo: `Partilha PIS/Cofins da faixa ${faixa} do Anexo ${anexoValido(anexo)}, vigente em ${exercicio}.` };
+}
+
+/** fator R = folha de 12 meses ÷ receita bruta de 12 meses */
+export function fatorR(folha: number, receita: number): number | null {
+  if (!(receita > 0)) return null;
+  return folha / receita;
+}
+
+export interface AlertaFatorR {
+  fator: number;
+  anexoDeclarado: number;
+  anexoSugerido: number;
+  texto: string;
+}
+
+/**
+ * ALERTA DE FATOR R — avisa, nunca bloqueia.
+ *
+ * A pergunta da folha é uma FAIXA ("15 a 30%"), não um número apurado: bloquear
+ * a emissão com base nela travaria laudo legítimo. O aviso pede confirmação
+ * explícita do anexo e segue; a confirmação fica registrada nos parâmetros.
+ */
+export function alertaFatorR(
+  anexoDeclarado: number | null | undefined,
+  folhaSobreReceita: number | null | undefined
+): AlertaFatorR | null {
+  const a = anexoDeclarado ?? 0;
+  const f = folhaSobreReceita;
+  if (f == null || !isFinite(f)) return null;
+  if (a !== 3 && a !== 5) return null;
+
+  if (a === 5 && f >= 0.28) {
+    return {
+      fator: f,
+      anexoDeclarado: 5,
+      anexoSugerido: 3,
+      texto:
+        `Folha declarada em ${pct(f)} da receita. Com fator R igual ou acima de 28% a atividade ` +
+        "vai ao Anexo III, e a alíquota do Simples — logo, a parcela que sai do DAS — muda. " +
+        "Confirme o anexo antes de emitir o laudo.",
+    };
+  }
+  if (a === 3 && f < 0.28) {
+    return {
+      fator: f,
+      anexoDeclarado: 3,
+      anexoSugerido: 5,
+      texto:
+        `Folha declarada em ${pct(f)} da receita. Com fator R abaixo de 28% a atividade cai no ` +
+        "Anexo V, com alíquota mais alta e outra parcela saindo do DAS. Confirme o anexo antes " +
+        "de emitir o laudo.",
+    };
+  }
+  return null;
+}
+
+/* --------------------------------------------------------------------------
+ * PERGUNTAS DESDOBRADAS — Q2 e Q3 eram as mais ambíguas do questionário.
+ *
+ * O motor continua consumindo `qual` e `cred`: as perguntas menores DERIVAM
+ * esses dois valores. Assim as análises antigas seguem válidas e o laudo pode
+ * mostrar a composição de cada premissa em vez de um percentual sem origem.
+ * -------------------------------------------------------------------------- */
+
+export interface DetalheQual {
+  /** fração dos clientes PJ que estão fora do Simples (Real ou Presumido) */
+  fora_simples: number;
+  /** fração DESSES que, ainda assim, não aproveita crédito (imunes, órgão público, revenda a consumidor final) */
+  sem_aproveitamento: number;
+}
+
+export function derivarQual(d: DetalheQual): number {
+  return Math.min(Math.max(d.fora_simples * (1 - d.sem_aproveitamento), 0), 1);
+}
+
+export interface DetalheCred {
+  /** mercadorias e insumos comprados de fornecedor fora do Simples, em % da receita */
+  insumos: number;
+  /** serviços tomados de PJ fora do Simples, em % da receita */
+  servicos: number;
+  /** energia, aluguel de PJ, fretes e demais insumos com crédito, em % da receita */
+  outros: number;
+}
+
+export function derivarCred(d: DetalheCred): number {
+  return Math.min(Math.max(d.insumos + d.servicos + d.outros, 0), 1);
+}

@@ -1,6 +1,17 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
-import { decidir, dDASefetivo, PARAMETROS_2027, type Respostas } from "@/lib/motor";
+import {
+  decidir,
+  dDASefetivo,
+  cenarios,
+  emReais,
+  sensibilidade,
+  carimboAliquota,
+  alertaFatorR,
+  sharePCDe,
+  PARAMETROS_2027,
+  type Respostas,
+} from "@/lib/motor";
 import { anexoPorCnae } from "@/lib/triagem";
 import { premissasPadrao, ORIGEM_LOTE } from "@/lib/premissas-padrao";
 
@@ -77,6 +88,7 @@ export async function POST(req: Request) {
     ? Number(param.aliquota_cbs) + Number(param.aliquota_ibs)
     : PARAMETROS_2027.aliquota;
 
+  const agora = new Date().toISOString();
   const registros: Record<string, unknown>[] = [];
   const resultados: unknown[] = [];
   let puladas = 0;
@@ -96,18 +108,49 @@ export async function POST(req: Request) {
     const rbt12 = e.rbt12 != null ? Number(e.rbt12) : null;
     const ddas = dDASefetivo(anexo, rbt12);
 
-    const parametros = {
+    // mesma base do cálculo unitário: o lote não pode gerar um laudo mais pobre
+    const base = {
+      ...PARAMETROS_2027,
       aliquota,
       das: ddas.das,
       corteS1: param ? Number(param.corte_s1) : PARAMETROS_2027.corteS1,
       fronteiraMin: param ? Number(param.fronteira_min) : PARAMETROS_2027.fronteiraMin,
       fronteiraMax: param ? Number(param.fronteira_max) : PARAMETROS_2027.fronteiraMax,
+      rbt12,
+    };
+
+    const r = decidir(respostas, base);
+    const dinheiro = emReais(r, rbt12, null);
+
+    const parametros = {
+      exercicio: 2027,
+      aliquota,
+      das: ddas.das,
+      corteS1: base.corteS1,
+      fronteiraMin: base.fronteiraMin,
+      fronteiraMax: base.fronteiraMax,
+      sublimite: base.sublimite,
+      bandaSublimite: base.bandaSublimite,
+      rbt12,
+      anexo,
       ddas,
+      partilha: sharePCDe(anexo, ddas.faixa, 2027),
+      // por que esta saída, congelado com o resto: a seção 7 do laudo imprime isto
+      motivo: r.motivo,
+      banda_sublimite: !!r.banda_sublimite,
+      carimbo: carimboAliquota(aliquota, agora),
+      cenarios: cenarios(respostas, base),
+      dinheiro,
+      sensibilidade: sensibilidade(respostas, base, dinheiro),
+      custo_apuracao_anual: null,
+      detalhes: null,
+      // toda premissa do lote nasce como padrão do sistema — nenhuma foi informada
+      origens: Object.fromEntries(Object.keys(respostas).map((k) => [k, "padrao"])),
+      fator_r: alertaFatorR(anexo, respostas.folha),
+      anexo_confirmado: false,
       origem_premissas: ORIGEM_LOTE,
       confianca_premissas: perfilCnae.confianca,
     };
-
-    const r = decidir(respostas, parametros);
 
     registros.push({
       tenant_id: tenantId,
@@ -123,7 +166,7 @@ export async function POST(req: Request) {
       saida: r.saida,
       prioridade: r.prioridade,
       parametros,
-      calculado_em: new Date().toISOString(),
+      calculado_em: agora,
     });
 
     resultados.push({

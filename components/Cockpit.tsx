@@ -23,6 +23,7 @@ import {
   type Linha,
 } from "@/lib/cockpit";
 import { PainelEmpresa } from "@/components/PainelEmpresa";
+import { Trilha, type EstadoTrilha } from "@/components/Trilha";
 
 /**
  * O COCKPIT — uma tela onde havia sete.
@@ -77,6 +78,7 @@ export function Cockpit({
   posPct,
   avisos,
   totalCarteira,
+  temEscritorio,
 }: {
   linhas: Linha[];
   esteira: Esteira;
@@ -84,6 +86,7 @@ export function Cockpit({
   posPct: number;
   avisos: Aviso[];
   totalCarteira: number;
+  temEscritorio: boolean;
 }) {
   const router = useRouter();
   const [etapa, setEtapa] = useState<keyof Esteira | null>(null);
@@ -128,6 +131,26 @@ export function Cockpit({
     base = buscar(base, busca);
     return ordenarFila(base);
   }, [linhas, foco, grupo, etapa, busca]);
+
+  // a trilha lê a MESMA fila ordenada: o "próximo passo" que ela anuncia é
+  // literalmente a primeira linha com trabalho pendente, não uma segunda regra
+  const pendentes = useMemo(
+    () => ordenarFila(linhas).filter((l) => !["pronto", "fora"].includes(l.acao)),
+    [linhas]
+  );
+  const proxima = pendentes[0] ?? null;
+  const trilha: EstadoTrilha = {
+    temEscritorio,
+    empresas: esteira.importadas,
+    naFila: esteira.decidem,
+    analises: esteira.analisadas,
+    laudos: esteira.laudos,
+    assinados: esteira.assinados,
+    proxima: proxima ? { id: proxima.id, nome: proxima.razao_social } : null,
+    proximaAcao: proxima
+      ? (proxima.acao as "analisar" | "confirmar" | "emitir" | "termo" | "cobrar")
+      : null,
+  };
 
   const visiveis = filtradas.slice(0, mostrar);
   const mesa = naMesa(linhas, honorario);
@@ -255,7 +278,9 @@ export function Cockpit({
   // ------------------------------------------------------------- carteira vazia
   if (totalCarteira === 0) {
     return (
-      <div className="rounded border border-line bg-surface p-6 shadow-card">
+      <>
+        <Trilha estado={trilha} aoAbrirEmpresa={(id, aba) => setGaveta({ id, aba })} />
+        <div className="rounded border border-line bg-surface p-6 shadow-card">
         <div className="mx-auto max-w-md text-center">
           <h2 className="text-[16px] font-bold text-ink">Comece pela sua carteira</h2>
           <p className="mt-1.5 text-[13.5px] text-slate2">
@@ -288,12 +313,15 @@ export function Cockpit({
             Importar carteira
           </Link>
         </div>
-      </div>
+        </div>
+      </>
     );
   }
 
   return (
     <div className="pb-2">
+      <Trilha estado={trilha} aoAbrirEmpresa={(id, aba) => setGaveta({ id, aba })} />
+
       {/* ================================================= 2. LINHA DE PRODUÇÃO */}
       <div className="rounded border border-line bg-surface p-3.5 shadow-card">
         <div className="mb-2 flex items-center justify-between gap-2 md:mb-3">
