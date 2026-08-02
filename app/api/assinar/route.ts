@@ -10,7 +10,7 @@ import {
   type MetodoAssinatura,
 } from "@/lib/esign";
 import { carimbar } from "@/lib/carimbo";
-import { enviarEmail, htmlCodigoOtp } from "@/lib/brevo";
+import { enviarEmail, htmlCodigoOtp } from "@/lib/email";
 
 /**
  * Página pública de assinatura — sem sessão, opera pelo service role (como o

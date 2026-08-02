@@ -375,3 +375,41 @@ coisa que dependa do Supabase no ar (importar de fato, RLS, emitir laudo e
 termo, assinar, gravar coleta, cota de plano), o cache do `.htaccess` (depende
 do Apache), salvar o certificado no perfil do LinkedIn, e o que só o olho
 julga.
+
+## E-mail transacional — servidor próprio (Postal)
+
+`lib/email.ts` é a **porta única** de saída. Ela tenta o Postal (servidor da casa, na VPS
+Contabo) e cai para a Brevo se o Postal não estiver configurado ou recusar a mensagem. Toda
+troca de caminho escreve no log com o motivo — e-mail que "às vezes chega" sem ninguém saber
+por onde é o pior defeito de infraestrutura que existe: não quebra nada e corrói a entrega
+por semanas.
+
+- `lib/mailer/postal.ts` — cliente da API HTTP do Postal. **Não confia no HTTP 200**: o Postal
+  responde 200 mesmo em erro, e o resultado real está no campo `status` do JSON.
+- `lib/mailer/templates.ts` — a moldura e os transacionais do app.
+- `lib/brevo.ts` — ficou sendo só o **driver** da Brevo. A função foi renomeada para
+  `enviarPelaBrevo`: numa lista de imports, `enviarEmail` vindo de um arquivo chamado
+  `brevo.ts` faz qualquer pessoa concluir que o e-mail sai pela Brevo, e hoje não sai.
+- `app/api/dev/testar-email` — protegida por `MAILER_TEST_SECRET`. Sem a variável, devolve 401
+  e não manda nada.
+
+Variáveis: `POSTAL_URL`, `POSTAL_API_KEY`, `POSTAL_FROM`, `MAILER_TEST_SECRET`.
+
+**"Aceito" não é "entregue".** `success` do Postal significa que ele pôs a mensagem na fila.
+A entrega real aparece em **Messages**, no painel, com a resposta SMTP crua do destino.
+
+## Templates de e-mail do Supabase
+
+```
+node ferramentas/gerar-emails-supabase.mjs
+```
+
+Escreve 13 arquivos em `supabase/emails/`: 6 de autenticação e **7 de aviso de segurança**
+(senha trocada, e-mail trocado, telefone trocado, método de login ligado/desligado,
+verificação em duas etapas adicionada/removida). A segunda família é a que quase todo mundo
+deixa em branco e é justamente a que protege a conta.
+
+Usam a **mesma moldura** dos transacionais do app, de propósito: e-mail de senha com cara
+diferente do resto do produto é o que ensina o usuário a não desconfiar de e-mail falso.
+
+Os HTML são gerados — edite o gerador, não os arquivos.

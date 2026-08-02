@@ -2,7 +2,7 @@ import { ehOptar } from "@/lib/motor";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { conteudoCanonico, sha256, novoToken, CLAUSULAS_CIENCIA } from "@/lib/esign";
-import { enviarEmail, htmlConviteAssinatura } from "@/lib/brevo";
+import { enviarEmail, htmlConviteAssinatura } from "@/lib/email";
 
 /**
  * TERMOS EM LOTE — o último gargalo da esteira.

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { montarDigest, htmlDigest, type DadosDigest } from "@/lib/digest";
 import { atingidas, ordenar, type ItemRadar, type EmpresaRadar } from "@/lib/radar";
-import { enviarEmail } from "@/lib/brevo";
+import { enviarEmail } from "@/lib/email";
 import { HONORARIO_PADRAO } from "@/lib/potencial";
 
 /**

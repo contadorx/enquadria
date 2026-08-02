@@ -164,7 +164,7 @@ export async function POST(req: Request) {
         aplicar(rr.corpo, exemplo) +
         `\n\n—\nTeste da régua "${rr.nome}". Os dados acima são fictícios.`;
 
-      const { enviarEmail } = await import("@/lib/brevo");
+      const { enviarEmail } = await import("@/lib/email");
       const envio = await enviarEmail({ para, assunto, html: htmlRegua(corpoTexto) });
       if (!envio.enviado) return NextResponse.json({ erro: envio.motivo || "falha no envio" }, { status: 502 });
 

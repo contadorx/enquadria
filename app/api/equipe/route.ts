@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { emailValido } from "@/lib/csv";
-import { enviarEmail } from "@/lib/brevo";
+import { enviarEmail } from "@/lib/email";
 
 /**
  * EQUIPE — convites para o escritório.

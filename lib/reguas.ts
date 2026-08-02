@@ -459,7 +459,7 @@ export async function executarReguas(
     };
   }
 
-  const { enviarEmail } = await import("@/lib/brevo");
+  const { enviarEmail } = await import("@/lib/email");
   const erros: string[] = [];
   let enviados = 0;
   let semEmail = 0;

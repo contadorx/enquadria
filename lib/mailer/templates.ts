@@ -9,10 +9,13 @@
  *    CSS deixa o botão invisível.
  */
 
-const MARCA = "#0f2a4a";
+// o mesmo navy do app e do site. Antes era #0f2a4a, um azul parecido mas
+// diferente — e-mail com a marca de um tom e o produto de outro é o tipo de
+// detalhe que ninguém nomeia e todo mundo sente.
+export const MARCA = "#0B1220";
 const APP = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.enquadria.com.br";
 
-function moldura(titulo: string, miolo: string, rodapeExtra = ""): string {
+export function moldura(titulo: string, miolo: string, rodapeExtra = ""): string {
   return `<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -29,7 +32,7 @@ function moldura(titulo: string, miolo: string, rodapeExtra = ""): string {
 </body></html>`;
 }
 
-function botao(url: string, texto: string): string {
+export function botao(url: string, texto: string): string {
   return `<p style="margin:24px 0">
     <a href="${url}" style="background:${MARCA};color:#fff;text-decoration:none;padding:12px 22px;border-radius:6px;display:inline-block;font-weight:600">${escapar(texto)}</a>
   </p>
@@ -37,7 +40,7 @@ function botao(url: string, texto: string): string {
   <span style="word-break:break-all">${url}</span></p>`;
 }
 
-function escapar(s: string): string {
+export function escapar(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 

@@ -1,9 +1,18 @@
 /**
- * BREVO — envio transacional do código de assinatura (OTP) e avisos do termo.
+ * BREVO — o DRIVER, não a porta de entrada.
+ *
+ * Desde que o servidor próprio (Postal) entrou, ninguém deve importar daqui
+ * para mandar e-mail: a porta é `lib/email`, que escolhe o caminho. Este
+ * arquivo ficou sendo só o "como falar com a Brevo", e continua existindo
+ * porque enquanto o IP novo aquece é bom ter para onde cair.
  *
  * Degrada como o resto: sem BREVO_API_KEY o envio não acontece e o chamador
  * decide o que fazer — no fluxo de assinatura, cai para o método SIMPLES (o
  * aceite sem código, ainda válido). O produto nunca trava por falta da chave.
+ *
+ * O nome mudou de `enviarEmail` para `enviarPelaBrevo` de propósito: numa
+ * lista de imports, `enviarEmail` de um arquivo chamado brevo.ts faz qualquer
+ * pessoa concluir que o e-mail sai pela Brevo — e hoje não sai.
  */
 
 export interface ResultadoEmail {
@@ -11,7 +20,7 @@ export interface ResultadoEmail {
   motivo?: string;
 }
 
-export async function enviarEmail(params: {
+export async function enviarPelaBrevo(params: {
   para: string;
   nome?: string;
   assunto: string;
