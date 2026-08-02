@@ -101,7 +101,7 @@ export const MODULOS: Modulo[] = [
         topicos: [
           "Exportar a lista de clientes do seu sistema: as quatro colunas que bastam",
           "Como o CNAE classifica em urgente, avaliar, baixo risco e descarte",
-          "As três exceções que a triagem não pega — e como tratar cada uma",
+          "As quatro exceções que a triagem não pega — e como tratar cada uma",
           "O número que você tem agora e o que fazer com ele ainda hoje",
         ],
         materiais: ["triagem"],
@@ -120,12 +120,13 @@ export const MODULOS: Modulo[] = [
         minutos: 9,
         onda: 2,
         resumo:
-          "Por que a nominal do topo da faixa superestima o custo, e como sair da RBT12 para a alíquota efetiva.",
+          "Dois erros que empurram a decisão para o lado errado: usar a nominal do topo da faixa, e calcular por um anexo só a empresa que segrega receita.",
         topicos: [
           "(RBT12 × nominal − parcela a deduzir) ÷ RBT12, feito no papel",
-          "Onde encontrar a partilha de PIS/Cofins da faixa",
-          "Quanto a diferença entre nominal e efetiva desloca a decisão",
-          "Fator R: quando o anexo declarado não bate com a folha",
+          "Onde encontrar a partilha de PIS/Cofins da faixa — e por que ela muda de anexo para anexo",
+          "Receita segregada: o dDAS é a soma ponderada, não o de um anexo",
+          "O caso em que a segregação troca a resposta do laudo, com a conta na tela",
+          "Fator R: onde a receita de serviço cai, entre o Anexo III e o V",
         ],
         materiais: ["conta"],
       },
@@ -139,6 +140,7 @@ export const MODULOS: Modulo[] = [
           "Receita qualificada, carga híbrida, custo líquido, repasse de equilíbrio, folga do adquirente e folga da negociação.",
         topicos: [
           "As seis fórmulas encadeadas, com substituição numérica",
+          "De onde vem o dDAS quando a empresa tem receita em mais de um anexo",
           "A regra de bolso: se o repasse estoura o ganho do comprador, não fecha",
           "As cinco saídas possíveis e o que cada uma exige do empresário",
           "A banda do sublimite de R$ 3,6 milhões e por que ela devolve a decisão ao dono",
