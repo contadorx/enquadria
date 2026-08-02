@@ -346,3 +346,32 @@ da dele.
 desenho do site. O `apple-icon` vai sem cantos arredondados e sem transparência
 de propósito: o iOS já arredonda e já recorta, e um SVG com raio próprio sai com
 borda dupla.
+
+## Rodar tudo o que dá para rodar sozinho
+
+```
+node testes/rodar-tudo.mjs
+```
+
+77 verificações num comando: as três suítes de função pura, o CSV da massa
+pelo parser de verdade (47 lidas · 45 importadas · 1 duplicada · 1 descartada),
+`triar()` sobre as 45 que entram contra a distribuição registrada, os 15
+cenários da decisão, os 10 de receita segregada com o dDAS ponderado e as duas
+saídas (a certa e a que sairia pelo anexo do cadastro), a memória de cálculo do
+laudo segregado, e as checagens de navegador no curso estático e no formulário
+da coleta.
+
+Os valores esperados são **golden**, não recalculados na hora. Recalcular com a
+mesma função que se está testando faz o teste passar sempre — inclusive depois
+de alguém quebrar a função.
+
+O CSV da massa é procurado em `/root/work/Enquadria_Massa_Empresas_Teste.csv`;
+para apontar outro caminho, `MASSA_CSV=... node testes/rodar-tudo.mjs`. A saída
+fica em `testes/ultimo-relatorio.txt`, e o comando sai com zero só se tudo
+passou.
+
+**O que ele não cobre**, e por isso continua na lista da planilha: qualquer
+coisa que dependa do Supabase no ar (importar de fato, RLS, emitir laudo e
+termo, assinar, gravar coleta, cota de plano), o cache do `.htaccess` (depende
+do Apache), salvar o certificado no perfil do LinkedIn, e o que só o olho
+julga.

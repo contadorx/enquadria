@@ -1,0 +1,95 @@
+
+── Compilando o TypeScript das funções puras ───────────────────
+ok    compila sem erro
+
+── Suítes de função pura ───────────────────────────────────────
+ok    suíte cockpit (15 asserções)
+ok    suíte motor (79 asserções)
+ok    suíte coleta (42 asserções)
+
+── Massa de empresas no parser do app ──────────────────────────
+ok    lê 47 linhas
+ok    importa 45
+ok    acha 1 duplicada
+ok    descarta 1
+ok    e-mail inválido NÃO é gravado
+ok    RBT12 escrito como moeda vira número
+ok    linha sem razão social entra com rótulo
+ok    faturamento em faixa textual não vira RBT12
+ok    triagem: faixa A = 23
+ok    triagem: faixa B = 6
+ok    triagem: faixa C = 1
+ok    triagem: faixa D = 9
+ok    triagem: faixa MEI = 2
+ok    triagem: faixa FORA = 4
+ok    prioridade máxima na de faixa textual
+
+── Cenários da decisão ─────────────────────────────────────────
+ok    C01 → S4
+ok    C02 → S2
+ok    C03 → S1
+ok    C04 → S1
+ok    C05 → S3
+ok    C06 → S5
+ok    C07 → S1
+ok    C08 → S4
+ok    C09 → S1
+ok    C10 → S1
+ok    C11 → S2
+ok    C12 → S3
+ok    C13 → S4
+ok    C14 → S1
+ok    C15 → S1
+ok    C12 é o único que cai na banda do sublimite
+
+── Cenários de receita segregada ───────────────────────────────
+ok    G01 dDAS ponderado = 1.414%
+ok    G01 saída segregada S4 · pelo cadastro S4
+ok    G02 dDAS ponderado = 1.845%
+ok    G02 saída segregada S4 · pelo cadastro S4
+ok    G03 dDAS ponderado = 2.510%
+ok    G03 saída segregada S4 · pelo cadastro S4
+ok    G04 dDAS ponderado = 2.510%
+ok    G04 saída segregada S4 · pelo cadastro S3
+ok    G05 dDAS ponderado = 2.876%
+ok    G05 saída segregada S3 · pelo cadastro S3
+ok    G06 dDAS ponderado = 3.058%
+ok    G06 saída segregada S4 · pelo cadastro S4
+ok    G07 dDAS ponderado = 2.077%
+ok    G07 saída segregada S4 · pelo cadastro S4
+ok    G08 dDAS ponderado = 2.510%
+ok    G08 saída segregada S4 · pelo cadastro S3
+ok    G09 dDAS ponderado = 2.282%
+ok    G09 saída segregada S3 · pelo cadastro S3
+ok    G10 dDAS ponderado = 1.368%
+ok    G10 saída segregada S3 · pelo cadastro S3
+ok    G04 e G08 são os únicos que MUDAM a decisão
+ok    G10 (um anexo a 100%) devolve o mesmo do caminho antigo
+
+── Memória de cálculo do laudo com receita segregada ───────────
+ok    imprime um passo por anexo
+ok    o passo 2 diz que a receita é segregada
+ok    o passo 2 mostra a soma ponderada
+ok    o resultado do passo 2 é o dDAS final
+ok    condição sobre a composição da receita
+ok    condição sobre o fator R (há serviço no mix)
+ok    análise de um anexo só mantém o passo 1 de sempre
+
+── Navegador — curso estático e formulário da coleta ───────────
+ok    medalhão com CSS = 32px
+ok    medalhão SEM css continua 32px (não vira cartaz)
+ok    assets carimbados com ?v=
+ok    materiais travados antes do e-mail
+ok    materiais liberam depois do e-mail
+ok    progresso começa em 0
+ok    progresso vai a 9 de 9
+ok    certificado libera com 9 de 9
+ok    desmarcar uma aula tranca o certificado de novo
+ok    LinkedIn: mês da EMISSÃO, não de hoje
+ok    LinkedIn: código e url de verificação
+ok    cada opção mostra o percentual equivalente
+ok    pergunta de sim/não NÃO ganha percentual
+
+── Resultado ───────────────────────────────────────────────────
+
+TUDO PASSOU — 77 verificações automáticas
