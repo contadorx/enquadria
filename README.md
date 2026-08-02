@@ -172,3 +172,19 @@ jurídico que diverge, e divergir aqui é pior do que não ter documento.
 
 A tela de login exibe o aceite dos Termos ao criar conta, e o rodapé do app
 aponta para os quatro documentos.
+
+## Curso: progresso e certificado
+
+O curso público mora no site estático. O **progresso** (quais aulas foram
+concluídas) vive no navegador do participante — o site não tem login, e exigir
+cadastro para marcar uma aula seria a fricção que o curso existe para evitar. A
+página diz isso na tela.
+
+O **certificado** é do app: `POST /api/curso/certificado` grava em
+`curso_certificados` (migration **0023**) e devolve um código público no formato
+`EQ-XXXX-XXXX`. O documento fica em `/certificado/[codigo]`, é rota pública,
+imprimível em A4 paisagem, e serve como a própria verificação — quem receber o
+certificado confere o código sem login.
+
+Emitir duas vezes com o mesmo e-mail devolve o MESMO código: dois números para a
+mesma conclusão seria bug, não recurso.

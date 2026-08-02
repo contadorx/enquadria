@@ -104,7 +104,8 @@
           "p": [
             "O curso publicado em enquadria.com.br/curso é gratuito e não exige cadastro para ser assistido. O e-mail é solicitado uma única vez, e apenas para liberar o download dos materiais.",
             "O conteúdo do curso e os materiais são de uso profissional do participante. Não é permitido revender, republicar ou apresentar o material como próprio.",
-            "O curso é material educativo. Vale para ele a mesma regra da seção 4: nenhuma aula, planilha ou modelo substitui o julgamento do profissional que assina."
+            "O curso é material educativo. Vale para ele a mesma regra da seção 4: nenhuma aula, planilha ou modelo substitui o julgamento do profissional que assina.",
+            "Ao concluir as nove aulas, o participante pode emitir um **certificado de participação** com código de verificação pública. É certificado de curso livre: não tem vínculo com instituição de ensino nem carga horária reconhecida para educação continuada, e a conclusão é registrada a partir do acompanhamento do próprio participante."
           ]
         },
         {
@@ -198,7 +199,7 @@
             "**Uso da plataforma**: registros técnicos de acesso e histórico das ações realizadas na conta (quem fez, o quê, quando).",
             "**Carteira do escritório**: CNPJ, razão social, CNAE, porte, situação cadastral e receita bruta das empresas clientes; nome, e-mail e telefone do contato indicado para assinar o termo.",
             "**Análises e documentos**: as premissas informadas, os resultados calculados e os documentos emitidos, com o respectivo hash e trilha de assinatura.",
-            "**Curso**: apenas o endereço de e-mail informado para liberar os materiais, com a data e a origem.",
+            "**Curso**: o endereço de e-mail informado para liberar os materiais, com a data e a origem. Quem pede o **certificado de conclusão** informa também nome completo e, se quiser, o número do CRC — os dois saem impressos no documento. O progresso nas aulas fica **apenas no seu navegador**: não sobe para nós.",
             "**Cobrança**: dados necessários à emissão e liquidação da assinatura, tratados pelo intermediador de pagamentos. **Não armazenamos número de cartão.**"
           ]
         },
@@ -240,7 +241,7 @@
             "**Registros de acesso**: 6 meses após o término, conforme o art. 15 da Lei nº 12.965/2014.",
             "**Histórico de ações**: durante o contrato.",
             "**Dados fiscais e de cobrança**: pelos prazos legais aplicáveis.",
-            "**E-mail do curso**: até você pedir a remoção, ou após 24 meses sem qualquer interação."
+            "**E-mail do curso**: até você pedir a remoção, ou após 24 meses sem qualquer interação. **Certificado emitido**: mantido enquanto o código público existir, porque é ele que permite conferir o documento — a remoção invalida o certificado, e nós avisamos disso antes de apagar."
           ]
         },
         {
@@ -262,7 +263,8 @@
           "p": [
             "O site institucional e o curso **não usam cookies de rastreamento, pixel de rede social nem publicidade comportamental.**",
             "O aplicativo usa cookies estritamente necessários para manter a sua sessão autenticada. Sem eles, não há como você permanecer logado.",
-            "A página do curso guarda no seu navegador, apenas durante a visita, a informação de que os materiais já foram liberados — para não pedir o e-mail duas vezes na mesma sessão."
+            "A página do curso guarda no seu navegador, apenas durante a visita, a informação de que os materiais já foram liberados — para não pedir o e-mail duas vezes na mesma sessão.",
+            "O curso guarda no seu navegador quais aulas você marcou como concluídas e, se emitiu, o código do seu certificado. É informação sua, no seu aparelho: limpar os dados do navegador apaga o progresso, e há um botão na página do curso para zerar isso na hora."
           ]
         },
         {
