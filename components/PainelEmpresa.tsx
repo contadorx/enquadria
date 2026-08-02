@@ -7,8 +7,11 @@ import { pct, moeda, SAIDAS, ehOptar, type Saida, type Respostas } from "@/lib/m
 import { ROTULO_FAIXA, type Faixa } from "@/lib/triagem";
 import { premissasEmTexto, baseDeCalculo, premissasEstimadas, type AnaliseGravada } from "@/lib/laudo";
 import { EditarEmpresa } from "@/components/EditarEmpresa";
-import { FormAnalise } from "@/components/FormAnalise";
+import { FormAnalise, RESPOSTAS_PADRAO } from "@/components/FormAnalise";
 import { Comparativo } from "@/components/Comparativo";
+import { PedirDados, type ColetaGravada } from "@/components/PedirDados";
+import type { Derivadas } from "@/lib/coleta";
+import type { DetalheQual } from "@/lib/motor";
 
 /**
  * O DOSSIÊ DA EMPRESA — um componente, dois lugares.
@@ -65,6 +68,7 @@ interface Dossie {
     assinante_nome: string | null;
     assinado_em: string | null;
   } | null;
+  coleta: ColetaGravada | null;
   comparativos: { id: string; numero: number; emitido_em: string }[];
   janelas: Record<string, string>;
   trilha: string[];
@@ -101,6 +105,17 @@ export function PainelEmpresa({
   const [copiado, setCopiado] = useState(false);
   const [nomeSig, setNomeSig] = useState("");
   const [emailSig, setEmailSig] = useState("");
+  /**
+   * O QUE VEIO DA EMPRESA, ainda não salvo. Fica separado da análise gravada de
+   * propósito: a resposta do cliente ALIMENTA o formulário, não o substitui. O
+   * contador vê os valores já preenchidos, ajusta o que a escrituração
+   * contradisser e só então salva. Quem assina o laudo é ele.
+   */
+  const [daColeta, setDaColeta] = useState<{
+    marca: number;
+    respostas: Respostas;
+    detalhes: { qual: DetalheQual };
+  } | null>(null);
 
   const carregar = useCallback(async () => {
     try {
@@ -129,6 +144,31 @@ export function PainelEmpresa({
     void carregar();
     aoMudar?.();
     router.refresh();
+  }
+
+  /**
+   * As seis respostas da empresa entram nas seis casas correspondentes. A folha
+   * NÃO vem daqui — ela está na escrituração, é o contador que tem — então
+   * preserva-se o que já havia. O detalhe de `qual` é remontado para que o
+   * formulário mostre de onde o número saiu, em vez de exibir um percentual
+   * sem origem.
+   */
+  function aplicarColeta(dv: Derivadas) {
+    const atuais = (d?.rodadas?.[0]?.respostas as unknown as Respostas) ?? null;
+    setDaColeta({
+      marca: Date.now(),
+      respostas: {
+        ...(atuais ?? RESPOSTAS_PADRAO),
+        b2b: dv.b2b,
+        qual: dv.qual,
+        cred: dv.cred,
+        preco: dv.preco,
+        conc: dv.conc,
+        exig: dv.exig,
+      },
+      detalhes: { qual: { fora_simples: dv.qual, sem_aproveitamento: 0 } },
+    });
+    setAba("decisao");
   }
 
   if (erro) {
@@ -256,16 +296,32 @@ export function PainelEmpresa({
       {/* ------------------------------------------------------------ DECISÃO */}
       {aba === "decisao" && (
         <div className="space-y-4 pb-4">
+          <PedirDados
+            empresaId={e.id}
+            empresaNome={e.razao_social}
+            coleta={d.coleta ?? null}
+            aoMudar={() => mudou()}
+            aoAplicar={aplicarColeta}
+          />
+
           <FormAnalise
+            /* o `key` força a remontagem quando as respostas da empresa chegam.
+               Sem ele, o formulário continuaria exibindo o que já estava na
+               tela: `respostasIniciais` só é lido na montagem, e o contador
+               clicaria em "usar estas respostas" sem ver nada mudar. */
+            key={daColeta ? `coleta-${daColeta.marca}` : "analise"}
             empresaId={e.id}
             anexo={e.anexo}
             cnae={e.cnae_principal}
             rbt12Inicial={e.rbt12 != null ? Number(e.rbt12) : null}
-            respostasIniciais={(a?.respostas as unknown as Respostas) ?? null}
-            detalhesIniciais={a?.parametros?.detalhes ?? null}
+            respostasIniciais={daColeta?.respostas ?? (a?.respostas as unknown as Respostas) ?? null}
+            detalhesIniciais={daColeta?.detalhes ?? a?.parametros?.detalhes ?? null}
             custoInicial={a?.parametros?.custo_apuracao_anual ?? null}
             estimada={estimada}
-            aoSalvar={() => mudou()}
+            aoSalvar={() => {
+              setDaColeta(null);
+              mudou();
+            }}
           />
 
           {a && (

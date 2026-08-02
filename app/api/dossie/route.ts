@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
+import { createAdminClient } from "@/lib/supabase-admin";
 import { trilhaEmTexto } from "@/lib/esign";
 
 /**
@@ -68,12 +69,33 @@ export async function GET(req: Request) {
 
   const assinado = termo?.assinatura_status === "assinado" || !!termo?.assinado_em;
 
+  /**
+   * A COLETA vem pelo cliente de SERVIÇO, e isso é seguro exatamente aqui:
+   * `empresas` já foi lida acima com o cliente do USUÁRIO e voltou preenchida —
+   * ou seja, a RLS da carteira já autorizou este contador a ver esta empresa.
+   * A tabela `coletas` tem RLS ligada e nenhuma policy de propósito, para que a
+   * decisão de acesso aconteça num lugar só, apoiada na RLS que já existe.
+   */
+  const admin = createAdminClient();
+  const { data: coleta } = admin
+    ? await admin
+        .from("coletas")
+        .select(
+          "id, token, status, criado_em, respondido_em, respondente_nome, respondente_cargo, respostas, derivadas, observacao, aplicada_em"
+        )
+        .eq("empresa_id", id)
+        .order("criado_em", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    : { data: null };
+
   return NextResponse.json({
     ok: true,
     empresa,
     rodadas: rodadas ?? [],
     laudo,
     termo,
+    coleta: coleta ?? null,
     comparativos: comparativos ?? [],
     janelas: Object.fromEntries((janelas ?? []).map((j) => [j.id, j.nome])),
     trilha: assinado && termo ? trilhaEmTexto(termo as never) : [],

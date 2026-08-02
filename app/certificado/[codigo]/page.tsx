@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { BotaoImprimir } from "@/components/BotaoImprimir";
+import { CompartilharCertificado } from "@/components/CompartilharCertificado";
 import { CURSO, MODULOS } from "@/lib/curso";
 
 /**
@@ -18,10 +19,49 @@ import { CURSO, MODULOS } from "@/lib/curso";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: `Certificado — ${CURSO.nome} | Enquadria`,
-  robots: { index: false, follow: false },
-};
+/**
+ * A prévia do link. `noindex` continua: certificado tem nome de gente, e nome
+ * de gente não precisa estar no Google. Isso NÃO impede a prévia — LinkedIn e
+ * WhatsApp leem as tags Open Graph mesmo em página fora do índice.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: { codigo: string };
+}): Promise<Metadata> {
+  const codigo = decodeURIComponent(params.codigo).toUpperCase().trim();
+  const supabase = createAdminClient();
+  let nome: string | null = null;
+  if (supabase) {
+    const { data } = await supabase
+      .from("curso_certificados")
+      .select("nome")
+      .eq("codigo", codigo)
+      .maybeSingle();
+    nome = (data?.nome as string) ?? null;
+  }
+
+  const titulo = nome
+    ? `${nome} concluiu ${CURSO.nome}`
+    : `Certificado — ${CURSO.nome} | Enquadria`;
+  const descricao =
+    "Curso gratuito do Enquadria sobre a opção de IBS/CBS fora do DAS aberta pela Resolução CGSN nº 186/2026. Certificado com código de verificação pública.";
+
+  return {
+    title: titulo,
+    description: descricao,
+    robots: { index: false, follow: false },
+    openGraph: {
+      title: titulo,
+      description: descricao,
+      type: "article",
+      url: `https://app.enquadria.com.br/certificado/${codigo}`,
+      siteName: "Enquadria",
+      locale: "pt_BR",
+    },
+    twitter: { card: "summary_large_image", title: titulo, description: descricao },
+  };
+}
 
 interface Certificado {
   codigo: string;
@@ -139,6 +179,12 @@ export default async function CertificadoPage({ params }: { params: { codigo: st
           </div>
         </div>
       </div>
+
+      <CompartilharCertificado
+        codigo={cert.codigo}
+        emitidoEm={cert.emitido_em}
+        curso={cert.curso}
+      />
 
       <style
         dangerouslySetInnerHTML={{

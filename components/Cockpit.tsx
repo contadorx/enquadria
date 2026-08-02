@@ -102,6 +102,9 @@ export function Cockpit({
   const [copiado, setCopiado] = useState<string | null>(null);
   const [avisosLidos, setAvisosLidos] = useState<Set<string>>(new Set());
   const [todosAvisos, setTodosAvisos] = useState(false);
+  // a gaveta larga é o padrão; quem precisa da mesa inteira (comparativo com as
+  // três composições lado a lado) abre no máximo sem perder o lugar na fila
+  const [gavetaMax, setGavetaMax] = useState(false);
 
   // a gaveta cobre a fila inteira no celular: sem travar o fundo, o dedo rola a
   // lista atrás do dossiê e a pessoa perde o lugar onde estava
@@ -665,19 +668,41 @@ export function Cockpit({
             onClick={() => setGaveta(null)}
             className="absolute inset-0 h-full w-full bg-ink/50"
           />
-          <div className="absolute inset-x-0 bottom-0 top-8 overflow-y-auto rounded-t-lg bg-surface2 p-4 shadow-card md:inset-y-0 md:left-auto md:right-0 md:top-0 md:w-[560px] md:rounded-none">
-            <button
-              onClick={() => setGaveta(null)}
-              className="mb-2 flex items-center gap-1.5 text-[12.5px] font-semibold text-accentdeep"
-            >
-              ← voltar à fila
-            </button>
-            <PainelEmpresa
-              empresaId={gaveta.id}
-              modo="gaveta"
-              abaInicial={gaveta.aba}
-              aoMudar={() => router.refresh()}
-            />
+          {/* A LARGURA DA GAVETA É PARTE DA FERRAMENTA, NÃO ENFEITE.
+              Ela era 560px fixos. Dentro disso, o comparativo — que divide
+              campos e resultado em duas colunas a partir de telas grandes —
+              ficava com 340px de formulário e o resto espremido, e as tabelas
+              de composição só cabiam com rolagem lateral. Número de decisão
+              que exige rolagem horizontal para ser lido é número que ninguém
+              lê. Agora acompanha a tela até 1120px, e há o modo máximo. */}
+          <div
+            className={`absolute inset-x-0 bottom-0 top-8 flex flex-col overflow-hidden rounded-t-lg bg-surface2 shadow-card md:inset-y-0 md:left-auto md:right-0 md:top-0 md:rounded-none ${
+              gavetaMax ? "md:w-[96vw]" : "md:w-[min(1120px,92vw)]"
+            }`}
+          >
+            <div className="flex flex-none items-center justify-between gap-3 border-b border-line bg-surface2 px-4 py-2.5 md:px-6">
+              <button
+                onClick={() => setGaveta(null)}
+                className="flex items-center gap-1.5 text-[12.5px] font-semibold text-accentdeep"
+              >
+                ← voltar à fila
+              </button>
+              <button
+                onClick={() => setGavetaMax((v) => !v)}
+                className="hidden rounded-sm border border-line px-2.5 py-1 font-mono text-[10.5px] uppercase tracking-[0.12em] text-muted hover:border-accent hover:text-accentdeep md:block"
+                title={gavetaMax ? "Voltar à largura normal" : "Ocupar a tela toda"}
+              >
+                {gavetaMax ? "reduzir" : "ampliar"}
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 md:p-6">
+              <PainelEmpresa
+                empresaId={gaveta.id}
+                modo="gaveta"
+                abaInicial={gaveta.aba}
+                aoMudar={() => router.refresh()}
+              />
+            </div>
           </div>
         </div>
       )}

@@ -199,7 +199,7 @@
             "**Uso da plataforma**: registros técnicos de acesso e histórico das ações realizadas na conta (quem fez, o quê, quando).",
             "**Carteira do escritório**: CNPJ, razão social, CNAE, porte, situação cadastral e receita bruta das empresas clientes; nome, e-mail e telefone do contato indicado para assinar o termo.",
             "**Análises e documentos**: as premissas informadas, os resultados calculados e os documentos emitidos, com o respectivo hash e trilha de assinatura.",
-            "**Curso**: o endereço de e-mail informado para liberar os materiais, com a data e a origem. Quem pede o **certificado de conclusão** informa também nome completo e, se quiser, o número do CRC — os dois saem impressos no documento. O progresso nas aulas fica **apenas no seu navegador**: não sobe para nós.",
+            "**Curso**: o endereço de e-mail informado para liberar os materiais, com a data e a origem. Quem pede o **certificado de conclusão** informa também nome completo e, se quiser, o número do CRC — os dois saem impressos no documento. O progresso nas aulas fica **apenas no seu navegador**: não sobe para nós. A página pública do certificado gera uma imagem com o seu nome e o código, para a prévia do link em redes sociais — é o que permite compartilhar o certificado. Se preferir não ter o certificado público, peça a remoção: o código deixa de conferir.",
             "**Cobrança**: dados necessários à emissão e liquidação da assinatura, tratados pelo intermediador de pagamentos. **Não armazenamos número de cartão.**"
           ]
         },

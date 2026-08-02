@@ -188,3 +188,88 @@ certificado confere o código sem login.
 
 Emitir duas vezes com o mesmo e-mail devolve o MESMO código: dois números para a
 mesma conclusão seria bug, não recurso.
+
+### Compartilhar o certificado
+
+- `/certificado/[codigo]/opengraph-image` — a previa que LinkedIn, WhatsApp e
+  Telegram mostram ao colar o link (1200x630).
+- `/certificado/[codigo]/imagem` — a mesma arte para BAIXAR e postar;
+  `?f=quadrado` devolve 1080x1080.
+- Botao **Adicionar ao perfil do LinkedIn** no formato oficial
+  (`startTask=CERTIFICATION_NAME`), ja com nome, data, `certId` e `certUrl`.
+  Usa `organizationName=Enquadria`; se um dia existir pagina da empresa no
+  LinkedIn, trocar por `organizationId=<id numerico>` faz o logo aparecer no
+  perfil de quem adicionou. Os dois parametros nao podem ir juntos.
+
+O desenho das imagens vive em `lib/cert-imagem.tsx`, usado pelas duas rotas —
+imagem de previa diferente da imagem baixada e o tipo de detalhe que faz o
+material parecer improvisado.
+
+**Armadilha registrada:** a busca da fonte Plus Jakarta Sans tem queda para a
+fonte padrao, e a queda devolve `undefined`, nao `[]`. Passar `fonts: []` para o
+`ImageResponse` derruba a renderizacao inteira com "No fonts are loaded" — nao
+cai no padrao.
+
+## Pedir dados à empresa (migration 0024)
+
+Das oito perguntas da análise, três o contador responde olhando a escrituração
+(folha, faturamento, anexo). As outras cinco não estão em lugar nenhum da
+contabilidade: quanto das vendas vai para outra empresa, se essas empresas são
+grandes, se algum cliente já cobrou nota com crédito, se dá para repassar preço,
+se o concorrente é maior. A nota fiscal traz o CNPJ do cliente, mas não traz o
+regime dele — e nenhum livro registra "o cliente avisou que em 2027 vai exigir
+crédito". Sem esses cinco, o contador estima; e a estimativa entra no laudo com
+a mesma cara de um número apurado.
+
+O fluxo:
+
+1. Na gaveta da empresa, **Gerar o link para a empresa** cria uma coleta
+   (`POST /api/coleta`) com token de 20 caracteres.
+2. O contador copia a **mensagem pronta** (ou abre no WhatsApp). Se ele
+   precisasse redigir o convite, não mandaria.
+3. A empresa abre `/coleta/[token]` — rota **pública**, fora do middleware.
+   Pedir cadastro ao dono da empresa para responder seis perguntas é garantir
+   que ele não responda. Seis perguntas, celular, sem jargão.
+4. `POST /api/coleta/[token]` valida no servidor (só os valores declarados em
+   `lib/coleta.ts` passam), grava as respostas cruas e as derivadas.
+5. O painel mostra as respostas **em texto**, e **Usar estas respostas na
+   análise** preenche o formulário. Não salva sozinho: quem assina é o contador.
+
+`lib/coleta.ts` é a única definição do questionário — a página pública desenha a
+partir dele e o painel lê a partir dele. Duas listas divergiriam no primeiro
+ajuste de texto, e aí a pergunta respondida deixaria de ser a pergunta usada na
+conta.
+
+**Acesso.** `coletas` tem RLS ligada e **nenhuma policy**. Quem autoriza é o
+servidor: antes de criar uma coleta, a empresa é buscada com o cliente do
+usuário, sujeito à RLS que já existe em `empresas`. Se o contador não enxerga a
+empresa, a coleta não nasce. A regra de quem-vê-o-quê continua morando num lugar
+só, em vez de ser reescrita aqui e divergir depois.
+
+**Linguagem.** `testes/coleta.test.mjs` reprova sigla e jargão no questionário —
+IBS, CBS, DAS, anexo, alíquota, regime, Lucro Real. Pergunta que precisa de
+glossário volta em branco ou volta errada.
+
+## Testes
+
+Não há runner: são funções puras compiladas na hora.
+
+```
+npx tsc lib/cockpit.ts lib/triagem.ts lib/motor.ts lib/premissas-padrao.ts \
+  lib/laudo.ts lib/coleta.ts --outDir .tmp-testes --module esnext \
+  --target es2020 --moduleResolution bundler --skipLibCheck
+cd .tmp-testes && sed -i -E 's|from "\./([a-z-]+)"|from "./\1.js"|g' *.js
+cp ../testes/*.test.mjs . && for t in *.test.mjs; do node "$t"; done
+```
+
+`cockpit.test.mjs` (fila e próxima ação) · `motor.test.mjs` (árvore de decisão,
+cenários, sensibilidade) · `coleta.test.mjs` (tradução da resposta da empresa
+para a conta, e a proibição de jargão).
+
+## Planilhas de teste
+
+Fora do repositório, entregues à parte: `Enquadria_Massa_Empresas_Teste.xlsx`
+(+ o `.csv` que se importa de verdade) e `Enquadria_Cenarios_Teste.xlsx`. O
+gabarito das duas foi **gerado rodando `triar()` e `decidir()`**, não escrito à
+mão — planilha de teste com resultado esperado digitado de cabeça valida a
+memória de quem escreveu, não o sistema.

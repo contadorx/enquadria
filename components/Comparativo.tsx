@@ -168,7 +168,13 @@ export function Comparativo({
         </div>
       )}
 
-      <div className="mt-5 grid grid-cols-1 items-start gap-5 xl:grid-cols-[340px_1fr]">
+      {/* QUEBRA EM lg, NÃO EM xl. O prefixo do Tailwind mede a JANELA, não o
+          bloco onde o componente está. Com a gaveta em 560px e a janela grande,
+          o `xl` disparava e dividia 560px em 340 de formulário + o resto — o
+          resultado, que é a razão de existir da tela, ficava com menos de
+          200px. A gaveta agora acompanha a tela, e `lg` é o ponto em que ela
+          tem largura real para duas colunas. */}
+      <div className="mt-5 grid grid-cols-1 items-start gap-5 lg:grid-cols-[320px_1fr]">
         {/* ENTRADA */}
         <div className="space-y-4">
           <div className="rounded border border-line bg-surface p-4 shadow-card">
@@ -320,12 +326,15 @@ export function Comparativo({
           </div>
 
           {/* COMPOSIÇÃO */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
             {r.regimes.map((x) => (
               <div key={x.regime} className="rounded border border-line bg-surface p-4 shadow-card">
                 <div className="mb-2 text-[13px] font-bold">{x.nome}</div>
-                <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
-                  <table className="w-full border-collapse text-[12.5px] min-w-[600px] md:min-w-0">
+                <div>
+                  {/* sem min-width: a tabela tem duas colunas (rótulo e valor) e
+                      cabe em qualquer largura. O min-w-[600px] que estava aqui
+                      forçava rolagem lateral justamente onde ela mais atrapalha */}
+                  <table className="w-full border-collapse text-[12.5px]">
                     <tbody>
                       {x.composicao.map((l) => (
                         <tr key={l.rotulo}>

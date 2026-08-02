@@ -77,39 +77,51 @@ export async function POST(req: Request) {
     );
   }
 
-  // já emitiu? devolve o mesmo — dois códigos para a mesma conclusão é bug
+  // já emitiu? devolve o mesmo — dois códigos para a mesma conclusão é bug.
+  // Devolve TAMBÉM a data de emissão: quem recupera o certificado meses depois
+  // precisa levar a data verdadeira para o perfil do LinkedIn, não a de hoje.
   const { data: existente } = await supabase
     .from("curso_certificados")
-    .select("codigo")
+    .select("codigo, emitido_em")
     .eq("email", email)
     .eq("curso", CURSO.nome)
     .maybeSingle();
 
   if (existente?.codigo) {
-    return NextResponse.json({ ok: true, codigo: existente.codigo, ja_existia: true }, { headers: cab });
+    return NextResponse.json(
+      { ok: true, codigo: existente.codigo, emitido_em: existente.emitido_em, ja_existia: true },
+      { headers: cab }
+    );
   }
 
   const codigo = novoCodigo();
-  const { error } = await supabase.from("curso_certificados").insert({
-    codigo,
-    nome,
-    email,
-    crc,
-    curso: CURSO.nome,
-    aulas: TOTAL_AULAS,
-    minutos: TOTAL_MINUTOS,
-  });
+  const { data: criado, error } = await supabase
+    .from("curso_certificados")
+    .insert({
+      codigo,
+      nome,
+      email,
+      crc,
+      curso: CURSO.nome,
+      aulas: TOTAL_AULAS,
+      minutos: TOTAL_MINUTOS,
+    })
+    .select("emitido_em")
+    .single();
 
   if (error) {
     // corrida entre duas abas do mesmo participante: busca o que ficou
     const { data: agora } = await supabase
       .from("curso_certificados")
-      .select("codigo")
+      .select("codigo, emitido_em")
       .eq("email", email)
       .eq("curso", CURSO.nome)
       .maybeSingle();
     if (agora?.codigo) {
-      return NextResponse.json({ ok: true, codigo: agora.codigo, ja_existia: true }, { headers: cab });
+      return NextResponse.json(
+        { ok: true, codigo: agora.codigo, emitido_em: agora.emitido_em, ja_existia: true },
+        { headers: cab }
+      );
     }
     return NextResponse.json(
       { erro: "Não consegui emitir agora. Tente de novo em instantes." },
@@ -117,5 +129,8 @@ export async function POST(req: Request) {
     );
   }
 
-  return NextResponse.json({ ok: true, codigo, ja_existia: false }, { headers: cab });
+  return NextResponse.json(
+    { ok: true, codigo, emitido_em: criado?.emitido_em ?? null, ja_existia: false },
+    { headers: cab }
+  );
 }
