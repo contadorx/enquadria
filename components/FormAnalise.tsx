@@ -8,6 +8,10 @@ import {
   emReais,
   sensibilidade,
   alertaFatorR,
+  dDASsegregado,
+  fatorRSegregado,
+  somaSegmentos,
+  segmentosFechados,
   derivarQual,
   derivarCred,
   pct,
@@ -18,6 +22,7 @@ import {
   type Respostas,
   type DetalheQual,
   type DetalheCred,
+  type Segmento,
 } from "@/lib/motor";
 import { anexoPorCnae } from "@/lib/triagem";
 import { parseValorBRL } from "@/lib/csv";
@@ -39,6 +44,15 @@ import { Gauge } from "@/components/Gauge";
  */
 
 type Origem = "informada" | "estimada" | "padrao";
+
+/** o contador conhece os anexos pelo número; o rótulo é para não errar a linha */
+const ROTULO_ANEXO: Record<number, string> = {
+  1: "comércio",
+  2: "indústria",
+  3: "serviço (III)",
+  4: "serviço (IV)",
+  5: "serviço (V)",
+};
 
 const ROTULO_ORIGEM: Record<Origem, string> = {
   informada: "informada pelo cliente",
@@ -115,6 +129,7 @@ export function FormAnalise({
   respostasIniciais,
   detalhesIniciais,
   custoInicial,
+  segmentosIniciais,
   estimada,
   aoSalvar,
 }: {
@@ -125,6 +140,8 @@ export function FormAnalise({
   respostasIniciais: Respostas | null;
   detalhesIniciais?: { qual?: DetalheQual; cred?: DetalheCred } | null;
   custoInicial?: number | null;
+  /** segregação congelada numa análise anterior, para reabrir como estava */
+  segmentosIniciais?: Segmento[] | null;
   /** premissas vieram do lote por CNAE — o contador precisa confirmar antes do papel */
   estimada?: boolean;
   aoSalvar?: (analiseId: string) => void;
@@ -144,6 +161,27 @@ export function FormAnalise({
   const [custo, setCusto] = useState(custoInicial != null ? String(custoInicial) : "");
   const [anexoSel, setAnexoSel] = useState<number>(anexo ?? anexoPorCnae(cnae) ?? 1);
   const [anexoConfirmado, setAnexoConfirmado] = useState(false);
+  /**
+   * SEGREGAÇÃO DE RECEITA. Fechada por padrão: a maioria das empresas tem um
+   * anexo só, e um formulário que abre com cinco campos de percentual assusta
+   * quem não precisa deles. Quem precisa abre num clique — e quem precisa
+   * costuma saber muito bem que precisa.
+   */
+  const [segregar, setSegregar] = useState<boolean>(
+    (segmentosIniciais?.length ?? 0) > 1
+  );
+  const [segmentos, setSegmentos] = useState<Segmento[]>(
+    segmentosIniciais && segmentosIniciais.length > 1
+      ? segmentosIniciais
+      : [{ anexo: anexo ?? anexoPorCnae(cnae) ?? 1, share: 1 }]
+  );
+
+  function mudarSegmento(a: number, texto: string) {
+    const n = Number(texto.replace(",", ".").replace(/[^\d.]/g, ""));
+    const share = Number.isFinite(n) ? Math.min(Math.max(n, 0), 100) / 100 : 0;
+    const outros = segmentos.filter((s) => s.anexo !== a);
+    setSegmentos(share > 0 ? [...outros, { anexo: a, share }].sort((x, y) => x.anexo - y.anexo) : outros);
+  }
   const [tocadas, setTocadas] = useState<Set<string>>(new Set());
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState(false);
@@ -167,8 +205,17 @@ export function FormAnalise({
 
   const rbt12Num = parseValorBRL(rbt12) ?? null;
   const custoNum = parseValorBRL(custo) ?? null;
-  const ddas = dDASefetivo(anexoSel, rbt12Num);
+  /**
+   * A prévia só usa a segregação quando ela FECHA 100%. Enquanto o contador
+   * digita — "60" e ainda vai digitar "40" — a soma está em 60%, e usar isso
+   * mostraria um dDAS escalado para baixo, com a saída pulando na tela a cada
+   * tecla. Melhor manter o anexo único até a composição fechar.
+   */
+  const somaPct = somaSegmentos(segmentos) * 100;
+  const fechado = segregar && segmentosFechados(segmentos) && segmentos.length > 1;
+  const ddas = fechado ? dDASsegregado(segmentos, rbt12Num) : dDASefetivo(anexoSel, rbt12Num);
   const base = { ...PARAMETROS_2027, das: ddas.das, rbt12: rbt12Num };
+  const alertaSeg = fechado ? fatorRSegregado(segmentos, r.folha) : null;
 
   const res = decidir(respostas, base);
   const saida = SAIDAS[res.saida];
@@ -194,8 +241,9 @@ export function FormAnalise({
           custo_apuracao_anual: custoNum,
           detalhes: { qual: dq, cred: dc },
           origens,
-          anexo: anexoSel,
+          anexo: fechado ? ddas.anexo : anexoSel,
           anexo_confirmado: anexoConfirmado,
+          segmentos: fechado ? segmentos : null,
         }),
       });
       const json = await resp.json();
@@ -270,21 +318,101 @@ export function FormAnalise({
         </div>
 
         <div className="mb-3.5 border-b border-linesoft pb-3.5">
-          <div className="text-[13.5px] font-semibold">Anexo do Simples</div>
-          <div className="mt-2 flex gap-1.5">
-            {[1, 2, 3, 4, 5].map((a) => (
-              <button
-                key={a}
-                onClick={() => setAnexoSel(a)}
-                className={`h-9 w-9 rounded-sm border font-mono text-[12px] ${
-                  anexoSel === a ? "border-ink bg-ink font-medium text-white" : "border-line bg-surface text-slate2"
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div className="text-[13.5px] font-semibold">Anexo do Simples</div>
+            <button
+              onClick={() => setSegregar(!segregar)}
+              className="text-[12px] font-semibold text-accentdeep underline underline-offset-2"
+            >
+              {segregar ? "voltar ao anexo único" : "a empresa segrega receita entre anexos"}
+            </button>
+          </div>
+
+          {!segregar ? (
+            <div className="mt-2 flex gap-1.5">
+              {[1, 2, 3, 4, 5].map((a) => (
+                <button
+                  key={a}
+                  onClick={() => setAnexoSel(a)}
+                  className={`h-9 w-9 rounded-sm border font-mono text-[12px] ${
+                    anexoSel === a ? "border-ink bg-ink font-medium text-white" : "border-line bg-surface text-slate2"
+                  }`}
+                >
+                  {a}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-2">
+              {/* A SEGREGAÇÃO NÃO É DETALHE DE CADASTRO.
+                  Cada anexo tem partilha de PIS/Cofins própria — de 14,0% no
+                  Anexo II a 19,15% no V — e `das` É essa partilha. Uma empresa
+                  meio comércio, meio serviço tratada por um anexo só chega a
+                  errar o dDAS em quase metade, e isso vira outra saída da
+                  árvore num documento assinado. */}
+              <p className="mb-2 text-[12px] leading-relaxed text-muted">
+                Informe quanto da receita cai em cada anexo, como no PGDAS. A alíquota de cada um
+                é calculada com a RBT12 da empresa; o que sai do DAS é a soma ponderada.
+              </p>
+              <div className="space-y-1.5">
+                {[1, 2, 3, 4, 5].map((a) => {
+                  const s = segmentos.find((x) => x.anexo === a);
+                  const v = s ? Math.round(s.share * 1000) / 10 : 0;
+                  return (
+                    <div key={a} className="flex items-center gap-2.5">
+                      <span className="w-[132px] flex-none font-mono text-[11.5px] text-slate2">
+                        Anexo {a} · {ROTULO_ANEXO[a]}
+                      </span>
+                      <input
+                        value={v === 0 ? "" : String(v).replace(".", ",")}
+                        onChange={(e) => mudarSegmento(a, e.target.value)}
+                        inputMode="decimal"
+                        placeholder="0"
+                        className="w-[76px] rounded-sm border border-line px-2 py-1 text-right font-mono text-[12.5px] outline-none focus:border-accent"
+                      />
+                      <span className="font-mono text-[11px] text-muted">% da receita</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div
+                className={`mt-2 flex items-baseline justify-between rounded-sm px-2.5 py-1.5 text-[12.5px] ${
+                  fechado ? "bg-verdewash text-verde" : "bg-amarelowash text-slate2"
                 }`}
               >
-                {a}
-              </button>
-            ))}
-          </div>
-          {alerta && (
+                <span>Soma das participações</span>
+                <b className="font-mono">{(somaPct).toFixed(1).replace(".", ",")}%</b>
+              </div>
+              {!fechado && (
+                <p className="mt-1 text-[11px] text-amarelo">
+                  Precisa fechar 100% para salvar. Enquanto não fechar, a prévia usa o anexo único.
+                </p>
+              )}
+              {fechado && (
+                <p className="mt-1.5 font-mono text-[11px] text-muted">
+                  dDAS ponderado = {(ddas.das * 100).toFixed(3).replace(".", ",")}% da receita
+                </p>
+              )}
+              {alertaSeg && (
+                <div className="mt-2.5 rounded-sm border border-amarelo bg-amarelowash px-3 py-2.5">
+                  <div className="text-[12.5px] font-semibold text-ink">
+                    Fator R e o anexo do serviço não batem
+                  </div>
+                  <p className="mt-0.5 text-[12.5px] text-slate2">{alertaSeg.texto}</p>
+                  <label className="mt-2 flex items-center gap-2 text-[12.5px] text-slate2">
+                    <input
+                      type="checkbox"
+                      checked={anexoConfirmado}
+                      onChange={(e) => setAnexoConfirmado(e.target.checked)}
+                    />
+                    Confirmo a segregação como está
+                  </label>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!segregar && alerta && (
             <div className="mt-2.5 rounded-sm border border-amarelo bg-amarelowash px-3 py-2.5">
               <div className="text-[12.5px] font-semibold text-ink">
                 Fator R e anexo declarado não batem

@@ -273,3 +273,76 @@ Fora do repositório, entregues à parte: `Enquadria_Massa_Empresas_Teste.xlsx`
 gabarito das duas foi **gerado rodando `triar()` e `decidir()`**, não escrito à
 mão — planilha de teste com resultado esperado digitado de cabeça valida a
 memória de quem escreveu, não o sistema.
+
+## Receita segregada por anexo (02/08/2026)
+
+Até aqui a empresa tinha **um** anexo. Mas o Simples segrega receita por
+atividade dentro do mesmo CNPJ — a fábrica que também revende (II e I), a
+prestadora que vende produto (III e I), e principalmente o serviço que fica no
+III ou no V conforme o fator R.
+
+Isso não é detalhe de cadastro: cada anexo tem **partilha de PIS/Cofins
+própria** (15,5% no I, 14,0% no II, 15,6%–17,1% no III, 17,15%–19,15% no V), e
+`das` — a parcela que deixa de ser paga ao optar — É essa partilha. Uma empresa
+60% comércio e 40% serviço no Anexo V, com RBT12 de R$ 1,2 mi:
+
+| como se calcula | dDAS |
+|---|---|
+| só pelo Anexo I (dominante) | 1,368% |
+| só pelo Anexo V | 3,653% |
+| **ponderado pela receita** | **2,282%** |
+
+Tratar essa empresa pelo anexo dominante erra o dDAS em **40%** — e o teste do
+motor registra um caso 50/50 em que o erro é 45,5% e a saída da árvore vira de
+S3 para S4. Número errado aqui é número errado num laudo assinado.
+
+A conta, em `dDASsegregado`:
+
+```
+das = Σ ( participação_a × alíquota_efetiva_a × sharePC_a )
+```
+
+A RBT12 é da **empresa**, não da atividade — é ela que define a faixa e a
+alíquota efetiva em cada tabela, como no PGDAS. Com um segmento só e
+participação de 100%, a função devolve exatamente o que `dDASefetivo` devolvia:
+**as análises antigas continuam valendo**.
+
+- `fatorRSegregado` troca a pergunta: não é "o anexo da empresa está certo?",
+  é "a receita de serviço está no anexo certo?". Anexo IV não entra na regra.
+- A tela abre fechada (a maioria tem um anexo só) e só usa a segregação quando
+  ela **fecha 100%** — enquanto o contador digita "60" e ainda vai digitar
+  "40", usar a soma parcial mostraria um dDAS escalado para baixo e a saída
+  pulando a cada tecla.
+- A composição vai **congelada** em `analises.parametros.segmentos`, a memória
+  de cálculo do laudo imprime um passo por anexo mais a soma, e as condições de
+  validade passam a incluir "a composição da receita permanecer próxima da
+  declarada".
+
+Sem migration: `parametros` já é jsonb e já é copiado para o laudo.
+
+## Coleta no plano
+
+`LIMITE_COLETAS_GRATIS = 2`, alinhado aos 2 laudos de degustação: o grátis roda
+uma empresa de ponta a ponta, coleta inclusive. O que ele não dá é a carteira —
+uma resposta é curiosidade, trinta é método, e método é o que o PRO vende.
+
+A cota conta **empresas distintas perguntadas**, não links gerados: quem
+encerrou um link sem querer não pode perder uma das duas. A contagem usa
+`coletas.tenant_id`, gravado no insert; cruzar com a lista de empresas visíveis
+seria uma consulta que cresce com o escritório, e isto roda a cada clique.
+
+## Marca do escritório na coleta
+
+A página que a empresa abre leva **logo, nome e CRC do escritório** (`tenants`),
+como o laudo e o comparativo. Quem abre o link é cliente do contador e nunca
+ouviu falar de Enquadria — página com marca desconhecida pedindo dados de
+faturamento parece golpe, e não se responde a golpe. Sem tenant configurado, o
+topo fica sóbrio e sem marca nenhuma: melhor isso do que exibir a nossa no lugar
+da dele.
+
+## Ícone
+
+`app/icon.svg` e `app/apple-icon.svg` — o Next descobre pelos nomes. Mesmo
+desenho do site. O `apple-icon` vai sem cantos arredondados e sem transparência
+de propósito: o iOS já arredonda e já recorta, e um SVG com raio próprio sai com
+borda dupla.

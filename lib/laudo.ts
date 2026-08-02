@@ -14,6 +14,7 @@ import {
   ANEXOS_SIMPLES,
   type Saida,
   type DDAS,
+  type SegmentoCalculado as SegmentoImpresso,
   type CarimboAliquota,
   type Cenario,
   type Dinheiro,
@@ -36,7 +37,10 @@ export interface AnaliseGravada {
   calculado_em: string | null;
   /** parâmetros congelados na análise, incluindo o dDAS efetivo (rastreabilidade) */
   parametros?: {
-    ddas?: DDAS;
+    /** com receita segregada, `ddas.segmentos` traz a composição usada */
+    ddas?: DDAS & { segmentos?: SegmentoImpresso[]; normalizado?: boolean; somaInformada?: number };
+    segmentos?: { anexo: number; share: number }[] | null;
+    segregado?: boolean;
     aliquota?: number;
     das?: number;
     /** "lote_cnae" quando as premissas foram estimadas pelo CNAE, não informadas */
@@ -285,7 +289,38 @@ export function memoriaDeCalculo(a: AnaliseGravada): PassoCalculo[] {
   const n = (x: number | null | undefined, casas = 4) =>
     x == null || !isFinite(x) ? "—" : x.toFixed(casas).replace(".", ",");
 
-  if (d) {
+  /**
+   * RECEITA SEGREGADA. Quando a empresa tem atividade em mais de um anexo, o
+   * passo 1 deixa de ser UMA alíquota e vira uma composição: cada anexo tem a
+   * sua tabela e a sua partilha de PIS/Cofins, e o dDAS é a soma ponderada
+   * pela receita de cada um. Sem imprimir a composição, o laudo traria um dDAS
+   * que ninguém consegue refazer com a tabela de um anexo só — que é
+   * exatamente o defeito que esta seção existe para não ter.
+   */
+  const segs = d?.segmentos;
+  if (d && segs && segs.length > 1) {
+    segs.forEach((s, i) => {
+      const t = ANEXOS_SIMPLES[s.anexo]?.[s.faixa - 1];
+      passos.push({
+        passo: `1.${i + 1} Anexo ${s.anexo} — ${pct(s.share, 1)} da receita`,
+        formula:
+          s.fonte === "efetiva"
+            ? "[(RBT12 × nominal − deduzir) ÷ RBT12] × partilha de PIS/Cofins do anexo"
+            : "alíquota nominal do topo da faixa × partilha de PIS/Cofins do anexo",
+        substituicao:
+          s.fonte === "efetiva" && s.rbt12 && t
+            ? `[(${moeda(s.rbt12)} × ${pct(t.nominal, 2)} − ${moeda(t.deduzir)}) ÷ ${moeda(s.rbt12)}] × ${pct(s.sharePC, 2)}`
+            : `Anexo ${s.anexo}, faixa ${s.faixa} — RBT12 não informada`,
+        resultado: `${pct(s.aliquota, 2)} de Simples · ${pct(s.das, 3)} de PIS/Cofins no anexo`,
+      });
+    });
+    passos.push({
+      passo: "2. Parcela de PIS/Cofins embutida no DAS (receita segregada)",
+      formula: "dDAS = Σ (participação do anexo × PIS/Cofins do anexo)",
+      substituicao: segs.map((s) => `${pct(s.share, 1)} × ${pct(s.das, 3)}`).join("  +  "),
+      resultado: `dDAS = ${pct(d.das, 3)} da receita total`,
+    });
+  } else if (d) {
     const tabela = ANEXOS_SIMPLES[d.anexo]?.[d.faixa - 1];
     if (d.fonte === "efetiva" && d.rbt12 && tabela) {
       passos.push({
@@ -440,6 +475,25 @@ export function condicoesDeValidade(a: AnaliseGravada): string[] {
     cond.push(
       `A receita do ano permanecer do mesmo lado do sublimite de ${moeda(p.sublimite)}, que altera o que já sai do DAS.`
     );
+  }
+  /**
+   * Com receita segregada, o mix É uma premissa. Cada anexo tem partilha de
+   * PIS/Cofins própria, então mudar a proporção entre as atividades muda o
+   * dDAS e pode mudar a decisão — sem que nada no cadastro da empresa mude.
+   */
+  const segs = p.ddas?.segmentos;
+  if (segs && segs.length > 1) {
+    cond.push(
+      "A composição da receita permanecer próxima da declarada — " +
+        segs.map((s) => `Anexo ${s.anexo} em ${pct(s.share, 1)}`).join(", ") +
+        ". Cada anexo tem partilha de PIS/Cofins própria, e mudar o mix muda o que sai do DAS."
+    );
+    if (segs.some((s) => s.anexo === 3 || s.anexo === 5)) {
+      cond.push(
+        "O fator R do período manter a receita de serviço no anexo declarado — a folha em relação " +
+          "à receita é o que decide entre o Anexo III e o Anexo V, e ela muda mês a mês."
+      );
+    }
   }
   cond.push("A empresa permanecer optante pelo Simples Nacional e em situação cadastral regular.");
   return cond;

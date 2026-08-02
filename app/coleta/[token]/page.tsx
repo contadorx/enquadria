@@ -45,14 +45,34 @@ export default async function ColetaPage({ params }: { params: { token: string }
 
   const { data: empresa } = await admin
     .from("empresas")
-    .select("razao_social")
+    .select("razao_social, tenant_id")
     .eq("id", coleta.empresa_id)
     .maybeSingle();
   const nome = (empresa?.razao_social as string) ?? "sua empresa";
 
+  /**
+   * A MARCA QUE APARECE É A DO ESCRITÓRIO, não a nossa.
+   *
+   * Quem abre este link é cliente do contador, e nunca ouviu falar de
+   * Enquadria. Página com marca desconhecida pedindo dados do faturamento
+   * parece golpe — e não se responde a golpe. Mesma regra do laudo e do
+   * comparativo: o escritório na frente, a ferramenta discreta no rodapé.
+   *
+   * Sem tenant configurado, cai numa casca neutra: melhor sóbrio e sem marca
+   * nenhuma do que exibir a nossa no lugar da dele.
+   */
+  const { data: tenant } = empresa?.tenant_id
+    ? await admin
+        .from("tenants")
+        .select("nome, crc, logo_url")
+        .eq("id", empresa.tenant_id)
+        .maybeSingle()
+    : { data: null };
+  const escritorio = (tenant ?? null) as { nome?: string; crc?: string; logo_url?: string } | null;
+
   if (coleta.status === "respondida") {
     return (
-      <Casca>
+      <Casca escritorio={escritorio}>
         <Aviso titulo="Já respondido">
           As respostas da <b>{nome}</b> já chegaram
           {coleta.respondido_em
@@ -66,7 +86,7 @@ export default async function ColetaPage({ params }: { params: { token: string }
 
   if (coleta.status !== "aberta") {
     return (
-      <Casca>
+      <Casca escritorio={escritorio}>
         <Aviso titulo="Link encerrado">
           Este link foi encerrado pelo seu contador. Peça um novo a ele.
         </Aviso>
@@ -75,16 +95,16 @@ export default async function ColetaPage({ params }: { params: { token: string }
   }
 
   return (
-    <Casca>
+    <Casca escritorio={escritorio}>
       <div className="mb-6">
         <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-accentdeep">
-          Perguntas do seu contador
+          Perguntas {escritorio?.nome ? `de ${escritorio.nome}` : "do seu contador"}
         </div>
         <h1 className="mt-1.5 text-[26px] font-extrabold leading-tight tracking-tight text-ink">
           Seis perguntas sobre a {nome}
         </h1>
         <p className="mt-2.5 max-w-[52ch] text-[14.5px] leading-relaxed text-slate2">
-          Elas levam uns três minutos. Seu contador precisa disso para calcular uma decisão que a
+          Elas levam uns três minutos. {escritorio?.nome ?? "Seu contador"} precisa disso para calcular uma decisão que a
           sua empresa tem prazo para tomar — e são coisas que só quem toca o negócio sabe
           responder. Não existe resposta certa ou errada: responda pelo que acontece de verdade.
         </p>
@@ -103,29 +123,56 @@ function Aviso({ titulo, children }: { titulo: string; children: React.ReactNode
   );
 }
 
-function Casca({ children }: { children: React.ReactNode }) {
+interface Escritorio {
+  nome?: string;
+  crc?: string;
+  logo_url?: string;
+}
+
+function Casca({
+  children,
+  escritorio,
+}: {
+  children: React.ReactNode;
+  escritorio?: Escritorio | null;
+}) {
+  const nome = escritorio?.nome?.trim();
   return (
     <div className="min-h-screen bg-bg px-4 py-8">
       <div className="mx-auto max-w-[620px]">
-        <div className="mb-6 flex items-center gap-2">
-          <svg width="26" height="26" viewBox="0 0 64 64">
-            <rect width="64" height="64" rx="14" fill="#0B1220" />
-            <path
-              d="M20 16h24M20 16v32M20 48h24M20 32h16"
-              stroke="#06B6D4"
-              strokeWidth="5"
-              strokeLinecap="round"
-              fill="none"
-            />
-            <circle cx="46" cy="32" r="4" fill="#06B6D4" />
-          </svg>
-          <span className="text-[17px] font-extrabold tracking-tight text-ink">Enquadria</span>
-        </div>
+        {/* O TOPO É DO ESCRITÓRIO. Logo quando existir; nome e CRC quando não
+            houver imagem; e nada, se o contador ainda não configurou — a
+            página fica sóbria em vez de exibir uma marca que o cliente dele
+            não conhece. */}
+        {(escritorio?.logo_url || nome) && (
+          <div className="mb-6 flex items-center gap-3 border-b border-line pb-4">
+            {escritorio?.logo_url ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={escritorio.logo_url}
+                alt={nome ? `Logo de ${nome}` : "Logo do escritório"}
+                className="max-h-[46px] max-w-[170px] object-contain"
+              />
+            ) : (
+              <span className="text-[17px] font-extrabold tracking-tight text-ink">{nome}</span>
+            )}
+            {escritorio?.logo_url && nome && (
+              <span className="text-[14px] font-semibold text-slate2">{nome}</span>
+            )}
+            {escritorio?.crc && (
+              <span className="ml-auto font-mono text-[11px] text-muted">{escritorio.crc}</span>
+            )}
+          </div>
+        )}
         {children}
         <p className="mt-6 text-center text-[11px] leading-relaxed text-muted">
-          Este formulário foi aberto pelo escritório de contabilidade que atende a sua empresa. As
-          respostas vão só para ele. Nenhum dado é usado para outra finalidade, e o link pode ser
-          encerrado a qualquer momento.
+          Este formulário foi aberto por{" "}
+          {nome ? <b className="font-semibold text-slate2">{nome}</b> : "pelo escritório de contabilidade"},
+          que atende a sua empresa. As respostas vão só para ele, não são usadas para outra
+          finalidade, e o link pode ser encerrado a qualquer momento.
+        </p>
+        <p className="mt-2 text-center font-mono text-[10px] text-muted">
+          formulário gerado no Enquadria
         </p>
       </div>
     </div>

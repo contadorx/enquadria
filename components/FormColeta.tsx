@@ -120,7 +120,24 @@ export function FormColeta({ token, empresa }: { token: string; empresa: string 
                               ativo ? "border-accent bg-accent" : "border-line"
                             }`}
                           />
-                          {o.rotulo}
+                          {/* O NÚMERO DEBAIXO DA FRASE, não ao lado. "A maior
+                              parte" vira 0,7 na conta do contador; quem
+                              responde tem o número na cabeça e precisa poder
+                              conferir se a faixa que marcou é a dele. Ao lado,
+                              num celular, o percentual espremia rótulos longos
+                              a uma palavra por linha. */}
+                          <span className="min-w-0 flex-1">
+                            {o.rotulo}
+                            {o.equivale && (
+                              <span
+                                className={`mt-0.5 block font-mono text-[11.5px] ${
+                                  ativo ? "text-[#A5F3FC]" : "text-muted"
+                                }`}
+                              >
+                                {o.equivale}
+                              </span>
+                            )}
+                          </span>
                         </button>
                       );
                     })}

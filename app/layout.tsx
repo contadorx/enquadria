@@ -5,6 +5,19 @@ export const metadata: Metadata = {
   title: "Enquadria — decisão de enquadramento IBS/CBS",
   description:
     "Triagem da carteira, decisão de regime e prova documental para a janela de opção do Simples Nacional.",
+  /**
+   * O ÍCONE DO APP. Existia só no site; aqui a aba ficava com o quadrado
+   * genérico do navegador — e o contador trabalha com a carteira aberta o dia
+   * inteiro, muitas vezes entre dez abas. Aba sem ícone é aba que ele não
+   * acha.
+   *
+   * Os arquivos são `app/icon.svg` e `app/apple-icon.svg`: o Next descobre
+   * pelos nomes e monta as tags sozinho. É o mesmo desenho do site — a marca é
+   * uma só.
+   */
+  icons: { icon: "/icon.svg", apple: "/apple-icon.svg" },
+  applicationName: "Enquadria",
+  appleWebApp: { capable: true, title: "Enquadria", statusBarStyle: "black-translucent" },
 };
 
 /**

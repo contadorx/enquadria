@@ -29,6 +29,11 @@
 create table if not exists public.coletas (
   id                uuid primary key default gen_random_uuid(),
   empresa_id        uuid not null,
+  -- guardado no insert a partir do perfil de quem pediu. Existe para a COTA do
+  -- plano poder ser contada sem varrer a carteira inteira: contar coletas por
+  -- tenant é um índice; cruzar com a lista de empresas visíveis seria uma
+  -- consulta que cresce com o tamanho do escritório.
+  tenant_id         uuid,
   token             text not null,
   status            text not null default 'aberta',
   criado_em         timestamptz not null default now(),
@@ -56,6 +61,10 @@ begin
                  where table_schema='public' and table_name='coletas' and column_name='observacao') then
     alter table public.coletas add column observacao text;
   end if;
+  if not exists (select 1 from information_schema.columns
+                 where table_schema='public' and table_name='coletas' and column_name='tenant_id') then
+    alter table public.coletas add column tenant_id uuid;
+  end if;
 end $$;
 
 -- a chave-de-fora só entra se `empresas` existir e ainda não houver a relação;
@@ -75,6 +84,7 @@ end $$;
 -- o token é o endereço público da coleta: não pode repetir
 create unique index if not exists coletas_token on public.coletas (token);
 create index if not exists coletas_empresa on public.coletas (empresa_id, criado_em desc);
+create index if not exists coletas_tenant on public.coletas (tenant_id, empresa_id);
 
 -- status é um conjunto fechado; texto livre aqui vira bug silencioso no painel
 do $$

@@ -33,6 +33,20 @@ export interface OpcaoColeta {
   rotulo: string;
   /** o que a conta recebe */
   valor: number;
+  /**
+   * O NÚMERO POR TRÁS DA FRASE, mostrado ao lado da opção.
+   *
+   * "A maior parte" vira 0,7 na conta do contador. Quem responde tem o número
+   * na cabeça — o dono sabe que vende "uns 60% para empresa" — e sem ver a
+   * equivalência não tem como perceber que marcou a faixa errada. Mostrar o
+   * intervalo custa uma linha e evita um laudo calculado sobre 70% quando o
+   * certo era 50%. Vazio nas perguntas de sim/não, onde não há percentual.
+   *
+   * CURTO DE PROPÓSITO: isto é lido num celular, ao lado de um rótulo que já
+   * pode ter cinco palavras. Texto comprido aqui espremia o rótulo a uma
+   * palavra por linha — o contexto já está na pergunta, não precisa repetir.
+   */
+  equivale?: string;
 }
 
 export interface PerguntaColeta {
@@ -50,11 +64,11 @@ export const PERGUNTAS: PerguntaColeta[] = [
     ajuda:
       "Vale a nota no CNPJ do cliente. Venda para o consumidor final — a pessoa que leva para casa ou para o uso dela — não conta aqui.",
     opcoes: [
-      { rotulo: "Quase tudo para empresas", valor: 0.9 },
-      { rotulo: "A maior parte para empresas", valor: 0.7 },
-      { rotulo: "Metade e metade", valor: 0.5 },
-      { rotulo: "A maior parte para consumidor final", valor: 0.25 },
-      { rotulo: "Quase tudo para consumidor final", valor: 0.05 },
+      { rotulo: "Quase tudo para empresas", valor: 0.9, equivale: "mais de 80%" },
+      { rotulo: "A maior parte para empresas", valor: 0.7, equivale: "uns 60% a 80%" },
+      { rotulo: "Metade e metade", valor: 0.5, equivale: "perto de 50%" },
+      { rotulo: "A maior parte para consumidor final", valor: 0.25, equivale: "20% a 40%" },
+      { rotulo: "Quase tudo para consumidor final", valor: 0.05, equivale: "menos de 10%" },
     ],
   },
   {
@@ -63,11 +77,11 @@ export const PERGUNTAS: PerguntaColeta[] = [
     ajuda:
       "Grande aqui quer dizer indústria, rede, atacado, construtora, empresa com faturamento alto. Pequena quer dizer o comércio da esquina, o prestador, o MEI. Se não souber, responda pelo cliente que mais pesa no seu faturamento.",
     opcoes: [
-      { rotulo: "Quase todas grandes", valor: 0.9 },
-      { rotulo: "A maioria grandes", valor: 0.7 },
-      { rotulo: "Tem de tudo", valor: 0.5 },
-      { rotulo: "A maioria pequenas", valor: 0.25 },
-      { rotulo: "Quase todas pequenas ou MEI", valor: 0.05 },
+      { rotulo: "Quase todas grandes", valor: 0.9, equivale: "mais de 80% delas" },
+      { rotulo: "A maioria grandes", valor: 0.7, equivale: "60% a 80% delas" },
+      { rotulo: "Tem de tudo", valor: 0.5, equivale: "metade é grande" },
+      { rotulo: "A maioria pequenas", valor: 0.25, equivale: "20% a 40% são grandes" },
+      { rotulo: "Quase todas pequenas ou MEI", valor: 0.05, equivale: "menos de 10% é grande" },
     ],
   },
   {
@@ -107,11 +121,11 @@ export const PERGUNTAS: PerguntaColeta[] = [
     ajuda:
       "Some mercadoria, matéria-prima, serviço contratado de empresa, energia, aluguel pago a empresa e frete. A pergunta é quanto disso vem de fornecedor de porte maior — e não do pequeno fornecedor ou do MEI.",
     opcoes: [
-      { rotulo: "Quase tudo de fornecedor grande", valor: 0.8 },
-      { rotulo: "A maior parte", valor: 0.6 },
-      { rotulo: "Mais ou menos metade", valor: 0.4 },
-      { rotulo: "Pouco — compro de pequenos", valor: 0.2 },
-      { rotulo: "Quase nada", valor: 0.05 },
+      { rotulo: "Quase tudo de fornecedor grande", valor: 0.8, equivale: "uns 80% das compras" },
+      { rotulo: "A maior parte", valor: 0.6, equivale: "uns 60% das compras" },
+      { rotulo: "Mais ou menos metade", valor: 0.4, equivale: "uns 40% das compras" },
+      { rotulo: "Pouco — compro de pequenos", valor: 0.2, equivale: "uns 20% das compras" },
+      { rotulo: "Quase nada", valor: 0.05, equivale: "menos de 10% das compras" },
     ],
   },
 ];

@@ -294,6 +294,164 @@ export function dDASefetivo(
   return { das: faixa.nominal * faixa.sharePC, faixa: f, anexo: a, aliquota: faixa.nominal, sharePC: faixa.sharePC, rbt12: null, fonte: "conservador" };
 }
 
+/* ==========================================================================
+ * RECEITA SEGREGADA POR ANEXO
+ *
+ * O erro que isto corrige: até aqui a empresa tinha UM anexo. Mas o Simples
+ * segrega receita por atividade dentro do MESMO CNPJ — a fábrica que também
+ * revende (II e I), a prestadora que vende produto (III e I), e principalmente
+ * o serviço que fica no III ou no V conforme o fator R. Cada anexo tem a sua
+ * tabela e, o que importa aqui, a sua PARTILHA DE PIS/COFINS: 15,5% no I,
+ * 14,0% no II, 15,6%–17,1% no III, 17,15%–19,15% no V.
+ *
+ * Como `das` é exatamente a fatia de PIS/Cofins que sai do DAS ao optar, tratar
+ * uma empresa mista por um anexo só erra o número que decide. Um exemplo real:
+ * metade comércio (I) e metade serviço no V, RBT12 de R$ 1,2 mi — pelo Anexo I
+ * sozinho o `das` sai bem abaixo do verdadeiro, e `das` menor significa `cl`
+ * maior, ou seja, empurra para NÃO optar. O viés existe nas duas direções
+ * conforme a composição, que é justamente o motivo de não dar para escolher
+ * "o anexo principal" e seguir em frente.
+ *
+ * A CONTA. A RBT12 é da EMPRESA, não da atividade — é ela que define a faixa e
+ * a alíquota efetiva em CADA tabela, como no PGDAS. Depois, cada anexo entra
+ * com o peso da receita dele:
+ *
+ *     das = Σ ( participação_a × alíquota_efetiva_a × sharePC_a )
+ *
+ * Com um anexo só e participação de 100%, isto devolve exatamente o que
+ * `dDASefetivo` devolvia — as análises antigas continuam valendo.
+ * ========================================================================== */
+
+export interface Segmento {
+  /** anexo do Simples (1 a 5) */
+  anexo: number;
+  /** participação desta atividade na receita, em fração (0,4 = 40%) */
+  share: number;
+}
+
+export interface SegmentoCalculado extends DDAS {
+  share: number;
+  /** quanto este anexo contribui para o `das` final, em fração da receita */
+  contribuicao: number;
+}
+
+export interface DDASSegregado extends DDAS {
+  segregado: true;
+  segmentos: SegmentoCalculado[];
+  /** soma das participações informadas, ANTES de qualquer normalização */
+  somaInformada: number;
+  /**
+   * true quando a soma não fechava 100% e foi normalizada. Nunca deveria
+   * acontecer — a tela não deixa salvar fora de 100% — mas se acontecer, o
+   * laudo precisa poder dizer isso em vez de imprimir um número silenciosamente
+   * escalado.
+   */
+  normalizado: boolean;
+}
+
+const TOLERANCIA_SOMA = 0.005;
+
+/**
+ * `segmentos` com um item só (ou vazio) cai no comportamento de sempre.
+ * Participação zero ou negativa é descartada: linha em branco na tela não pode
+ * virar peso na conta.
+ */
+export function dDASsegregado(
+  segmentos: Segmento[] | null | undefined,
+  rbt12?: number | null,
+  faixaFallback?: number | null
+): DDAS | DDASSegregado {
+  const validos = (segmentos ?? []).filter((s) => s && s.share > 0 && anexoValido(s.anexo) === s.anexo);
+
+  if (validos.length === 0) return dDASefetivo(null, rbt12, faixaFallback);
+  if (validos.length === 1) return dDASefetivo(validos[0].anexo, rbt12, faixaFallback);
+
+  const somaInformada = validos.reduce((t, s) => t + s.share, 0);
+  const normalizado = Math.abs(somaInformada - 1) > TOLERANCIA_SOMA;
+  const divisor = somaInformada > 0 ? somaInformada : 1;
+
+  const calculados: SegmentoCalculado[] = validos.map((s) => {
+    const base = dDASefetivo(s.anexo, rbt12, faixaFallback);
+    const share = normalizado ? s.share / divisor : s.share;
+    return { ...base, share, contribuicao: base.das * share };
+  });
+
+  const das = calculados.reduce((t, s) => t + s.contribuicao, 0);
+  const aliquota = calculados.reduce((t, s) => t + s.aliquota * s.share, 0);
+  const sharePC = das > 0 && aliquota > 0 ? das / aliquota : 0;
+  // o anexo "da empresa" é o de maior receita — serve para rótulo e para o
+  // alerta de fator R, nunca para a conta, que é sempre a soma acima
+  const dominante = calculados.reduce((a, b) => (b.share > a.share ? b : a));
+
+  return {
+    das,
+    faixa: dominante.faixa,
+    anexo: dominante.anexo,
+    aliquota,
+    sharePC,
+    rbt12: dominante.rbt12,
+    fonte: calculados.every((s) => s.fonte === "efetiva") ? "efetiva" : "conservador",
+    acimaDoTeto: calculados.some((s) => s.acimaDoTeto),
+    segregado: true,
+    segmentos: calculados,
+    somaInformada,
+    normalizado,
+  };
+}
+
+/** discriminante para quem consome o resultado sem saber qual dos dois veio */
+export function ehSegregado(d: DDAS | DDASSegregado): d is DDASSegregado {
+  return (d as DDASSegregado).segregado === true;
+}
+
+/**
+ * ONDE O SERVIÇO FICA — III ou V, pelo fator R.
+ *
+ * `alertaFatorR` já cuida do caso de um anexo só. Com receita segregada a
+ * pergunta muda de forma: não é "o anexo está certo?", é "a receita de serviço
+ * está no anexo certo?". Devolve null quando não há serviço de fator R na
+ * composição — construção e afins (Anexo IV) não entram nesta regra.
+ */
+export function fatorRSegregado(
+  segmentos: Segmento[] | null | undefined,
+  folhaSobreReceita: number | null | undefined
+): { fator: number; deveriaSer: 3 | 5; declarado: number[]; texto: string } | null {
+  const f = folhaSobreReceita;
+  if (f == null || !isFinite(f)) return null;
+  const servicos = (segmentos ?? []).filter((s) => (s.anexo === 3 || s.anexo === 5) && s.share > 0);
+  if (servicos.length === 0) return null;
+
+  const deveriaSer: 3 | 5 = f >= 0.28 ? 3 : 5;
+  // sem spread de Set: o tsconfig do projeto compila para um alvo que não
+  // itera Set sem downlevelIteration, e isto roda também nos testes compilados
+  const declarados = servicos
+    .map((s) => s.anexo)
+    .filter((a, i, todos) => todos.indexOf(a) === i);
+  const erradas = servicos.filter((s) => s.anexo !== deveriaSer);
+  if (erradas.length === 0) return null;
+
+  const total = erradas.reduce((t, s) => t + s.share, 0);
+  return {
+    fator: f,
+    deveriaSer,
+    declarado: declarados,
+    texto:
+      `Folha em ${pct(f)} da receita. Com fator R ${f >= 0.28 ? "igual ou acima" : "abaixo"} de 28%, ` +
+      `a receita de serviço vai ao Anexo ${deveriaSer} — e ${pct(total)} da receita está declarada ` +
+      `no Anexo ${erradas.map((s) => s.anexo).join(" e ")}. A alíquota do Simples muda, e com ela a ` +
+      "parcela que sai do DAS. Confirme a segregação antes de emitir o laudo.",
+  };
+}
+
+/** a participação tem de fechar 100% — usado pela tela para travar o salvamento */
+export function somaSegmentos(segmentos: Segmento[] | null | undefined): number {
+  return (segmentos ?? []).reduce((t, s) => t + (s.share > 0 ? s.share : 0), 0);
+}
+export function segmentosFechados(segmentos: Segmento[] | null | undefined): boolean {
+  const s = somaSegmentos(segmentos);
+  return Math.abs(s - 1) <= TOLERANCIA_SOMA;
+}
+
 /**
  * dDAS por anexo E faixa — espelho conservador (nominal × sharePC), derivado da
  * tabela oficial acima, para o modo demonstração e o `parametros_exercicio`.

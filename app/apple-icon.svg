@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="180" height="180">
+  <!-- Sem cantos arredondados e sem transparência: o iOS já arredonda e já
+       recorta o ícone da tela de início. Um SVG com raio próprio sai com
+       borda dupla, e com fundo transparente sai preto no aparelho. -->
+  <rect width="180" height="180" fill="#0B1220"/>
+  <g transform="translate(34 34) scale(1.75)">
+    <path d="M20 16h24M20 16v32M20 48h24M20 32h16" stroke="#06B6D4" stroke-width="5" stroke-linecap="round" fill="none" transform="translate(-14 -14)"/>
+    <circle cx="32" cy="18" r="4" fill="#06B6D4"/>
+  </g>
+</svg>

@@ -3,6 +3,7 @@ import { randomBytes } from "crypto";
 import { createClient } from "@/lib/supabase-server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { novoToken } from "@/lib/coleta";
+import { LIMITE_COLETAS_GRATIS, type Assinatura } from "@/lib/plano";
 
 /**
  * ABRIR (E FECHAR) UMA COLETA — rota do contador, autenticada.
@@ -39,6 +40,13 @@ export async function POST(req: Request) {
     .maybeSingle();
   if (!empresa) return NextResponse.json({ erro: "empresa não encontrada" }, { status: 404 });
 
+  const { data: perfil } = await supabase
+    .from("profiles")
+    .select("tenant_id")
+    .eq("id", user.id)
+    .maybeSingle();
+  const tenantId = (perfil?.tenant_id as string) ?? null;
+
   const admin = createAdminClient();
   if (!admin) {
     return NextResponse.json(
@@ -62,8 +70,55 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, token: aberta.token, ja_existia: true });
   }
 
+  /**
+   * A COTA DO PLANO — contada por EMPRESA PERGUNTADA, não por link gerado.
+   *
+   * O contador que encerrou um link sem querer, ou que precisa reabrir porque
+   * o cliente respondeu com pressa, não pode perder uma das duas cotas do
+   * grátis. Por isso o que se conta é quantas empresas DISTINTAS já receberam
+   * o formulário; reabrir para uma que já está na lista passa livre.
+   *
+   * A contagem usa `tenant_id` gravado na própria coleta. Cruzar com a lista
+   * de empresas visíveis seria uma consulta que cresce com o tamanho do
+   * escritório, e isto aqui roda a cada clique no botão.
+   */
+  if (tenantId) {
+    const { data: assinRaw } = await supabase.rpc("assinatura_ativa");
+    const assinatura = (Array.isArray(assinRaw) ? assinRaw[0] : assinRaw) as Assinatura | null;
+    const ilimitado = !!assinatura?.plano_id && assinatura.limite_analises == null;
+
+    if (!ilimitado) {
+      const { data: anteriores } = await admin
+        .from("coletas")
+        .select("empresa_id")
+        .eq("tenant_id", tenantId);
+
+      const distintas = new Set((anteriores ?? []).map((c) => c.empresa_id as string));
+      const limite = assinatura?.plano_id
+        ? Number(assinatura.limite_analises ?? LIMITE_COLETAS_GRATIS)
+        : LIMITE_COLETAS_GRATIS;
+
+      if (!distintas.has(empresaId) && distintas.size >= limite) {
+        return NextResponse.json(
+          {
+            erro:
+              `Você já pediu dados a ${distintas.size} de ${limite} empresas deste plano. ` +
+              "No PRO o formulário vale para a carteira inteira — que é onde ele deixa de ser " +
+              "curiosidade e vira método.",
+            bloqueado_por_plano: true,
+            usados: distintas.size,
+            limite,
+          },
+          { status: 402 }
+        );
+      }
+    }
+  }
+
   const token = novoToken(randomBytes(20));
-  const { error } = await admin.from("coletas").insert({ empresa_id: empresaId, token });
+  const { error } = await admin
+    .from("coletas")
+    .insert({ empresa_id: empresaId, token, tenant_id: tenantId });
   if (error) {
     return NextResponse.json({ erro: "Não consegui abrir a coleta agora." }, { status: 500 });
   }

@@ -12,6 +12,21 @@
 
 export const LIMITE_GRATIS = 2;
 
+/**
+ * COLETA DE DADOS COM A EMPRESA — mesmo desenho, contador próprio.
+ *
+ * O grátis precisa poder EXPERIMENTAR: mandar o formulário para dois clientes,
+ * ver a resposta chegar e sentir o que muda quando os cinco números que não
+ * estão na escrituração param de ser chute. Alinhado aos 2 laudos de
+ * degustação — dá para rodar uma empresa de ponta a ponta sem pagar nada.
+ *
+ * O que o grátis não dá é a CARTEIRA. Uma resposta é curiosidade; trinta é
+ * método, e método é o que o PRO vende. Reabrir uma coleta encerrada da mesma
+ * empresa não consome cota nova: a cota é por empresa perguntada, não por
+ * clique — senão o contador que fechou o link sem querer perde uma das duas.
+ */
+export const LIMITE_COLETAS_GRATIS = 2;
+
 export interface Assinatura {
   plano_id: string | null;
   limite_analises: number | null;

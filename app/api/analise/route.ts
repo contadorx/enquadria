@@ -9,10 +9,14 @@ import {
   carimboAliquota,
   alertaFatorR,
   sharePCDe,
+  dDASsegregado,
+  ehSegregado,
+  fatorRSegregado,
   PARAMETROS_2027,
   type Respostas,
   type DetalheQual,
   type DetalheCred,
+  type Segmento,
 } from "@/lib/motor";
 import { anexoPorCnae } from "@/lib/triagem";
 
@@ -53,6 +57,13 @@ export async function POST(req: Request) {
     /** anexo corrigido na tela (alerta de fator R) */
     anexo?: number | null;
     anexo_confirmado?: boolean;
+    /**
+     * Receita segregada por anexo. Ausente, ou com um item só, mantém o
+     * comportamento de sempre. Com dois ou mais, o dDAS passa a ser a soma
+     * ponderada — o número certo para a empresa que segrega receita entre
+     * comércio, indústria e serviço dentro do mesmo CNPJ.
+     */
+    segmentos?: Segmento[] | null;
   };
   try {
     corpo = await req.json();
@@ -102,9 +113,21 @@ export async function POST(req: Request) {
   const anexoEfetivo = anexoInformado ?? empresa?.anexo ?? anexoPorCnae(empresa?.cnae_principal) ?? 1;
   const rbt12Efetivo = rbt12Informado ?? (empresa?.rbt12 != null ? Number(empresa.rbt12) : null);
 
+  /**
+   * SEGREGAÇÃO — validada aqui, não confiada à tela.
+   * Só entram anexos de 1 a 5 com participação positiva. Um segmento (ou
+   * nenhum) cai no caminho de sempre; dois ou mais viram soma ponderada.
+   */
+  const segmentos: Segmento[] = (corpo.segmentos ?? [])
+    .filter((s) => s && Number(s.anexo) >= 1 && Number(s.anexo) <= 5 && Number(s.share) > 0)
+    .map((s) => ({ anexo: Number(s.anexo), share: Number(s.share) }));
+
   // dDAS EFETIVO por empresa: com RBT12 usa a alíquota efetiva; sem, topo da faixa
-  const ddas = dDASefetivo(anexoEfetivo, rbt12Efetivo);
-  const partilha = sharePCDe(anexoEfetivo, ddas.faixa, 2027);
+  const ddas =
+    segmentos.length > 1
+      ? dDASsegregado(segmentos, rbt12Efetivo)
+      : dDASefetivo(anexoEfetivo, rbt12Efetivo);
+  const partilha = sharePCDe(ddas.anexo, ddas.faixa, 2027);
 
   const aliquota = param
     ? Number(param.aliquota_cbs) + Number(param.aliquota_ibs)
@@ -129,7 +152,15 @@ export async function POST(req: Request) {
       : null;
   const dinheiro = emReais(r, rbt12Efetivo, custo);
   const linhasSensibilidade = sensibilidade(corpo.respostas, base, dinheiro);
-  const alerta = alertaFatorR(anexoEfetivo, corpo.respostas.folha);
+  /**
+   * Com receita segregada, a pergunta do fator R deixa de ser "o anexo da
+   * empresa está certo?" e vira "a receita de SERVIÇO está no anexo certo?".
+   * O alerta antigo continua valendo para quem tem um anexo só.
+   */
+  const alerta =
+    segmentos.length > 1
+      ? fatorRSegregado(segmentos, corpo.respostas.folha)
+      : alertaFatorR(anexoEfetivo, corpo.respostas.folha);
 
   const parametros = {
     exercicio: 2027,
@@ -141,7 +172,14 @@ export async function POST(req: Request) {
     sublimite: base.sublimite,
     bandaSublimite: base.bandaSublimite,
     rbt12: rbt12Efetivo,
-    anexo: anexoEfetivo,
+    anexo: ddas.anexo,
+    /**
+     * A segregação vai CONGELADA junto com o resto. O laudo imprime a
+     * composição que foi usada; se a empresa mudar o mix depois, o documento
+     * assinado continua explicando o número que ele traz.
+     */
+    segmentos: segmentos.length > 1 ? segmentos : null,
+    segregado: ehSegregado(ddas),
     // rastreabilidade da premissa do dDAS, congelada com a análise
     ddas,
     partilha,

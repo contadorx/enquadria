@@ -29,6 +29,12 @@ import {
   dDASefetivo,
   PARAMETROS_2027,
   ALIQUOTA_ALTERNATIVA,
+  dDASsegregado,
+  ehSegregado,
+  fatorRSegregado,
+  somaSegmentos,
+  segmentosFechados,
+  ANEXOS_SIMPLES,
 } from "./motor.js";
 import {
   memoriaDeCalculo,
@@ -166,6 +172,105 @@ const antiga = {
 ok(memoriaDeCalculo(antiga).length >= 3, "análise antiga ainda gera memória parcial");
 ok(quadroComparativo(antiga).length === 0, "sem dDAS congelado, o quadro não inventa");
 ok(riscosELimites(antiga).length >= 4, "riscos valem para análise antiga");
+
+
+/* ======================================================================
+   RECEITA SEGREGADA POR ANEXO
+
+   O caso da empresa de serviço que também vende, e do serviço que fica no
+   III ou no V conforme o fator R. Cada anexo tem a sua partilha de
+   PIS/Cofins, e `das` É essa partilha — logo, tratar empresa mista por um
+   anexo só erra exatamente o número que decide.
+   ====================================================================== */
+const RBT = 1200000;
+
+// 1) um segmento só tem de devolver o MESMO que o caminho antigo, senão a
+//    mudança reescreveria em silêncio o resultado das análises já emitidas
+for (const a of [1, 2, 3, 4, 5]) {
+  const antigo = dDASefetivo(a, RBT);
+  const novo = dDASsegregado([{ anexo: a, share: 1 }], RBT);
+  ok(novo.das === antigo.das && novo.faixa === antigo.faixa,
+     `anexo ${a} sozinho: segregado devolve o mesmo das de sempre`);
+  ok(!ehSegregado(novo), `anexo ${a} sozinho não se declara segregado`);
+}
+ok(dDASsegregado([], RBT).das === dDASefetivo(null, RBT).das, "lista vazia cai no caminho antigo");
+ok(dDASsegregado(null, RBT).das === dDASefetivo(null, RBT).das, "null cai no caminho antigo");
+
+// 2) a conta ponderada — conferida contra a soma feita à mão
+const meioMeio = dDASsegregado([{ anexo: 1, share: 0.5 }, { anexo: 5, share: 0.5 }], RBT);
+const soI = dDASefetivo(1, RBT);
+const soV = dDASefetivo(5, RBT);
+const dasEsperado = soI.das * 0.5 + soV.das * 0.5;
+ok(Math.abs(meioMeio.das - dasEsperado) < 1e-12, "50% comércio + 50% Anexo V: das é a média ponderada");
+ok(ehSegregado(meioMeio), "dois segmentos se declaram segregados");
+ok(meioMeio.segmentos.length === 2, "guarda os dois segmentos para o laudo imprimir");
+ok(Math.abs(meioMeio.segmentos.reduce((t, s) => t + s.contribuicao, 0) - meioMeio.das) < 1e-12,
+   "as contribuições somam o das final");
+
+// 3) E O ERRO QUE ISTO CORRIGE: pelo anexo dominante, quanto se erraria?
+//    Registrado como número para que ninguém trate a segregação como detalhe.
+const erroRelativo = Math.abs(soI.das - meioMeio.das) / meioMeio.das;
+ok(erroRelativo > 0.2,
+   `tratar a mista pelo Anexo I erraria o das em ${(erroRelativo * 100).toFixed(1)}% — por isso a segregação existe`);
+ok(soV.das > soI.das, "Anexo V tem partilha de PIS/Cofins maior que o Anexo I (premissa do teste acima)");
+
+// 4) o das segregado fica ENTRE os extremos: não inventa número fora do
+//    intervalo dos anexos que o compõem
+ok(meioMeio.das > Math.min(soI.das, soV.das) && meioMeio.das < Math.max(soI.das, soV.das),
+   "das ponderado fica entre o menor e o maior dos anexos");
+
+// 5) participação inválida não entra na conta
+const comLixo = dDASsegregado(
+  [{ anexo: 1, share: 0.5 }, { anexo: 5, share: 0.5 }, { anexo: 9, share: 0.3 }, { anexo: 2, share: 0 }],
+  RBT
+);
+ok(Math.abs(comLixo.das - meioMeio.das) < 1e-12, "anexo inexistente e participação zero são descartados");
+
+// 6) soma fora de 100% normaliza E AVISA — o laudo precisa poder dizer isso
+const torto = dDASsegregado([{ anexo: 1, share: 0.4 }, { anexo: 5, share: 0.4 }], RBT);
+ok(ehSegregado(torto) && torto.normalizado, "soma de 80% é marcada como normalizada");
+ok(Math.abs(torto.somaInformada - 0.8) < 1e-12, "guarda a soma informada, não a corrigida");
+ok(Math.abs(torto.das - meioMeio.das) < 1e-12, "normalizada, 40/40 dá o mesmo que 50/50");
+ok(!ehSegregado(meioMeio) || !meioMeio.normalizado, "soma de 100% não é marcada como normalizada");
+
+// 7) o anexo dominante é rótulo, não conta
+const dominante = dDASsegregado([{ anexo: 1, share: 0.2 }, { anexo: 5, share: 0.8 }], RBT);
+ok(dominante.anexo === 5, "anexo dominante é o de maior receita");
+ok(Math.abs(dominante.das - (soI.das * 0.2 + soV.das * 0.8)) < 1e-12, "mas o das continua sendo a soma ponderada");
+
+// 8) acima do teto contamina o conjunto: se um segmento estoura, a empresa
+//    estourou — ela é uma só
+const acima = dDASsegregado([{ anexo: 1, share: 0.5 }, { anexo: 3, share: 0.5 }], 5000000);
+ok(acima.acimaDoTeto === true, "RBT12 acima do teto marca o conjunto");
+
+// 9) sem RBT12 o conjunto inteiro é conservador
+const semRbt = dDASsegregado([{ anexo: 1, share: 0.5 }, { anexo: 3, share: 0.5 }], null);
+ok(semRbt.fonte === "conservador", "sem RBT12, fonte conservadora");
+
+// 10) FATOR R na composição — a pergunta muda de "o anexo está certo" para
+//     "a receita de serviço está no anexo certo"
+const segServico = [{ anexo: 1, share: 0.6 }, { anexo: 5, share: 0.4 }];
+const alertaAlta = fatorRSegregado(segServico, 0.35);
+ok(alertaAlta !== null && alertaAlta.deveriaSer === 3, "folha em 35%: serviço no V deveria ser III");
+ok(fatorRSegregado(segServico, 0.15) === null, "folha em 15%: serviço no V está certo, sem alerta");
+const segIII = [{ anexo: 1, share: 0.6 }, { anexo: 3, share: 0.4 }];
+ok(fatorRSegregado(segIII, 0.35) === null, "folha em 35%: serviço no III está certo");
+ok(fatorRSegregado(segIII, 0.15)?.deveriaSer === 5, "folha em 15%: serviço no III deveria ser V");
+ok(fatorRSegregado([{ anexo: 1, share: 1 }], 0.15) === null, "sem serviço na composição, não há alerta de fator R");
+ok(fatorRSegregado([{ anexo: 4, share: 1 }], 0.15) === null, "Anexo IV não entra na regra do fator R");
+ok(fatorRSegregado(segServico, null) === null, "sem folha informada, não inventa alerta");
+
+// 11) a trava da tela
+ok(segmentosFechados([{ anexo: 1, share: 0.5 }, { anexo: 5, share: 0.5 }]), "50+50 fecha");
+ok(!segmentosFechados([{ anexo: 1, share: 0.5 }, { anexo: 5, share: 0.4 }]), "50+40 não fecha");
+ok(Math.abs(somaSegmentos([{ anexo: 1, share: 0.3 }, { anexo: 5, share: 0.45 }]) - 0.75) < 1e-12, "soma das participações");
+
+// 12) a decisão MUDA com a segregação — é o ponto todo
+const respMista = { b2b: 0.8, qual: 0.9, cred: 0.35, folha: 0.15, preco: 2, conc: 1, exig: 0 };
+const soComercio = decidir(respMista, { ...PARAMETROS_2027, das: soI.das, rbt12: RBT });
+const segregada = decidir(respMista, { ...PARAMETROS_2027, das: meioMeio.das, rbt12: RBT });
+ok(soComercio.cl !== segregada.cl, "o custo líquido muda quando a receita é segregada");
+console.log(`   (mesma empresa: cl ${(soComercio.cl * 100).toFixed(2)}% pelo Anexo I sozinho contra ${(segregada.cl * 100).toFixed(2)}% segregada, saídas ${soComercio.saida}/${segregada.saida})`);
 
 console.log(f === 0 ? "\nTODOS OS TESTES PASSARAM" : `\n${f} FALHAS`);
 process.exit(f ? 1 : 0);

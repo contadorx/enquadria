@@ -56,6 +56,7 @@ export function PedirDados({
 }) {
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [bloqueio, setBloqueio] = useState<string | null>(null);
   const [copiado, setCopiado] = useState<string | null>(null);
 
   const base = typeof window !== "undefined" ? window.location.origin : "";
@@ -89,6 +90,7 @@ export function PedirDados({
       });
       const json = await resp.json();
       if (resp.ok) aoMudar();
+      else if (json.bloqueado_por_plano) setBloqueio(json.erro as string);
       else setErro(json.erro ?? "Não consegui abrir o pedido.");
     } finally {
       setOcupado(false);
@@ -230,13 +232,26 @@ export function PedirDados({
         responder pelo celular.
       </p>
       {erro && <p className="mt-2 text-[12px] text-vermelho">{erro}</p>}
-      <button
-        onClick={abrir}
-        disabled={ocupado}
-        className="mt-3 rounded-sm bg-ink px-3.5 py-2 text-[13px] font-semibold text-white disabled:opacity-40"
-      >
-        {ocupado ? "Abrindo…" : "Gerar o link para a empresa"}
-      </button>
+      {bloqueio && (
+        <div className="mt-3 rounded-sm border border-accent bg-accentwash p-3.5">
+          <p className="text-[12.5px] text-slate2">{bloqueio}</p>
+          <a
+            href="/painel/planos"
+            className="mt-2 inline-block rounded-sm bg-accent px-3.5 py-2 text-[12.5px] font-bold text-[#04212B]"
+          >
+            Ver o PRO — R$ 47/mês
+          </a>
+        </div>
+      )}
+      {!bloqueio && (
+        <button
+          onClick={abrir}
+          disabled={ocupado}
+          className="mt-3 rounded-sm bg-ink px-3.5 py-2 text-[13px] font-semibold text-white disabled:opacity-40"
+        >
+          {ocupado ? "Abrindo…" : "Gerar o link para a empresa"}
+        </button>
+      )}
     </div>
   );
 }
