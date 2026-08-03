@@ -46,8 +46,19 @@ export async function POST(req: Request) {
     .eq("id", user.id)
     .maybeSingle();
   const t = perfil?.tenants as { nome?: string } | null;
-  const escritorio = t?.nome || "um colega";
-  const quemIndicou = user.email ?? escritorio;
+  /**
+   * QUEM INDICOU — o nome do escritório, nunca o e-mail.
+   *
+   * Não existe campo de nome pessoal no cadastro nem no convite de membro, e
+   * o e-mail estava vazando para dentro da mensagem: o indicado recebia
+   * "fulano@gmail.com indicou você", que parece disparo automático e expõe o
+   * endereço de quem indicou sem ele ter combinado isso.
+   *
+   * O nome do escritório é o que ele já preencheu, é o que o colega reconhece,
+   * e é o que aparece no laudo. Sem ele, um genérico honesto.
+   */
+  const escritorio = t?.nome?.trim() || "Um colega contador";
+  const quemIndicou = escritorio;
   const base = process.env.NEXT_PUBLIC_SITE_URL || new URL(req.url).origin;
 
   // quem JÁ foi convidado alguma vez não recebe de novo, venha de quem vier

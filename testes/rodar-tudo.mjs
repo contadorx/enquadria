@@ -122,7 +122,9 @@ for (const suite of ["cockpit", "motor", "coleta", "muro", "reguas", "janela", "
   const saida = (r.stdout || "") + (r.stderr || "");
   const total = (saida.match(/^ok:/gm) || []).length;
   ok(`suíte ${suite} (${total} asserções)`, r.status === 0,
-     r.status === 0 ? undefined : saida.split("\n").filter((l) => l.startsWith("FALHOU")).slice(0, 5));
+     r.status === 0 ? undefined : (saida.split("\n").filter((l) => l.startsWith("FALHOU")).slice(0, 5).length
+       ? saida.split("\n").filter((l) => l.startsWith("FALHOU")).slice(0, 5)
+       : saida.split("\n").filter(Boolean).slice(-6)));
 }
 
 /* ================================================ 1b. AUDITORIA DE UX ==== */

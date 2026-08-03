@@ -96,7 +96,7 @@ export function Trilha({
         feito: estado.laudos > 0,
         cta: estado.proxima ? (
           <button onClick={() => aoAbrirEmpresa(estado.proxima!.id, "decisao")} className="btn">
-            Ir para os entregáveis
+            Fazer a análise
           </button>
         ) : null,
       },

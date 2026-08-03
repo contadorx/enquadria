@@ -20,12 +20,13 @@
  */
 
 import { limparCnpj, normalizarCnpj, formatarCnpj, mascararCnpj, cnpjValido, ehAlfanumerico } from "./cnpj.js";
-import { extrairCnpjs } from "./csv.js";
+import { extrairCnpjs, decodificarCsv, pareceMojibake } from "./csv.js";
 
 let f = 0;
 const t = (nome, real, esperado) => {
   const bate = JSON.stringify(real) === JSON.stringify(esperado);
-  if (!bate) { f++; console.log("FALHOU:", nome, JSON.stringify({ esperado, veio: real })); }
+  if (!bate) { f++; 
+console.log("FALHOU:", nome, JSON.stringify({ esperado, veio: real })); }
   else console.log("ok:", nome);
 };
 
@@ -94,6 +95,48 @@ t("extrai com o nome da empresa junto (colagem de planilha)",
 t("palavra de 14 letras não vira CNPJ",
   JSON.stringify(extrairCnpjs("DISTRIBUIDORAX")), JSON.stringify([]));
 t("CPF continua fora", JSON.stringify(extrairCnpjs("123.456.789-09")), JSON.stringify([]));
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * CODIFICAÇÃO DO CSV — o bug que corrompe razão social em silêncio.
+ *
+ * `File.text()` assume UTF-8 sempre. O Excel brasileiro exporta Windows-1252.
+ * Nada falha, nada avisa — e o nome errado da empresa vai para o banco, para o
+ * laudo e para o termo que o cliente assina.
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+const bytesDe = (arr) => new Uint8Array(arr).buffer;
+const utf8 = (txt) => new TextEncoder().encode(txt).buffer;
+
+// "Gráfica Ipiranga" em Windows-1252: o "á" é o byte 0xE1 sozinho
+const latin1Grafica = bytesDe([0x47, 0x72, 0xE1, 0x66, 0x69, 0x63, 0x61]); // Gráfica
+const r1 = decodificarCsv(latin1Grafica);
+t("Windows-1252 é detectado e decodificado certo", r1.texto, "Gráfica");
+t("a codificação detectada é informada", /1252/.test(r1.codificacao), true);
+
+const r2 = decodificarCsv(utf8("Gráfica Ipiranga"));
+t("UTF-8 sem BOM continua funcionando", r2.texto, "Gráfica Ipiranga");
+t("é reconhecido como utf-8", r2.codificacao, "utf-8");
+
+// BOM: o Excel adiciona quando você escolhe "CSV UTF-8"
+const comBom = new Uint8Array([0xEF, 0xBB, 0xBF, ...new Uint8Array(utf8("cnpj,razao_social"))]);
+const r3 = decodificarCsv(comBom.buffer);
+t("o BOM é removido — senão vira parte do nome da coluna", r3.texto, "cnpj,razao_social");
+t("o BOM é informado", /BOM/.test(r3.codificacao), true);
+
+// o caso que a detecção PRECISA acertar: sem acento as duas leituras coincidem
+const semAcento = decodificarCsv(utf8("Log Express Armazens Gerais"));
+t("texto sem acento passa intacto", semAcento.texto, "Log Express Armazens Gerais");
+
+// cedilha e til, que são os mais comuns em razão social
+const latin1Cedilha = bytesDe([0x43, 0x6F, 0x6E, 0x73, 0x74, 0x72, 0x75, 0xE7, 0xE3, 0x6F]); // Construção
+t("cedilha e til em latin1", decodificarCsv(latin1Cedilha).texto, "Construção");
+
+/* ── a rede de segurança: arquivo que já chega corrompido ────────────── */
+t("detecta acento já corrompido na origem", pareceMojibake("GrÃ¡fica Ipiranga"), true);
+t("detecta cedilha corrompida", pareceMojibake("ConstruÃ§Ã£o"), true);
+t("texto correto NÃO dispara alarme falso", pareceMojibake("Gráfica Ipiranga"), false);
+t("nem texto sem acento nenhum", pareceMojibake("Log Express Armazens"), false);
+t("nem acento normal com símbolo junto", pareceMojibake("Comércio & Cia"), false);
 
 console.log(f === 0 ? "TODOS OS TESTES PASSARAM" : `${f} FALHAS`);
 process.exit(f ? 1 : 0);

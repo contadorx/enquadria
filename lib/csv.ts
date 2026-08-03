@@ -210,3 +210,61 @@ export const CSV_EXEMPLO = `cnpj,razao_social,cnae_principal,porte,regime,rbt12,
 11.222.333/0001-81,Distribuidora Aurora Autopeças Ltda,4649-4/08,EPP,Simples Nacional,480000,Marcos Aurélio,marcos@aurora.com.br
 07.526.557/0001-00,Casa Nova Restaurante ME,5611-2/01,ME,Simples Nacional,220000,Helena Prado,helena@casanova.com.br
 22.333.444/0001-81,Transportes Vale Verde Ltda,4930-2/02,EPP,Simples Nacional,1200000,Jorge Valle,jorge@valeverde.com.br`;
+
+
+/**
+ * DECODIFICAR O ARQUIVO — antes de qualquer parse.
+ *
+ * `File.text()` decodifica SEMPRE como UTF-8. O Excel em portugues exporta CSV
+ * em Windows-1252 por padrao, e o resultado e silencioso e caro: a razao social
+ * chega com acento corrompido e e ASSIM que vai para o banco, para o laudo e
+ * para o termo que o cliente assina.
+ *
+ * Silencioso e a palavra: nada falha, nada avisa. O contador so descobre quando
+ * o cliente recebe um documento com o nome da propria empresa errado.
+ *
+ * A deteccao e por TENTATIVA, nao por adivinhacao:
+ *
+ *  1. BOM de UTF-8 -> e UTF-8, remove o BOM e decodifica.
+ *  2. Sem BOM -> tenta UTF-8 em modo ESTRITO. Texto latin1 com acento produz
+ *     sequencia invalida em UTF-8 e o decoder lanca — e o sinal que precisamos.
+ *  3. Falhou -> Windows-1252, que cobre o que o Excel brasileiro gera.
+ *
+ * A ordem importa: todo texto latin1 SEM acento tambem e UTF-8 valido, e nesse
+ * caso as duas decodificacoes dao o mesmo resultado. Elas so divergem onde ha
+ * acento, que e exatamente onde a deteccao precisa acertar.
+ */
+export function decodificarCsv(bytes: ArrayBuffer): { texto: string; codificacao: string } {
+  const arr = new Uint8Array(bytes);
+
+  if (arr.length >= 3 && arr[0] === 0xef && arr[1] === 0xbb && arr[2] === 0xbf) {
+    return {
+      texto: new TextDecoder("utf-8").decode(arr.subarray(3)),
+      codificacao: "utf-8 (com BOM)",
+    };
+  }
+
+  try {
+    const texto = new TextDecoder("utf-8", { fatal: true }).decode(arr);
+    return { texto, codificacao: "utf-8" };
+  } catch {
+    return {
+      texto: new TextDecoder("windows-1252").decode(arr),
+      codificacao: "windows-1252 (Excel)",
+    };
+  }
+}
+
+/**
+ * Sobrou acento corrompido?
+ *
+ * Rede de seguranca para o arquivo que JA chega danificado da origem — ai nao
+ * ha decodificacao que conserte, porque o estrago aconteceu antes. Detectar e
+ * AVISAR e tudo o que da para fazer, e e melhor que gravar calado.
+ *
+ * As sequencias procuradas sao o resultado de ler UTF-8 como latin1. Nenhuma
+ * delas aparece em portugues escrito corretamente.
+ */
+export function pareceMojibake(texto: string): boolean {
+  return /\u00C3[\u00A0-\u00BF]|\u00C2[\u00A0-\u00BF]|\uFFFD/.test(texto);
+}

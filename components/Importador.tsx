@@ -7,6 +7,8 @@ import {
   extrairCnpjs,
   csvDeCnpjs,
   CSV_EXEMPLO,
+  decodificarCsv,
+  pareceMojibake,
   type ResultadoParse,
   type LinhaCarteira,
 } from "@/lib/csv";
@@ -54,6 +56,7 @@ const COR: Record<Faixa, string> = {
 
 export function Importador({ jaTem = 0 }: { jaTem?: number }) {
   const router = useRouter();
+  const [codificacao, setCodificacao] = useState<string | null>(null);
   const [nomeArquivo, setNomeArquivo] = useState<string>("");
   const [parse, setParse] = useState<ResultadoParse | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -128,7 +131,13 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
     setErro(null);
     setFeito(null);
     setNomeArquivo(arquivo.name);
-    const texto = await arquivo.text();
+    /**
+     * Lemos os BYTES, não o texto. `arquivo.text()` assume UTF-8 sempre, e o
+     * Excel brasileiro exporta em Windows-1252 — o acento chega corrompido e
+     * vai assim para o banco, para o laudo e para o termo assinado.
+     */
+    const { texto, codificacao } = decodificarCsv(await arquivo.arrayBuffer());
+    setCodificacao(codificacao);
     const resultado = parsearCarteira(texto);
     if (!resultado.colunas_reconhecidas.cnpj) {
       const achadas = (resultado.colunas_ignoradas ?? []).slice(0, 6).join(", ");
@@ -346,7 +355,7 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
             href="/painel"
             className="rounded-sm bg-ink px-4 py-2 text-sm font-semibold text-white"
           >
-            Ver o mapa de risco
+            Ver a carteira triada
           </a>
           <button
             onClick={() => setFeito(null)}
@@ -439,10 +448,15 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
             Caminho 2 · você já tem o arquivo
           </div>
           <div className="mt-1 text-[15px] font-bold">Importe a carteira de um CSV</div>
+          <p className="mt-1 max-w-[68ch] text-[12px] leading-relaxed text-muted">
+            Arquivo <b className="text-slate2">.csv</b>. Se a sua carteira está em Excel,
+            use <i>Salvar como → CSV UTF-8</i> — o formato .xlsx não é lido aqui, e o
+            &ldquo;CSV UTF-8&rdquo; é o que preserva os acentos da razão social.
+          </p>
           <div className="mt-2.5 flex flex-wrap items-center gap-3">
             <label className="cursor-pointer rounded-sm border border-line px-4 py-2.5 text-sm font-semibold text-slate2">
               Escolher arquivo CSV
-              <input type="file" accept=".csv,text/csv" onChange={aoSelecionar} className="hidden" />
+              <input type="file" accept=".csv,.txt,text/csv,text/plain" onChange={aoSelecionar} className="hidden" />
             </label>
             <button
               onClick={usarExemplo}
@@ -460,6 +474,22 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
               <span className="font-mono text-[12px] text-muted">{nomeArquivo}</span>
             )}
           </div>
+
+          {/* Dizer qual codificação foi detectada não é detalhe técnico gratuito:
+              é a única pista que o contador tem se algum acento sair estranho. */}
+          {codificacao && (
+            <p className="mt-2 font-mono text-[11px] text-muted">
+              codificação detectada: {codificacao}
+            </p>
+          )}
+          {parse && parse.linhas.some((l) => pareceMojibake(l.razao_social ?? "")) && (
+            <p className="mt-2 rounded-sm bg-amarelowash px-3 py-2 text-[12px] leading-relaxed text-slate2">
+              <b>Alguns acentos vieram corrompidos no arquivo.</b> Isso acontece quando o
+              arquivo já foi salvo assim antes de chegar aqui — não tem como consertar na
+              leitura. Salve de novo escolhendo <b>CSV UTF-8</b> no Excel, ou cole os CNPJs
+              pelo Caminho 1 (a razão social vem da Receita, sempre correta).
+            </p>
+          )}
 
           <p className="mt-3 max-w-[70ch] text-[12.5px] leading-relaxed text-muted">
             Suba do jeito que veio: as colunas são reconhecidas por sinônimo, sem formato

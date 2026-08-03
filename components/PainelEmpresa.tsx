@@ -430,7 +430,18 @@ export function PainelEmpresa({
   }
 
   const ABAS: [Aba, string][] = [
-    ["decisao", a ? "Decisão" : "Analisar"],
+    /**
+     * "Análise" e não "Decisão".
+     *
+     * Decisão é o RESULTADO; análise é o que o contador faz. A aba nomeia a
+     * ação dele, não o produto dela — e quem abre a empresa está indo analisar,
+     * não decidir.
+     *
+     * O sufixo "· pendente" existe porque sair da aba sem salvar era
+     * indistinguível de nunca ter entrado: a pessoa voltava, via o dossiê, e
+     * não tinha como saber que havia trabalho começado e perdido.
+     */
+    ["decisao", a ? "Análise" : "Análise · pendente"],
     ["dossie", "Dossiê"],
     ["comparativo", "Comparativo"],
   ];
@@ -544,7 +555,7 @@ export function PainelEmpresa({
           </div>
 
           {a && (
-            <Bloco titulo="Entregáveis">
+            <Bloco titulo="Documentos da empresa">
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={emitirLaudo}

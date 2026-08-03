@@ -310,7 +310,7 @@ export function PedirDados({
           <p className="mt-2.5 rounded-sm border border-line bg-surface2 px-3 py-2 text-[12px] leading-relaxed">
             Enviado{enviado ? <> para <strong>{enviado}</strong></> : null}. Vale avisar o cliente
             pelo WhatsApp: <strong>a mensagem pode cair na caixa de spam</strong> dele, ainda mais
-            se for o primeiro e-mail que recebe do seu escritório.
+            se for a primeira mensagem enviada por aqui.
           </p>
         )}
 
@@ -318,7 +318,8 @@ export function PedirDados({
             o e-mail pode não chegar é quem está escolhendo como mandar. */}
         <p className="mt-2 text-[11.5px] leading-relaxed text-muted">
           O e-mail sai com o nome do seu escritório e a resposta volta para você. Como toda
-          primeira mensagem, ele <b className="text-slate2">pode cair no spam do cliente</b> —
+          primeira mensagem enviada por uma ferramenta nova, ele{" "}
+          <b className="text-slate2">pode cair no spam do cliente</b> —
           se a empresa for importante, mande também pelo WhatsApp.
         </p>
 
