@@ -368,7 +368,10 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
         distância; quem não tem agora consegue começar mesmo assim.
       */}
       <div className="rounded border border-dashed border-line bg-surface p-6">
-        <div className="text-[15px] font-bold">
+        <div className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-accentdeep">
+          Caminho 1 · sem exportar nada
+        </div>
+        <div className="mt-1 text-[15px] font-bold">
           {jaTem > 0 ? "Cole os CNPJs das novas empresas" : "Comece pelos CNPJs"}
         </div>
         <p className="mt-1 max-w-[68ch] text-[12.5px] leading-relaxed text-muted">
@@ -419,10 +422,23 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
           </div>
         )}
 
-        <div className="mt-5 border-t border-linesoft pt-4">
-          <div className="text-[12.5px] font-semibold text-slate2">
-            Já tem a carteira exportada?
+      </div>
+
+      {/* Os dois caminhos levam ao mesmo lugar e a pessoa escolhe UM. Enquanto
+          o CSV era um rodapé do bloco de cima, parecia passo seguinte — e quem
+          já tinha o arquivo na mão ficava colando CNPJ à toa. */}
+      <div className="my-3 flex items-center gap-3">
+        <div className="h-px flex-1 bg-line" />
+        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted">ou</span>
+        <div className="h-px flex-1 bg-line" />
+      </div>
+
+      <div className="rounded border border-dashed border-line bg-surface p-6">
+        <div>
+          <div className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-accentdeep">
+            Caminho 2 · você já tem o arquivo
           </div>
+          <div className="mt-1 text-[15px] font-bold">Importe a carteira de um CSV</div>
           <div className="mt-2.5 flex flex-wrap items-center gap-3">
             <label className="cursor-pointer rounded-sm border border-line px-4 py-2.5 text-sm font-semibold text-slate2">
               Escolher arquivo CSV

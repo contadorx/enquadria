@@ -273,6 +273,24 @@ export function PainelEmpresa({
   const assinado = !!d.termo && (d.termo.assinatura_status === "assinado" || !!d.termo.assinado_em);
   const estimada = a ? premissasEstimadas(a) : false;
 
+  /**
+   * ESTE DOCUMENTO JÁ FOI AO CLIENTE?
+   *
+   * Muda o rótulo do botão de "Enviar ao cliente" para "Reenviar". Parece
+   * detalhe e não é: sem isso o contador não distingue "nunca mandei" de
+   * "mandei e não responderam", e o botão que promete a primeira entrega
+   * dispara a segunda sem avisar.
+   *
+   * Só conta envio com status 'enviado'. Tentativa que falhou não é entrega —
+   * chamar de reenvio o que nunca chegou esconderia justamente o caso em que
+   * o contador precisa insistir.
+   */
+  function jaEnviado(tipo: "laudo" | "comparativo" | "termo", documentoId: string): boolean {
+    return !!d?.envios?.some(
+      (v) => v.tipo === tipo && v.documento_id === documentoId && v.status === "enviado"
+    );
+  }
+
   async function emitirLaudo() {
     if (!a) return;
     setOcupado("laudo");
@@ -795,6 +813,18 @@ export function PainelEmpresa({
                     <p className="mt-0.5 font-mono text-[10.5px] text-muted">não emitido</p>
                   )}
                 </div>
+                {/* O botão de emitir vivia só na aba Decisão. Quem chegava no
+                    dossiê para conferir o que existe lia "não emitido" e tinha
+                    de descobrir sozinho que a ação morava em outra aba. */}
+                {!d.laudo && (
+                  <button
+                    onClick={emitirLaudo}
+                    disabled={ocupado === "laudo"}
+                    className="shrink-0 rounded-sm bg-ink px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
+                  >
+                    {ocupado === "laudo" ? "Emitindo…" : "Emitir laudo"}
+                  </button>
+                )}
                 {d.laudo && (
                   <div className="flex shrink-0 gap-1.5">
                     <button
@@ -817,7 +847,11 @@ export function PainelEmpresa({
                       disabled={ocupado === "enviar-laudo"}
                       className="rounded-sm bg-accentdeep px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
                     >
-                      {ocupado === "enviar-laudo" ? "Enviando…" : "Enviar ao cliente"}
+                      {ocupado === "enviar-laudo"
+                        ? "Enviando…"
+                        : jaEnviado("laudo", d.laudo.id)
+                          ? "Reenviar"
+                          : "Enviar ao cliente"}
                     </button>
                     <a
                       href={`/doc/laudo/${d.laudo.id}`}
@@ -901,7 +935,11 @@ export function PainelEmpresa({
                           disabled={ocupado === `enviar-comp-${c.id}`}
                           className="shrink-0 rounded-sm bg-accentdeep px-2.5 py-1 text-[11.5px] font-semibold text-white disabled:opacity-50"
                         >
-                          {ocupado === `enviar-comp-${c.id}` ? "Enviando…" : "Enviar ao cliente"}
+                          {ocupado === `enviar-comp-${c.id}`
+                            ? "Enviando…"
+                            : jaEnviado("comparativo", c.id)
+                              ? "Reenviar"
+                              : "Enviar ao cliente"}
                         </button>
                       </div>
                     ))}

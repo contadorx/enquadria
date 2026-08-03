@@ -127,8 +127,16 @@ const uso = new Map();
 /** "arquivo:linha" dispensado explicitamente */
 const dispensados = new Set();
 
-// .from("tabela") ... .select("a, b, c")  — o select pode estar linhas abaixo
-const RE = /\.from\(\s*["'`]([a-z_]+)["'`]\s*\)[\s\S]{0,400}?\.select\(\s*["'`]([^"'`]+)["'`]/g;
+/**
+ * .from("tabela") ... .select("a, b, c") — o select pode estar linhas abaixo.
+ *
+ * O trecho entre os dois NÃO pode conter outro `.from(`. Sem essa trava, um
+ * `.from("empresas").update(...)` seguido, dezesseis linhas depois, de um
+ * `.from("coletas").select("token")` casava empresas com token e a auditoria
+ * acusava uma coluna que ninguém escreveu. O `.from(` intermediário é a
+ * fronteira natural entre duas consultas.
+ */
+const RE = /\.from\(\s*["'`]([a-z_]+)["'`]\s*\)((?:(?!\.from\()[\s\S]){0,400}?)\.select\(\s*["'`]([^"'`]+)["'`]/g;
 
 for (const arq of lista) {
   const src = fs.readFileSync(arq, "utf8");
@@ -161,7 +169,7 @@ for (const arq of lista) {
      */
     const desloc = m[0].lastIndexOf(".select(");
     const linha = src.slice(0, m.index + (desloc >= 0 ? desloc : 0)).split("\n").length;
-    const cols = m[2]
+    const cols = m[3]
       .split(",")
       .map((c) => c.trim())
       .filter((c) => c && !c.includes("(") && !c.includes(")") && c !== "*");

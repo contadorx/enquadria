@@ -59,7 +59,12 @@ export interface Escritorio {
  * cabeçalho do laudo. Cliente de e-mail que bloqueia imagem simplesmente não
  * mostra; nada do que importa depende dela.
  */
-function moldura(params: { escritorio: string | Escritorio; corpo: string }): string {
+function moldura(params: {
+  escritorio: string | Escritorio;
+  corpo: string;
+  /** false = destinatário é o contador, que já nos conhece e não precisa do aviso */
+  paraCliente?: boolean;
+}): string {
   const esc: Escritorio =
     typeof params.escritorio === "string" ? { nome: params.escritorio } : params.escritorio;
 
@@ -78,6 +83,7 @@ function moldura(params: { escritorio: string | Escritorio; corpo: string }): st
     ${params.corpo}
     <p style="font-size:11px;color:#94A3B8;margin-top:26px;border-top:1px solid #EEF2F7;padding-top:12px">
       Mensagem enviada por ${escapar(esc.nome)}. Se você não reconhece este envio, ignore este e-mail.
+      ${params.paraCliente === false ? "" : `<br>Se esta mensagem chegou na sua caixa de spam, marque como “não é spam” para receber as próximas.`}
     </p>
   </div>`;
 }
@@ -192,6 +198,7 @@ export function htmlColetaRespondida(params: {
 }): string {
   const quem = params.respondente ? ` por <strong>${escapar(params.respondente)}</strong>` : "";
   return moldura({
+    paraCliente: false, // vai para o contador, que já nos conhece
     escritorio: params.escritorio,
     corpo: `
     <p><strong>${escapar(params.empresa)}</strong> respondeu o formulário de dados${quem}.</p>
@@ -222,6 +229,7 @@ export function htmlTermoAssinadoContador(params: {
       ? "optar pelo recolhimento de IBS/CBS por fora do DAS"
       : "permanecer no regime tradicional do Simples Nacional";
   return moldura({
+    paraCliente: false, // vai para o contador, que já nos conhece
     escritorio: params.escritorio,
     corpo: `
     <p><strong>${escapar(params.assinante)}</strong> assinou o termo de ciência da
@@ -260,5 +268,41 @@ export function htmlTermoAssinadoCliente(params: {
     <p style="font-size:13px;color:#64748B">A decisão vale pelo semestre e não pode ser alterada
     dentro do período. Guarde este e-mail: o link acima abre o documento assinado a qualquer
     momento. Qualquer dúvida, é só responder.</p>`,
+  });
+}
+
+/**
+ * PEDIDO DE DADOS — o formulário que destrava a análise.
+ *
+ * Este é o PRIMEIRO e-mail que o cliente recebe do escritório dentro do
+ * Enquadria, e o único cuja resposta o contador precisa esperar para poder
+ * trabalhar. Duas consequências no texto:
+ *
+ *  1. Diz o custo antes do pedido ("uns três minutos, pelo celular"). Pedido
+ *     sem tamanho é adiado; pedido com tamanho é feito.
+ *  2. Explica POR QUE existe. O cliente não pediu análise nenhuma — se o
+ *     e-mail chega só com um link, parece cobrança ou golpe.
+ *
+ * Não fala em "contabilidade" nem em siglas: quem responde costuma ser o
+ * sócio, não o financeiro.
+ */
+export function htmlPedidoColeta(params: {
+  empresa: string;
+  escritorio: string | Escritorio;
+  link: string;
+}): string {
+  return moldura({
+    escritorio: params.escritorio,
+    corpo: `
+    <p>Sobre a <strong>${escapar(params.empresa)}</strong>:</p>
+    <p>Existe uma decisão de imposto com <strong>prazo em 30 de setembro</strong> que a
+    empresa precisa tomar. Para calcular qual caminho sai mais barato, preciso de alguns
+    números que só vocês têm.</p>
+    <p>Montei um formulário curto — <strong>uns três minutos</strong>, dá para responder
+    pelo celular. Não tem cadastro, não tem senha, e não pede nada de contabilidade:
+    são perguntas sobre o dia a dia da empresa.</p>
+    ${botao(params.link, "Responder o formulário")}
+    <p style="font-size:13px;color:#64748B">Assim que vocês responderem, eu faço a conta e
+    devolvo o comparativo. Qualquer dúvida, é só responder a este e-mail.</p>`,
   });
 }

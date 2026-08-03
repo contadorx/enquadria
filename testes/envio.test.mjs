@@ -217,6 +217,33 @@ for (const rel of ["app/api/laudo/enviar/route.ts", "app/api/comparativo/enviar/
      `${rel} manda nome, CRC e logo ao template`);
 }
 
+/* ── o aviso de spam: sutil, e só para quem é cliente ────────────────── */
+/**
+ * O cliente do contador pode nunca ter recebido nada nosso, e enquanto o
+ * domínio não tiver DKIM/SPF a primeira mensagem cai em spam com frequência.
+ * O aviso mora no rodapé — não rouba a mensagem — e ensina a ação que
+ * melhora as próximas: marcar como "não é spam".
+ *
+ * Já o CONTADOR é usuário nosso e recebe e-mail toda semana. Repetir o aviso
+ * para ele seria ruído em toda mensagem, então ele fica de fora.
+ */
+const ESC_S = { nome: "Escritório X" };
+for (const [nome, html] of [
+  ["laudo", htmlLaudoCliente({ empresa: "A", escritorio: ESC_S, link: "https://e/l/t", numero: 1, decisao: "optar" })],
+  ["comparativo", htmlComparativoCliente({ empresa: "A", escritorio: ESC_S, link: "https://e/c/t" })],
+  ["termo assinado (cliente)", htmlTermoAssinadoCliente({ empresa: "A", escritorio: ESC_S, link: "https://e/t/t" })],
+]) {
+  ok(/não é spam/i.test(html), `${nome}: ensina a marcar como não-spam`);
+  ok(/caixa de spam/i.test(html), `${nome}: cita a caixa de spam`);
+}
+
+for (const [nome, html] of [
+  ["coleta respondida", htmlColetaRespondida({ empresa: "A", escritorio: ESC_S, link: "https://e/x" })],
+  ["termo assinado (contador)", htmlTermoAssinadoContador({ empresa: "A", escritorio: ESC_S, link: "https://e/x" })],
+]) {
+  ok(!/não é spam/i.test(html), `${nome}: vai ao contador e NÃO repete o aviso`);
+}
+
 /* ── a promessa de "é só responder" precisa de reply-to ────────────── */
 /**
  * Estes e-mails convidam o cliente a responder, e o remetente do Postal é

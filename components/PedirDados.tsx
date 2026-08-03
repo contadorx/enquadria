@@ -58,6 +58,8 @@ export function PedirDados({
   const [erro, setErro] = useState<string | null>(null);
   const [bloqueio, setBloqueio] = useState<string | null>(null);
   const [copiado, setCopiado] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  const [enviado, setEnviado] = useState<string | null>(null);
 
   const base = typeof window !== "undefined" ? window.location.origin : "";
   const link = coleta?.token ? `${base}/coleta/${coleta.token}` : "";
@@ -68,6 +70,36 @@ export function PedirDados({
     `certo preciso de seis respostas que só você sabe dar — coisas do dia a dia do negócio, ` +
     `não tem nada de contabilidade. Leva uns três minutos, é pelo celular mesmo:\n\n${link}\n\n` +
     `Qualquer dúvida em alguma pergunta, me chama.`;
+
+  /**
+   * ENVIAR POR E-MAIL — o caminho para quem não tem WhatsApp do sócio.
+   *
+   * Sai do Enquadria com o cabeçalho do escritório e reply-to no contador. O
+   * aviso de spam fica ao lado do botão, não depois do clique: quem precisa
+   * saber que a mensagem pode não chegar é quem está decidindo como mandar.
+   */
+  async function enviarPorEmail() {
+    setEnviando(true);
+    setErro(null);
+    setEnviado(null);
+    try {
+      const resp = await fetch("/api/coleta/enviar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ empresa_id: empresaId }),
+      });
+      const j = (await resp.json().catch(() => ({}))) as { erro?: string; enviado_para?: string };
+      if (!resp.ok || j.erro) {
+        setErro(j.erro ?? "Não consegui enviar o e-mail.");
+        return;
+      }
+      setEnviado(j.enviado_para ?? "");
+    } catch {
+      setErro("Não consegui falar com o servidor. Tente de novo.");
+    } finally {
+      setEnviando(false);
+    }
+  }
 
   async function copiar(texto: string, marca: string) {
     try {
@@ -211,6 +243,13 @@ export function PedirDados({
             Abrir no WhatsApp
           </a>
           <button
+            onClick={enviarPorEmail}
+            disabled={enviando}
+            className="rounded-sm border border-line bg-surface px-3.5 py-2 text-[13px] font-semibold text-slate2 disabled:opacity-50"
+          >
+            {enviando ? "Enviando…" : enviado !== null ? "E-mail enviado ✓" : "Enviar por e-mail"}
+          </button>
+          <button
             onClick={() => copiar(link, "link")}
             className="rounded-sm border border-line bg-surface px-3.5 py-2 text-[13px] font-semibold text-slate2"
           >
@@ -224,6 +263,22 @@ export function PedirDados({
             encerrar o link
           </button>
         </div>
+
+        {enviado !== null && (
+          <p className="mt-2.5 rounded-sm border border-line bg-surface2 px-3 py-2 text-[12px] leading-relaxed">
+            Enviado{enviado ? <> para <strong>{enviado}</strong></> : null}. Vale avisar o cliente
+            pelo WhatsApp: <strong>a mensagem pode cair na caixa de spam</strong> dele, ainda mais
+            se for o primeiro e-mail que recebe do seu escritório.
+          </p>
+        )}
+
+        {/* O aviso vem ANTES do clique, não só depois: quem precisa saber que
+            o e-mail pode não chegar é quem está escolhendo como mandar. */}
+        <p className="mt-2 text-[11.5px] leading-relaxed text-muted">
+          O e-mail sai com o nome do seu escritório e a resposta volta para você. Como toda
+          primeira mensagem, ele <b className="text-slate2">pode cair no spam do cliente</b> —
+          se a empresa for importante, mande também pelo WhatsApp.
+        </p>
 
         {erro && <p className="mt-2 text-[12px] text-vermelho">{erro}</p>}
         <p className="mt-2.5 text-[11px] leading-relaxed text-muted">
