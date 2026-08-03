@@ -1,17 +1,21 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { AbasEscritorio } from "@/components/AbasEscritorio";
 import { NovaRodada } from "@/components/NovaRodada";
 
 export default function Config() {
+  const router = useRouter();
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [nome, setNome] = useState("");
   const [crc, setCrc] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [ok, setOk] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [subindoLogo, setSubindoLogo] = useState(false);
   const inputFile = useRef<HTMLInputElement>(null);
   const [totalAnalises, setTotalAnalises] = useState(0);
 
@@ -40,16 +44,25 @@ export default function Config() {
     if (!tenantId) return;
     setSalvando(true);
     setOk(false);
+    setErro(null);
     const supabase = createClient();
     const { error } = await supabase
       .from("tenants")
       .update({ nome, crc: crc || null })
       .eq("id", tenantId);
     setSalvando(false);
-    if (!error) {
-      setOk(true);
-      setTimeout(() => setOk(false), 2500);
+    if (error) {
+      // engolir o erro aqui era pior do que parece: a pessoa sai da tela
+      // convencida de que salvou e o passo 1 da trilha nunca fecha.
+      setErro("Não consegui salvar. Tente de novo — se insistir, recarregue a página.");
+      return;
     }
+    setOk(true);
+    setTimeout(() => setOk(false), 2500);
+    // O /painel é server component: ele calculou `temEscritorio` no render
+    // anterior e serve do cache. Sem invalidar, o passo 1 da trilha continua
+    // aberto mesmo com nome e CRC já gravados — que foi exatamente o relato.
+    router.refresh();
   }
 
   async function enviarLogo(e: React.ChangeEvent<HTMLInputElement>) {
@@ -58,14 +71,31 @@ export default function Config() {
     const supabase = createClient();
     const ext = arquivo.name.split(".").pop() ?? "png";
     const caminho = `${tenantId}/logo.${ext}`;
+    setErro(null);
+    setSubindoLogo(true);
     const { error } = await supabase.storage
       .from("logos")
       .upload(caminho, arquivo, { upsert: true, cacheControl: "3600" });
-    if (error) return;
+    if (error) {
+      // subir imagem falha por motivo banal (tamanho, tipo, permissão do
+      // bucket). Sair calado deixa a pessoa achando que o logo está lá.
+      setSubindoLogo(false);
+      setErro("Não consegui subir o logo. Verifique se é PNG ou JPG e tente de novo.");
+      return;
+    }
     const { data } = supabase.storage.from("logos").getPublicUrl(caminho);
     const url = `${data.publicUrl}?v=${Date.now()}`;
-    await supabase.from("tenants").update({ logo_url: url }).eq("id", tenantId);
+    const { error: erroBanco } = await supabase
+      .from("tenants")
+      .update({ logo_url: url })
+      .eq("id", tenantId);
+    setSubindoLogo(false);
+    if (erroBanco) {
+      setErro("O logo subiu mas não consegui vinculá-lo ao escritório. Tente de novo.");
+      return;
+    }
     setLogoUrl(url);
+    router.refresh(); // o logo entra na capa do laudo, que é server component
   }
 
   return (
@@ -101,13 +131,29 @@ export default function Config() {
             />
           </label>
 
+          {erro && (
+            <p className="mb-3 rounded-sm bg-vermelhowash px-3 py-2 text-[12.5px] text-vermelho">
+              {erro}
+            </p>
+          )}
+
           <button
             onClick={salvar}
             disabled={salvando}
             className="rounded-sm bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
           >
-            {salvando ? "Salvando..." : ok ? "Salvo ✓" : "Salvar"}
+            {salvando ? "Salvando…" : ok ? "Salvo ✓" : "Salvar"}
           </button>
+
+          {/* o CRC não é enfeite: é o que fecha o passo 1 dos primeiros passos
+              e o que dá credencial ao laudo. Dizer isso aqui evita a pessoa
+              salvar só o nome e não entender por que a trilha não anda. */}
+          {!crc.trim() && (
+            <p className="mt-3 text-[11.5px] leading-relaxed text-muted">
+              Sem o <strong>CRC</strong> o laudo sai sem credencial profissional — e o
+              primeiro passo dos “Primeiros passos” continua aberto.
+            </p>
+          )}
         </div>
 
         <div className="rounded border border-line bg-surface p-5 shadow-card">
@@ -125,9 +171,10 @@ export default function Config() {
             </div>
             <button
               onClick={() => inputFile.current?.click()}
-              className="rounded-sm border border-line px-4 py-2 text-sm font-semibold text-slate2"
+              disabled={subindoLogo}
+              className="rounded-sm border border-line px-4 py-2 text-sm font-semibold text-slate2 disabled:opacity-50"
             >
-              {logoUrl ? "Trocar logo" : "Enviar logo"}
+              {subindoLogo ? "Enviando…" : logoUrl ? "Trocar logo" : "Enviar logo"}
             </button>
             <input
               ref={inputFile}

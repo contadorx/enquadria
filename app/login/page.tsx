@@ -28,8 +28,8 @@ export default function Login() {
             password: senha,
             options: { data: { escritorio } },
           });
-    setOcupado(false);
     if (error) {
+      setOcupado(false);
       // nunca mostrar o erro cru: quando o servidor responde sem corpo,
       // `error.message` chega como o texto "{}" e não ajuda ninguém
       setErro(traduzirErroAuth(error, modo));
@@ -42,10 +42,12 @@ export default function Login() {
     if (modo === "criar") {
       const r = interpretarCadastro(data, email);
       if (r.tipo === "confirmar") {
+        setOcupado(false);
         setConfirmar(r.email);
         return;
       }
       if (r.tipo === "jaExiste") {
+        setOcupado(false);
         setErro({
           texto: "Já existe uma conta com este e-mail. Use “Entrar”.",
           culpaDoServidor: false,
@@ -54,6 +56,12 @@ export default function Login() {
       }
     }
 
+    // NÃO soltamos `ocupado` aqui de propósito. A navegação para /painel
+    // ainda vai acontecer e leva tempo: carregar a rota, buscar os dados,
+    // desenhar. Se o botão voltasse ao normal agora, a pessoa veria a tela
+    // parada com um botão pronto para clicar de novo — que foi exatamente o
+    // relato ("parece erro"). O estado de espera tem que durar até o efeito,
+    // não até a resposta da API.
     router.push("/painel");
     router.refresh();
   }
@@ -186,7 +194,13 @@ export default function Login() {
             disabled={ocupado || !email || !senha}
             className="w-full rounded-sm bg-ink py-2.5 text-sm font-semibold text-white disabled:opacity-40"
           >
-            {ocupado ? "..." : modo === "entrar" ? "Entrar" : "Criar conta"}
+            {ocupado
+              ? modo === "entrar"
+                ? "Entrando…"
+                : "Criando conta…"
+              : modo === "entrar"
+                ? "Entrar"
+                : "Criar conta"}
           </button>
         </div>
 

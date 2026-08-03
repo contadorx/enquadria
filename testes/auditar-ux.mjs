@@ -275,6 +275,96 @@ for (const arq of arquivos) {
   }
 }
 
+/* ───────────────────────────────────────────────── REGRA 5
+   ESPERA QUE ACABA ANTES DO EFEITO.
+
+   Relato real: "no login, após a validação ele não fica pensando ou indicando
+   que vai entrar, parecendo erro". O botão TINHA estado de espera — a regra 3
+   passava. O defeito era outro: o código soltava a espera assim que a API
+   respondia e só então navegava. Entre soltar e a página nova aparecer existe
+   um intervalo em que a tela está parada com o botão pronto para clicar de
+   novo. Para quem olha, isso não é "carregando": é "não funcionou".
+
+   A espera precisa durar até o EFEITO, não até a resposta.
+
+   Duas formas do mesmo defeito, ambas cobertas aqui:
+     (a) set…(false) e depois router.push/refresh no mesmo trecho;
+     (b) navegar depois de um await sem nenhum estado de espera no arquivo. */
+{
+  const ESPERA = /set\w*(Ocupado|Carregando|Enviando|Salvando|Emitindo|Testando|Processando|Gerando|Saindo|Loading|Busy)\w*/i;
+  for (const arq of arquivos) {
+    const txt = fs.readFileSync(arq, "utf8");
+    const linhas = txt.split("\n");
+
+    // (a) soltou a espera no caminho FELIZ e ainda navegou depois.
+    //
+    // O critério NÃO é "existe set…(false) antes do push": soltar a espera
+    // para sair cedo por erro é correto. O que separa os dois casos é a
+    // PROFUNDIDADE. Um set…(false) dentro de um `if` que retorna está mais
+    // indentado que a navegação — é saída antecipada. Um set…(false) no
+    // mesmo nível da navegação está no caminho que segue até ela: a espera
+    // morre e a tela fica parada até a página nova aparecer.
+    const nivel = (l) => l.length - l.trimStart().length;
+    for (let i = 0; i < linhas.length; i++) {
+      if (!new RegExp(ESPERA.source + "\\(false\\)", "i").test(linhas[i])) continue;
+      if (dispensado(linhas, i)) continue;
+      const nSet = nivel(linhas[i]);
+
+      for (let j = i + 1; j < Math.min(linhas.length, i + 60); j++) {
+        const t = linhas[j];
+        // um return no mesmo nível (ou acima) encerra este caminho: tudo bem
+        if (/^\s*return\b/.test(t) && nivel(t) <= nSet) break;
+        // só NAVEGAÇÃO conta. router.refresh() revalida dados sem trocar de
+        // página: a pessoa continua vendo a tela, e soltar a espera ali é
+        // o comportamento certo, não o defeito.
+        if (!/router\.push|window\.location/.test(t)) continue;
+        if (nivel(t) >= nSet) {
+          achado(arq, i + 1, "espera-solta-antes-do-fim",
+            "solta o estado de espera no mesmo nível da navegação — entre soltar e a página nova aparecer, a tela fica parada com o botão pronto para clicar de novo.");
+        }
+        break;
+      }
+    }
+
+    // (b) navega depois de esperar a rede, sem nunca marcar espera
+    if (/router\.push/.test(txt) && /await\s/.test(txt)) {
+      const temEspera = ESPERA.test(txt) || /useTransition\(/.test(txt);
+      if (!temEspera) {
+        const nLinha = linhas.findIndex((l) => /router\.push/.test(l)) + 1;
+        if (!dispensado(linhas, nLinha - 1)) {
+          achado(arq, nLinha, "espera-solta-antes-do-fim",
+            "espera a rede e navega sem nenhum indicador — nada na tela diz que algo está acontecendo.");
+        }
+      }
+    }
+  }
+}
+
+/* ───────────────────────────────────────────────── REGRA 6
+   GRAVOU NO NAVEGADOR E NÃO AVISOU O SERVIDOR.
+
+   Relato real: "coloquei dados do escritório e ele não executou a primeira
+   atividade do onboarding". Os dados ESTAVAM salvos no banco. O que não
+   aconteceu foi o `/painel` — server component — recalcular. Ele havia
+   derivado "escritório identificado?" no render anterior e continuou servindo
+   do cache. Para quem usa, o sistema simplesmente ignorou o que foi digitado.
+
+   Quem grava pelo cliente Supabase do navegador precisa chamar
+   router.refresh(): é o que invalida o cache das rotas de servidor. */
+{
+  for (const arq of arquivos) {
+    const txt = fs.readFileSync(arq, "utf8");
+    const linhas = txt.split("\n");
+    const grava = /\.from\("[^"]+"\)\s*\.\s*(update|insert|upsert|delete)\(/.exec(txt);
+    if (!grava) continue;
+    if (/router\.refresh|useTransition\(/.test(txt)) continue;
+    const nLinha = txt.slice(0, grava.index).split("\n").length;
+    if (dispensado(linhas, nLinha - 1)) continue;
+    achado(arq, nLinha, "gravou-sem-avisar-servidor",
+      `${grava[1]} no banco pelo navegador sem router.refresh() — as telas de servidor seguem mostrando o valor antigo.`);
+  }
+}
+
 /* ───────────────────────────────────────────────────────── relatório */
 const porRegra = {};
 for (const a of achados) (porRegra[a.regra] ??= []).push(a);
@@ -286,6 +376,8 @@ const REGRAS = {
   "desabilitado-sem-motivo": "Botão desabilitado sem explicação",
   "rede-sem-espera": "Ação de rede sem estado de espera",
   "erro-engolido": "Erro engolido pela interface",
+  "espera-solta-antes-do-fim": "Espera que termina antes do efeito",
+  "gravou-sem-avisar-servidor": "Gravou no banco e não invalidou a tela",
 };
 
 for (const [regra, titulo] of Object.entries(REGRAS)) {
