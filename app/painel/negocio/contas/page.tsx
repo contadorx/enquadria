@@ -1,5 +1,7 @@
 "use client";
 
+import { ABAS_PLATAFORMA } from "@/lib/nav";
+import { Abas } from "@/components/Abas";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
@@ -80,6 +82,7 @@ export default function ContasAdmin() {
 
   return (
     <div>
+      <Abas itens={ABAS_PLATAFORMA} />
       <h1 className="text-[19px] font-bold tracking-tight">Contas</h1>
       <p className="mt-0.5 max-w-[70ch] text-[13px] text-muted">
         Marcar teste e cortesia aqui é o que mantém o MRR honesto. Uma conta entra na receita

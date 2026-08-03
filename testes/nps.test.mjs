@@ -4,7 +4,7 @@
  * transforma pesquisa em ofensa, e é o tipo de coisa que alguém "simplifica"
  * um dia sem perceber o que quebrou.
  */
-import { perfilDaNota, desfecho, limparIndicados, emailPlausivel, calcularNps } from "./nps.js";
+import { perfilDaNota, desfecho, limparIndicados, emailPlausivel, calcularNps, devePerguntarNps } from "./nps.js";
 
 let falhas = 0;
 const ok = (c, m) => { if (c) console.log("ok:", m); else { console.log("FALHOU:", m); falhas++; } };
@@ -52,5 +52,28 @@ ok(calcularNps([10, 10, 10]) === 100, "só promotores dá 100");
 ok(calcularNps([0, 0]) === -100, "só detratores dá -100");
 ok(calcularNps([10, 7, 0]) === 0, "um de cada se anula");
 ok(calcularNps([9, 9, 8, 8, 6]) === 20, "conta certa com neutros no meio");
+
+
+
+/* ── quando perguntar: o que separa medir de irritar ─────────────────── */
+const C = (o) => ({ laudos: 3, respondidoEm: null, dispensadoEm: null, hoje: "2026-08-03", ...o });
+
+ok(devePerguntarNps(C({})), "com laudo emitido e sem histórico, pergunta");
+ok(!devePerguntarNps(C({ laudos: 0 })),
+   "sem laudo nenhum NÃO pergunta — a nota mediria a expectativa, não o produto");
+
+ok(!devePerguntarNps(C({ respondidoEm: "2026-07-20" })), "respondeu há 14 dias: fica em paz");
+ok(!devePerguntarNps(C({ respondidoEm: "2026-05-20" })), "respondeu há 75 dias: ainda em paz");
+ok(devePerguntarNps(C({ respondidoEm: "2026-04-01" })), "respondeu há 124 dias: pode perguntar de novo");
+
+ok(!devePerguntarNps(C({ dispensadoEm: "2026-07-25" })), "dispensou há 9 dias: respeita o 'agora não'");
+ok(devePerguntarNps(C({ dispensadoEm: "2026-06-01" })), "dispensou há 63 dias: pode voltar");
+
+// dispensar é mais fraco que responder — e o prazo reflete isso
+ok(devePerguntarNps(C({ dispensadoEm: "2026-06-20" })) && !devePerguntarNps(C({ respondidoEm: "2026-06-20" })),
+   "na mesma data, quem dispensou volta antes de quem respondeu");
+
+ok(!devePerguntarNps(C({ laudos: 0, respondidoEm: null, dispensadoEm: null })),
+   "a regra do laudo vence as outras: sem uso, não pergunta em hipótese nenhuma");
 
 process.exit(falhas ? 1 : 0);

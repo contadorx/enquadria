@@ -21,24 +21,31 @@ export interface GrupoNav {
   itens: ItemNav[];
 }
 
+/**
+ * O MENU — três destinos no dia a dia, e não sete.
+ *
+ * A lista tinha crescido para sete itens de trabalho e oito de plataforma. Um
+ * menu de quinze linhas não é navegação: é um índice que a pessoa lê toda vez
+ * porque nenhuma opção fica na memória.
+ *
+ * O critério do reagrupamento foi a PERGUNTA que leva a pessoa até ali:
+ *
+ *   "o que eu faço agora?"      → Cockpit
+ *   "como isso funciona?"       → Ajuda (com Reforma e chamados dentro)
+ *   "e a minha conta?"          → Escritório (config, equipe, planos, indique)
+ *
+ * Reforma e Ajuda continuam SEPARADAS como telas — uma é cronológica, a outra
+ * é por tema —, mas entram pelo mesmo lugar. Quem tem dúvida não sabe de
+ * antemão se ela é "de ajuda" ou "da Reforma"; obrigar essa escolha no menu é
+ * transferir para o usuário uma classificação que é nossa.
+ */
 export const NAV: GrupoNav[] = [
   {
     grupo: "Trabalho",
     itens: [
       { href: "/painel", label: "Cockpit", curto: "Cockpit" },
-      /* Duas entradas, não uma: ajuda é consultada sob demanda, a Reforma é
-         empurrada. Um menu só faria a notícia depender de a pessoa lembrar de
-         procurar — que é justamente o que ela não sabe que precisa fazer. */
-      { href: "/painel/reforma", label: "Reforma", curto: "Reforma" },
       { href: "/painel/ajuda", label: "Ajuda", curto: "Ajuda" },
-      { href: "/painel/chamados", label: "Meus chamados", curto: "Chamados" },
-      { href: "/painel/config", label: "Configurações", curto: "Config" },
-      /* Planos saiu de dentro de Escritório e virou item próprio.
-         Contratar é a ação que o produto mais precisa que aconteça, e ela
-         estava dois cliques abaixo de "Configurações" — atrás de um nome que
-         ninguém associa a comprar. */
-      { href: "/painel/planos", label: "Planos", curto: "Planos" },
-      { href: "/painel/indique", label: "Indique", curto: "Indique" },
+      { href: "/painel/config", label: "Escritório", curto: "Escritório" },
     ],
   },
 ];
@@ -47,18 +54,18 @@ export const NAV: GrupoNav[] = [
  * Grupo do DONO da plataforma. Fora do NAV principal de propósito: só aparece
  * para quem tem is_superadmin, e o painel do contador não pode sequer saber
  * que ele existe.
+ *
+ * Reagrupado pelo mesmo critério: cinco destinos em vez de oito, cada um
+ * respondendo a uma pergunta de gestão diferente.
  */
 export const NAV_PLATAFORMA: GrupoNav = {
   grupo: "Plataforma",
   itens: [
-    { href: "/painel/negocio", label: "Negócio", curto: "Negócio" },
-    { href: "/painel/negocio/contas", label: "Contas" },
-    { href: "/painel/negocio/cobrancas", label: "Cobranças" },
-    { href: "/painel/negocio/emails", label: "E-mails proativos" },
-    { href: "/painel/negocio/planos", label: "Planos & Asaas" },
-    { href: "/painel/negocio/ajuda", label: "Central de ajuda" },
-    { href: "/painel/negocio/chamados", label: "Chamados" },
-    { href: "/painel/negocio/assistente", label: "Assistente e NPS" },
+    { href: "/painel/negocio", label: "Visão geral", curto: "Negócio" },
+    { href: "/painel/negocio/contas", label: "Contas e receita" },
+    { href: "/painel/negocio/emails", label: "Comunicação" },
+    { href: "/painel/negocio/chamados", label: "Suporte" },
+    { href: "/painel/negocio/ajuda", label: "Conteúdo" },
   ],
 };
 
@@ -66,6 +73,27 @@ export const NAV_PLATAFORMA: GrupoNav = {
 export const ABAS_ESCRITORIO: ItemNav[] = [
   { href: "/painel/config", label: "Configurações" },
   { href: "/painel/equipe", label: "Equipe" },
+  { href: "/painel/planos", label: "Planos" },
+  { href: "/painel/indique", label: "Indique um colega" },
+];
+
+/** Ajuda, Reforma e chamados: um assunto só, três telas. */
+export const ABAS_AJUDA: ItemNav[] = [
+  { href: "/painel/ajuda", label: "Central de ajuda" },
+  { href: "/painel/reforma", label: "Reforma" },
+  { href: "/painel/chamados", label: "Meus chamados" },
+];
+
+/** As telas de gestão que saíram do menu da plataforma. */
+export const ABAS_PLATAFORMA: ItemNav[] = [
+  { href: "/painel/negocio/contas", label: "Contas" },
+  { href: "/painel/negocio/cobrancas", label: "Cobranças" },
+  { href: "/painel/negocio/planos", label: "Planos & Asaas" },
+];
+
+export const ABAS_SUPORTE: ItemNav[] = [
+  { href: "/painel/negocio/chamados", label: "Chamados" },
+  { href: "/painel/negocio/assistente", label: "Assistente e NPS" },
 ];
 
 /** O menu que a pessoa realmente vê. */
@@ -77,9 +105,8 @@ export function navDe(ehSuperadmin: boolean): GrupoNav[] {
 export function atalhosDe(ehSuperadmin: boolean): ItemNav[] {
   const base: ItemNav[] = [
     { href: "/painel", label: "Cockpit", curto: "Cockpit" },
-    { href: "/painel/reforma", label: "Reforma", curto: "Reforma" },
-    { href: "/painel/planos", label: "Planos", curto: "Planos" },
-    { href: "/painel/config", label: "Configurações", curto: "Config" },
+    { href: "/painel/ajuda", label: "Ajuda", curto: "Ajuda" },
+    { href: "/painel/config", label: "Escritório", curto: "Escritório" },
   ];
   return ehSuperadmin ? [...base, { href: "/painel/negocio", label: "Negócio", curto: "Negócio" }] : base;
 }
@@ -89,7 +116,9 @@ export function tituloDaRota(pathname: string): string {
   if (pathname.startsWith("/painel/empresa")) return "Empresa";
   if (pathname.startsWith("/painel/importar")) return "Importar carteira";
   if (pathname.startsWith("/painel/ajuda/")) return "Ajuda";
-  const todos = [...NAV, NAV_PLATAFORMA].flatMap((g) => g.itens).concat(ABAS_ESCRITORIO);
+  const todos = [...NAV, NAV_PLATAFORMA]
+    .flatMap((g) => g.itens)
+    .concat(ABAS_ESCRITORIO, ABAS_AJUDA, ABAS_PLATAFORMA, ABAS_SUPORTE);
   // a rota mais específica que casa com o caminho vence
   const achado = todos
     .filter((i) => pathname === i.href || pathname.startsWith(i.href + "/"))

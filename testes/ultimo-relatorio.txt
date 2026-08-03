@@ -14,13 +14,13 @@ ok    suíte envio (87 asserções)
 ok    suíte erros-auth (20 asserções)
 ok    suíte ajuda (41 asserções)
 ok    suíte cobranca (15 asserções)
-ok    suíte nps (31 asserções)
+ok    suíte nps (40 asserções)
 
 ── Auditoria de UX (percepção, não estética) ───────────────────
 ok    auditoria de UX (6 regras limpas)
 
 ── Auditoria de schema (colunas que ninguém garante que existem) 
-ok    auditoria de schema (18 tabelas com proveniência)
+ok    auditoria de schema (20 tabelas com proveniência)
 
 ── Endereços públicos — o que chega ao cliente sem login ───────
 ok    /assinar/[token] existe e é pública

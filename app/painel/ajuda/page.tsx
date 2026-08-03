@@ -1,7 +1,8 @@
+import { ABAS_AJUDA } from "@/lib/nav";
+import { Abas } from "@/components/Abas";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
 import { CATEGORIAS, temNovidade, ordenarAjuda, type Artigo } from "@/lib/ajuda";
-import { AssistenteAjuda } from "@/components/AssistenteAjuda";
 
 /**
  * A CENTRAL DE AJUDA vista pelo contador.
@@ -40,6 +41,7 @@ export default async function AjudaPage() {
 
   return (
     <div>
+      <Abas itens={ABAS_AJUDA} />
       <h1 className="text-[19px] font-bold tracking-tight">Central de ajuda</h1>
       <p className="mt-0.5 max-w-[70ch] text-[13px] text-muted">
         Como usar cada tela e como vender o serviço. O que muda na Reforma fica no{" "}
@@ -98,7 +100,6 @@ export default async function AjudaPage() {
         })}
       </div>
 
-      <AssistenteAjuda />
     </div>
   );
 }

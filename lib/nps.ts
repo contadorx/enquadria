@@ -114,3 +114,50 @@ export function calcularNps(notas: number[]): number | null {
   const det = notas.filter((n) => n <= 6).length;
   return Math.round(((prom - det) / notas.length) * 100);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * QUANDO PERGUNTAR — a parte que decide se o NPS ajuda ou irrita.
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+export interface ContextoNps {
+  /** laudos emitidos por este escritório */
+  laudos: number;
+  /** AAAA-MM-DD da última resposta de NPS, se houver */
+  respondidoEm: string | null;
+  /** AAAA-MM-DD em que a pessoa fechou o convite sem responder */
+  dispensadoEm: string | null;
+  hoje: string;
+}
+
+function diasEntre(de: string, ate: string): number {
+  const a = Date.UTC(+de.slice(0, 4), +de.slice(5, 7) - 1, +de.slice(8, 10));
+  const b = Date.UTC(+ate.slice(0, 4), +ate.slice(5, 7) - 1, +ate.slice(8, 10));
+  return Math.round((b - a) / 86400000);
+}
+
+/**
+ * PERGUNTAR AGORA?
+ *
+ * Três regras, e cada uma existe por um jeito diferente de estragar a coisa:
+ *
+ *  1. SÓ DEPOIS DE ENTREGAR VALOR. Perguntar "você indicaria?" a quem ainda
+ *     não emitiu um laudo é perguntar sobre um produto que a pessoa não usou.
+ *     A nota mede a expectativa dela, não o produto — e contamina a média com
+ *     ruído que ninguém sabe interpretar depois.
+ *
+ *  2. QUEM RESPONDEU FICA EM PAZ POR 90 DIAS. NPS que reaparece toda semana
+ *     ensina a fechar sem ler, e aí não mede mais nada.
+ *
+ *  3. QUEM DISPENSOU FICA EM PAZ POR 30. Fechar o convite é uma resposta —
+ *     "agora não". Reabrir no dia seguinte é ignorar o que a pessoa disse.
+ *
+ * O prazo do dispensado é menor que o do respondente de propósito: dispensar é
+ * mais fraco que responder, e a pessoa pode simplesmente estar no meio de uma
+ * tarefa.
+ */
+export function devePerguntarNps(c: ContextoNps): boolean {
+  if (c.laudos < 1) return false;
+  if (c.respondidoEm && diasEntre(c.respondidoEm, c.hoje) < 90) return false;
+  if (c.dispensadoEm && diasEntre(c.dispensadoEm, c.hoje) < 30) return false;
+  return true;
+}

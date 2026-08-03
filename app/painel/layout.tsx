@@ -4,6 +4,7 @@ import { Regua } from "@/components/Regua";
 import { BotaoSair } from "@/components/BotaoSair";
 import { NavMobile } from "@/components/NavMobile";
 import { navDe } from "@/lib/nav";
+import { CamadaGlobal } from "@/components/CamadaGlobal";
 import { JANELA, estadoDaJanela, faseDaJanela } from "@/lib/janela";
 
 export default async function PainelLayout({ children }: { children: React.ReactNode }) {
@@ -43,6 +44,32 @@ export default async function PainelLayout({ children }: { children: React.React
     ehSuperadmin = !!perfil?.is_superadmin;
   }
   const menu = navDe(ehSuperadmin);
+
+  /**
+   * O que a camada global precisa saber, buscado aqui porque o layout já é
+   * server component e já consultou o perfil — evita duas idas ao banco em
+   * toda navegação.
+   *
+   * Falha em qualquer uma destas consultas NÃO pode derrubar o painel: o
+   * assistente e o NPS são acessórios, e uma tabela que ainda não existe (a
+   * migration não rodada) não pode impedir alguém de trabalhar.
+   */
+  let assistenteAtivo = false;
+  let laudosDoEscritorio = 0;
+  let npsRespondidoEm: string | null = null;
+  try {
+    const [cfg, laudos, nps] = await Promise.all([
+      supabase.from("assistente_config").select("ativo").eq("id", 1).maybeSingle(),
+      supabase.from("laudos").select("id", { count: "exact", head: true }),
+      supabase.from("nps_respostas").select("criado_em").order("criado_em", { ascending: false }).limit(1),
+    ]);
+    assistenteAtivo = !!cfg.data?.ativo;
+    laudosDoEscritorio = laudos.count ?? 0;
+    const ultima = (nps.data ?? [])[0] as { criado_em?: string } | undefined;
+    npsRespondidoEm = ultima?.criado_em ? ultima.criado_em.slice(0, 10) : null;
+  } catch {
+    /* migrations não rodadas: painel funciona, os acessórios não aparecem */
+  }
 
   // calculado aqui, no servidor: o NavMobile é componente de cliente e usar
   // Date lá dentro faria servidor e navegador renderizarem valores diferentes
@@ -100,6 +127,14 @@ export default async function PainelLayout({ children }: { children: React.React
         {/* pb-20 no celular: a barra inferior não pode cobrir o fim do conteúdo */}
         <main className="min-w-0 px-4 pb-20 pt-5 md:px-6 md:pb-6 md:pt-6">{children}</main>
       </div>
+
+      {/* Flutuam por cima de qualquer tela: dúvida aparece no meio da tarefa,
+          e NPS que espera visita não é NPS. */}
+      <CamadaGlobal
+        assistenteAtivo={assistenteAtivo}
+        laudos={laudosDoEscritorio}
+        respondidoEm={npsRespondidoEm}
+      />
     </div>
   );
 }

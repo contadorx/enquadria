@@ -1,3 +1,5 @@
+import { ABAS_AJUDA } from "@/lib/nav";
+import { Abas } from "@/components/Abas";
 import { createClient } from "@/lib/supabase-server";
 
 /**
@@ -51,6 +53,7 @@ export default async function ChamadosPage() {
 
   return (
     <div className="max-w-[72ch]">
+      <Abas itens={ABAS_AJUDA} />
       <h1 className="text-[19px] font-bold tracking-tight">Meus chamados</h1>
       <p className="mt-0.5 text-[13px] text-muted">
         O que o assistente não soube responder vira chamado aqui — e é respondido por gente.

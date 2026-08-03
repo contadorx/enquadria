@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { desfecho, limparIndicados, type Indicado } from "@/lib/nps";
+import { AbasEscritorio } from "@/components/AbasEscritorio";
 
 /**
  * NOTA → INDICAÇÃO, numa tela só.
@@ -84,6 +85,7 @@ export default function Indique() {
   if (pronto !== null) {
     return (
       <div className="max-w-[60ch]">
+        <AbasEscritorio />
         <div className="rounded border border-verde bg-verdewash p-6">
           <h1 className="text-[17px] font-bold">
             {pronto > 0 ? `${pronto} indicação${pronto === 1 ? "" : "ões"} registrada${pronto === 1 ? "" : "s"}` : "Obrigado"}
@@ -103,7 +105,8 @@ export default function Indique() {
 
   return (
     <div className="max-w-[62ch]">
-      <h1 className="text-[19px] font-bold tracking-tight">Uma pergunta só</h1>
+      <AbasEscritorio />
+      <h1 className="text-[19px] font-bold tracking-tight">Indique um colega</h1>
       <p className="mt-0.5 text-[13px] text-muted">
         De 0 a 10, quanto você indicaria o Enquadria a outro contador?
       </p>

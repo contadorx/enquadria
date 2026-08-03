@@ -1,3 +1,5 @@
+import { ABAS_AJUDA } from "@/lib/nav";
+import { Abas } from "@/components/Abas";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
 import { temNovidade, type Artigo } from "@/lib/ajuda";
@@ -41,6 +43,7 @@ export default async function ReformaPage() {
 
   return (
     <div className="max-w-[74ch]">
+      <Abas itens={ABAS_AJUDA} />
       <h1 className="text-[19px] font-bold tracking-tight">Reforma tributária — o que mudou</h1>
       <p className="mt-0.5 text-[13px] text-muted">
         A regulamentação continua saindo. Publicamos aqui o que muda a decisão do seu cliente, com
