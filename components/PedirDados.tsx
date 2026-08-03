@@ -156,6 +156,20 @@ export function PedirDados({
             Pedir de novo
           </button>
         </div>
+
+        {/* BOTÃO CINZA PRECISA SE EXPLICAR.
+            Desabilitado sem motivo visível é indistinguível de quebrado — a
+            pessoa clica, nada acontece, e a conclusão é que o sistema falhou.
+            Se as derivadas não vieram, a resposta está gravada mas incompleta,
+            e o caminho é pedir de novo. */}
+        {!coleta.derivadas && (
+          <p className="mt-2.5 rounded-sm bg-amarelowash px-3 py-2 text-[12px] leading-relaxed text-amarelo">
+            <b>Não dá para aplicar estas respostas.</b> O formulário foi respondido, mas as seis
+            perguntas não vieram completas — sem elas não há o que preencher no cálculo. Clique em
+            &quot;Pedir de novo&quot; e reenvie o link à empresa.
+          </p>
+        )}
+
         <p className="mt-2.5 text-[11px] leading-relaxed text-slate2">
           As respostas entram como <b>informadas pelo cliente</b> — o formulário da análise fica
           aberto para você ajustar o que a escrituração contradisser. Quem assina é você.

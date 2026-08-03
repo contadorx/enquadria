@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MuroPlano } from "@/components/MuroPlano";
 import type { Muro } from "@/lib/plano";
 import { useRouter } from "next/navigation";
@@ -104,6 +104,8 @@ export function PainelEmpresa({
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [bloqueio, setBloqueio] = useState<string | null>(null);
   const [muro, setMuro] = useState<Muro | null>(null);
+  const formRef = useRef<HTMLDivElement>(null);
+  const [aplicado, setAplicado] = useState(false);
   const [link, setLink] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
   const [nomeSig, setNomeSig] = useState("");
@@ -172,6 +174,24 @@ export function PainelEmpresa({
       detalhes: { qual: { fora_simples: dv.qual, sem_aproveitamento: 0 } },
     });
     setAba("decisao");
+
+    /**
+     * LEVAR O OLHO ATÉ O FORMULÁRIO.
+     *
+     * "Usar estas respostas na análise" parecia não fazer nada, e a causa é a
+     * mesma do botão de colar CNPJs: o efeito acontece FORA DA VISTA. O
+     * formulário está logo abaixo deste bloco, na MESMA aba — então
+     * `setAba("decisao")` não muda nada visualmente, o formulário remonta com
+     * os valores da empresa, e quem está olhando o botão não vê movimento
+     * nenhum. Conclusão razoável de quem clicou: o botão está quebrado.
+     *
+     * Agora ele rola até o formulário e deixa um aviso explícito de que os
+     * valores entraram e ainda precisam ser conferidos e salvos.
+     */
+    setAplicado(true);
+    requestAnimationFrame(() =>
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    );
   }
 
   if (erro) {
@@ -319,6 +339,19 @@ export function PainelEmpresa({
             aoAplicar={aplicarColeta}
           />
 
+          <div ref={formRef}>
+          {aplicado && (
+            <div className="mb-3 rounded-sm border border-verde bg-verdewash px-3.5 py-2.5">
+              <div className="text-[13px] font-semibold text-verde">
+                ✓ Respostas da empresa aplicadas no formulário abaixo.
+              </div>
+              <p className="mt-1 text-[12.5px] leading-relaxed text-slate2">
+                Elas entram marcadas como <b>informadas pelo cliente</b>. A folha continua sendo
+                sua — está na escrituração, não no formulário dele. Confira tudo e clique em
+                salvar: <b>nada é gravado até você salvar</b>.
+              </p>
+            </div>
+          )}
           <FormAnalise
             /* o `key` força a remontagem quando as respostas da empresa chegam.
                Sem ele, o formulário continuaria exibindo o que já estava na
@@ -336,9 +369,11 @@ export function PainelEmpresa({
             estimada={estimada}
             aoSalvar={() => {
               setDaColeta(null);
+              setAplicado(false);
               mudou();
             }}
           />
+          </div>
 
           {a && (
             <Bloco titulo="Entregáveis">
