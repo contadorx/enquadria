@@ -35,6 +35,7 @@ import {
   htmlTermoAssinadoContador,
   htmlTermoAssinadoCliente,
   htmlConviteIndicacao,
+  htmlRespostaChamado,
 } from "./emails-cliente.js";
 
 import fsE from "node:fs";
@@ -319,6 +320,26 @@ ok(/Marina/.test(CONVITE), "trata o indicado pelo nome");
 ok(/30 de setembro/.test(CONVITE), "dá o motivo com data — sem prazo não há urgência honesta");
 ok(/único e-mail/i.test(CONVITE), "promete não insistir, e a rota cumpre com a trava de e-mail repetido");
 ok(!/desconto|comiss/i.test(CONVITE), "não transforma o contador em afiliado sem combinar");
+
+/* ── resposta de chamado: a resposta INTEIRA, não um convite ─────────── */
+/**
+ * O assistente promete "você recebe a resposta por e-mail". Mandar "temos
+ * novidades, acesse o sistema" transformaria a promessa numa viagem — e quem
+ * perguntou algo operacional quer a resposta, não um link.
+ */
+const RESP = htmlRespostaChamado({
+  assunto: "Preciso do RBT12 para emitir?",
+  resposta: "Não precisa.\nSem RBT12 a alíquota sai estimada pelo topo da faixa.",
+  link: "https://app.enquadria.com.br/painel/chamados",
+});
+ok(/Não precisa/.test(RESP), "a resposta vai inteira no corpo");
+ok(/alíquota sai estimada/.test(RESP), "inclusive as linhas seguintes");
+ok(/Preciso do RBT12/.test(RESP), "e retoma a pergunta, para a pessoa lembrar do contexto");
+ok(/responder a este e-mail|responder este e-mail/i.test(RESP), "convida a continuar a conversa");
+
+// o corpo é escapado: resposta do suporte com < ou > não pode virar tag
+const COMTAG = htmlRespostaChamado({ assunto: "a", resposta: "use <script>x</script>", link: "https://e/x" });
+ok(!/<script/i.test(COMTAG), "resposta com tag não vira HTML executável");
 
 console.log(f === 0 ? "TODOS OS TESTES PASSARAM" : `${f} FALHAS`);
 process.exit(f ? 1 : 0);

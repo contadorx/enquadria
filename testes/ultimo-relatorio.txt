@@ -10,17 +10,18 @@ ok    suíte muro (11 asserções)
 ok    suíte reguas (14 asserções)
 ok    suíte janela (20 asserções)
 ok    suíte cnpj (34 asserções)
-ok    suíte envio (82 asserções)
+ok    suíte envio (87 asserções)
 ok    suíte erros-auth (20 asserções)
 ok    suíte ajuda (41 asserções)
 ok    suíte cobranca (43 asserções)
 ok    suíte nps (31 asserções)
+ok    suíte onboarding (23 asserções)
 
 ── Auditoria de UX (percepção, não estética) ───────────────────
 ok    auditoria de UX (6 regras limpas)
 
 ── Auditoria de schema (colunas que ninguém garante que existem) 
-ok    auditoria de schema (16 tabelas com proveniência)
+ok    auditoria de schema (18 tabelas com proveniência)
 
 ── Endereços públicos — o que chega ao cliente sem login ───────
 ok    /assinar/[token] existe e é pública
@@ -136,4 +137,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 111 verificações automáticas
+TUDO PASSOU — 112 verificações automáticas

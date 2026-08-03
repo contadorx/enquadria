@@ -339,3 +339,34 @@ export function htmlConviteIndicacao(params: {
     insistimos e este é o único e-mail que você recebe por esta indicação.</p>`,
   });
 }
+
+/**
+ * RESPOSTA DE CHAMADO — o e-mail que fechava o ciclo pela metade.
+ *
+ * O assistente promete "você recebe a resposta por e-mail". Sem esta mensagem,
+ * a resposta ficava esperando dentro do app que a pessoa talvez não abrisse
+ * naquela semana — e a promessa virava mentira sem ninguém perceber.
+ *
+ * Traz a RESPOSTA INTEIRA no corpo, não um "temos novidades, acesse". Quem
+ * perguntou algo operacional quer a resposta, não uma viagem até o site.
+ */
+export function htmlRespostaChamado(params: {
+  assunto: string;
+  resposta: string;
+  link: string;
+}): string {
+  const corpoTexto = escapar(params.resposta)
+    .split("\n")
+    .map((l) => (l.trim() ? `<p>${l}</p>` : ""))
+    .join("");
+
+  return moldura({
+    escritorio: { nome: "Enquadria" },
+    paraCliente: false,
+    corpo: `
+    <p>Sobre o que você perguntou — <strong>${escapar(params.assunto)}</strong>:</p>
+    ${corpoTexto}
+    ${botao(params.link, "Ver no Enquadria")}
+    <p style="font-size:13px;color:#64748B">Se ficou alguma dúvida, é só responder este e-mail.</p>`,
+  });
+}

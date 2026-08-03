@@ -57,6 +57,7 @@ export const NAV_PLATAFORMA: GrupoNav = {
     { href: "/painel/negocio/emails", label: "E-mails proativos" },
     { href: "/painel/negocio/planos", label: "Planos & Asaas" },
     { href: "/painel/negocio/ajuda", label: "Central de ajuda" },
+    { href: "/painel/negocio/chamados", label: "Chamados" },
     { href: "/painel/negocio/assistente", label: "Assistente e NPS" },
   ],
 };

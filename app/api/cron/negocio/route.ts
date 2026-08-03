@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { executarRegua } from "@/lib/cobranca-executar";
 import { createAdminClient } from "@/lib/supabase-admin";
 
 /**
@@ -83,28 +82,25 @@ export async function GET(req: Request) {
   }
 
   /**
-   * A RÉGUA DE COBRANÇA ENTRA NO MESMO CRON.
+   * ⚠️ DOIS MOTORES PARALELOS — as chamadas foram REMOVIDAS daqui.
    *
-   * Um job diário, um lugar para olhar quando algo não saiu. Um segundo cron
-   * teria o próprio horário, o próprio log e a própria chance de estar
-   * desligado sem ninguém perceber.
+   * Em 03/08 eu construí `lib/cobranca-executar` e `lib/onboarding-executar`
+   * sem antes olhar que `lib/reguas.ts` JÁ fazia as duas coisas:
    *
-   * Roda depois da marcação de vencidas de propósito: a régua lê o status que
-   * o passo anterior acabou de atualizar.
+   *   ativacao_boas_vindas · ativacao_sem_carteira · ativacao_sem_laudo
+   *   cobranca_gerada · cobranca_pre_vencimento · cobranca_d1 · cobranca_d5
+   *
+   * Com os três ligados, o mesmo cliente receberia a mesma cobrança duas
+   * vezes, por caminhos diferentes — e a trava de cada motor não enxerga a do
+   * outro, então nenhuma das duas impediria.
+   *
+   * Os módulos continuam no repositório, testados, para a decisão de
+   * consolidação. Ligados, não.
    */
-  let cobranca = null;
-  try {
-    const hoje = new Date().toISOString().slice(0, 10);
-    cobranca = await executarRegua(hoje, simular);
-    if (cobranca.erro) erros.push(`cobranca: ${cobranca.erro}`);
-  } catch (e) {
-    erros.push(`cobranca: ${e instanceof Error ? e.message : "erro"}`);
-  }
 
   return NextResponse.json({
     ok: true,
     modo: simular ? "teste (nada foi enviado)" : "envio",
-    cobranca,
     vencidas_encontradas: vencidas.ids.length,
     vencidas_marcadas: vencidas.marcadas,
     reguas,
