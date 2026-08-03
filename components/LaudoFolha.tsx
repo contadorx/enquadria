@@ -47,7 +47,13 @@ export interface DadosLaudo {
   escritorio: { nome?: string; crc?: string; logo_url?: string } | null;
 }
 
-export function LaudoFolha({ dados }: { dados: DadosLaudo }) {
+/**
+ * `publico` só governa a NAVEGAÇÃO: quem chega pelo link enviado ao cliente não
+ * tem cockpit para onde voltar. O CONTEÚDO é idêntico nos dois endereços — a
+ * memória de cálculo é a peça que sustenta o honorário; entregar menos ao
+ * cliente esvaziaria o documento que ele está pagando.
+ */
+export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publico?: boolean }) {
   const { analise, empresa, escritorio: t } = dados;
   const laudo = { numero: dados.numero, emitido_em: dados.emitido_em };
   const a = analise;
@@ -199,9 +205,13 @@ export function LaudoFolha({ dados }: { dados: DadosLaudo }) {
   return (
     <div className="doc">
       <div className="no-print mb-4 flex items-center justify-between">
-        <Link href="/painel" className="text-sm text-accentdeep">
-          ← voltar ao cockpit
-        </Link>
+        {publico ? (
+          <span />
+        ) : (
+          <Link href="/painel" className="text-sm text-accentdeep">
+            ← voltar ao cockpit
+          </Link>
+        )}
         <BotaoImprimir />
       </div>
 

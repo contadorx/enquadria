@@ -1,0 +1,135 @@
+/**
+ * OS E-MAILS QUE VÃO AO CLIENTE DO CONTADOR.
+ *
+ * Separados de lib/brevo.ts de propósito: aquele arquivo é o driver da Brevo e
+ * ganhou dois templates por conveniência. Estes aqui são produto — o momento em
+ * que o trabalho do contador chega a quem paga por ele — e vão mudar por
+ * motivos de negócio, não de infraestrutura.
+ *
+ * TRÊS REGRAS QUE VALEM PARA TODOS
+ *
+ * 1. A VOZ É DO CONTADOR, NÃO DO ENQUADRIA. Quem manda é o escritório; a
+ *    ferramenta não aparece. O cliente não comprou software, comprou o
+ *    profissional — e um e-mail que se anuncia como sistema transforma um
+ *    entregável técnico em notificação automática.
+ *
+ * 2. NENHUMA PROMESSA DE ECONOMIA. O documento apresenta cenários sob premissas
+ *    declaradas; a decisão e a responsabilidade técnica são de quem assina. Um
+ *    e-mail que promete resultado cria expectativa que o laudo não sustenta, e
+ *    é o contador que responde por ela.
+ *
+ * 3. UMA CHAMADA SÓ. O e-mail existe para o documento ser aberto. Qualquer
+ *    segundo botão disputa com o primeiro.
+ *
+ * O link é sempre PÚBLICO e por token — o cliente não tem conta no Enquadria e
+ * nunca vai criar uma para ler o que já é dele.
+ */
+
+function escapar(s: string): string {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * A moldura comum. O cabeçalho leva o nome do escritório porque é dele que o
+ * cliente está esperando notícia — e o rodapé diz de quem é a mensagem, para
+ * que ninguém a confunda com disparo de marca desconhecida.
+ */
+function moldura(params: { escritorio: string; corpo: string }): string {
+  return `
+  <div style="font-family:Arial,Helvetica,sans-serif;max-width:540px;margin:0 auto;color:#334155;font-size:15px;line-height:1.6">
+    <div style="border-bottom:2px solid #0B1220;padding-bottom:12px;margin-bottom:22px">
+      <strong style="font-size:18px;color:#0B1220">${escapar(params.escritorio)}</strong>
+    </div>
+    ${params.corpo}
+    <p style="font-size:11px;color:#94A3B8;margin-top:26px;border-top:1px solid #EEF2F7;padding-top:12px">
+      Mensagem enviada por ${escapar(params.escritorio)}. Se você não reconhece este envio, ignore este e-mail.
+    </p>
+  </div>`;
+}
+
+function botao(link: string, texto: string): string {
+  return `
+    <p style="text-align:center;margin:28px 0">
+      <a href="${escapar(link)}" style="background:#06B6D4;color:#04212B;font-weight:bold;text-decoration:none;padding:14px 28px;border-radius:999px;display:inline-block;font-size:15px">${escapar(texto)}</a>
+    </p>`;
+}
+
+/**
+ * LAUDO DE ENQUADRAMENTO — o documento que sustenta o honorário.
+ *
+ * O assunto nomeia a empresa porque o cliente pode ter várias, e nomeia o
+ * documento porque ele foi cobrado por ele. Nada de "seu relatório está pronto":
+ * o que chega é um laudo técnico com memória de cálculo, e o e-mail diz isso.
+ */
+export function htmlLaudoCliente(params: {
+  empresa: string;
+  escritorio: string;
+  link: string;
+  numero: number;
+  /** o que o motor concluiu — muda a frase, nunca a promessa */
+  decisao?: "optar" | "permanecer" | null;
+}): string {
+  const numero = String(params.numero).padStart(4, "0");
+  const frase =
+    params.decisao === "optar"
+      ? `A conclusão é que, no cenário analisado, <strong>vale optar</strong> pelo recolhimento de IBS/CBS por fora do DAS.`
+      : params.decisao === "permanecer"
+      ? `A conclusão é que, no cenário analisado, <strong>vale permanecer</strong> no regime tradicional do Simples Nacional.`
+      : `O laudo traz a conclusão e o caminho que levou até ela.`;
+
+  return moldura({
+    escritorio: params.escritorio,
+    corpo: `
+    <p>Sobre a <strong>${escapar(params.empresa)}</strong>:</p>
+    <p>Concluímos a análise do enquadramento em IBS/CBS e emitimos o
+    <strong>laudo nº ${numero}</strong>. ${frase}</p>
+    <p>O documento traz a memória de cálculo completa — fórmula, números e resultado, linha a
+    linha — para que a conta possa ser conferida por qualquer profissional.</p>
+    ${botao(params.link, "Abrir o laudo")}
+    <p style="font-size:13px;color:#64748B">A janela de opção se encerra em <strong>30 de setembro</strong>.
+    Qualquer dúvida sobre o documento, é só responder a este e-mail.</p>`,
+  });
+}
+
+/**
+ * COMPARATIVO DE REGIMES — o documento de venda.
+ *
+ * Chega ANTES da decisão, e é o que faz o cliente entender por que a conversa
+ * existe. Por isso a chamada fala em conversar, não em concluir: o comparativo
+ * abre a reunião, o laudo a fecha.
+ *
+ * O nome do regime de menor carga aparece porque é a informação que o cliente
+ * quer — mas sempre com "no cenário analisado", que é o que o documento de fato
+ * afirma. Sem essa amarra o e-mail promete mais do que o comparativo entrega.
+ */
+export function htmlComparativoCliente(params: {
+  empresa: string;
+  escritorio: string;
+  link: string;
+  numero: number;
+  /** nome do regime de menor carga no cenário — não é recomendação */
+  menor?: string | null;
+}): string {
+  const numero = String(params.numero).padStart(4, "0");
+  const frase = params.menor
+    ? `No cenário analisado, o regime de menor carga é o <strong>${escapar(params.menor)}</strong>.`
+    : `O documento coloca os regimes lado a lado, com a composição de cada um.`;
+
+  return moldura({
+    escritorio: params.escritorio,
+    corpo: `
+    <p>Sobre a <strong>${escapar(params.empresa)}</strong>:</p>
+    <p>Preparamos o <strong>comparativo de regimes nº ${numero}</strong>, colocando lado a lado a
+    carga anual de cada regime tributário no cenário da empresa. ${frase}</p>
+    <p>O documento mostra também a composição de cada regime, imposto por imposto, e as premissas
+    que usamos para chegar lá.</p>
+    ${botao(params.link, "Abrir o comparativo")}
+    <p style="font-size:13px;color:#64748B">O comparativo é um estudo de cenários, não uma apuração:
+    a decisão sobre mudança de regime depende de fatores que vão além desta conta e é sempre nossa,
+    em conjunto com você. Vale marcarmos uma conversa — é só responder a este e-mail.</p>`,
+  });
+}

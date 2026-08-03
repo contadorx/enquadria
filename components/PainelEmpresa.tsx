@@ -42,6 +42,12 @@ const COR_SAIDA: Record<string, string> = {
 
 type Aba = "decisao" | "dossie" | "comparativo";
 
+const ROTULO_ENVIO: Record<string, string> = {
+  laudo: "Laudo",
+  comparativo: "Comparativo",
+  termo: "Termo de ciência",
+};
+
 interface Dossie {
   empresa: {
     id: string;
@@ -72,6 +78,16 @@ interface Dossie {
   } | null;
   coleta: ColetaGravada | null;
   comparativos: { id: string; numero: number; emitido_em: string }[];
+  envios: {
+    id: string;
+    tipo: "laudo" | "comparativo" | "termo";
+    documento_id: string | null;
+    para: string;
+    status: "enviado" | "erro";
+    erro: string | null;
+    caminho: string | null;
+    criado_em: string;
+  }[];
   janelas: Record<string, string>;
   trilha: string[];
 }
@@ -108,6 +124,13 @@ export function PainelEmpresa({
   const [aplicado, setAplicado] = useState(false);
   const [link, setLink] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
+  /**
+   * O RESULTADO DO ENVIO FICA NA TELA, ao lado do botão que o disparou.
+   * A lição dos dois "botões que não funcionam": efeito que nasce longe do
+   * clique é lido como clique perdido. Enviar e-mail é o caso extremo — não há
+   * nada visível acontecendo, então o aviso É a única prova para o contador.
+   */
+  const [avisoEnvio, setAvisoEnvio] = useState<{ ok: boolean; texto: string } | null>(null);
   const [nomeSig, setNomeSig] = useState("");
   const [emailSig, setEmailSig] = useState("");
   /**
@@ -229,6 +252,72 @@ export function PainelEmpresa({
       } else {
         setBloqueio(json.erro ?? "não foi possível emitir o laudo");
       }
+    } finally {
+      setOcupado(null);
+    }
+  }
+
+  /**
+   * ENVIAR O LAUDO AO CLIENTE. Não emite: se o laudo não existe, o botão nem
+   * aparece. Emitir por tabela furaria o gate de plano que vive em /api/laudo.
+   */
+  async function enviarLaudo() {
+    if (!d?.laudo) return;
+    setOcupado("enviar-laudo");
+    setAvisoEnvio(null);
+    try {
+      const resp = await fetch("/api/laudo/enviar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ laudo_ids: [d.laudo.id] }),
+      });
+      const json = await resp.json();
+      if (resp.ok && json.enviados > 0) {
+        setAvisoEnvio({ ok: true, texto: `Laudo enviado para ${e.contato_email}.` });
+        mudou();
+      } else if (json.sem_contato > 0) {
+        setAvisoEnvio({ ok: false, texto: "Esta empresa não tem e-mail de contato cadastrado — preencha no bloco Contato, aqui embaixo." });
+      } else {
+        setAvisoEnvio({
+          ok: false,
+          texto: json.falhas?.[0]?.erro ?? json.erro ?? "não foi possível enviar o laudo",
+        });
+        mudou();
+      }
+    } catch {
+      setAvisoEnvio({ ok: false, texto: "falha de rede ao enviar" });
+    } finally {
+      setOcupado(null);
+    }
+  }
+
+  async function enviarComparativo(id: string, numero: number) {
+    setOcupado(`enviar-comp-${id}`);
+    setAvisoEnvio(null);
+    try {
+      const resp = await fetch("/api/comparativo/enviar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ comparativo_ids: [id] }),
+      });
+      const json = await resp.json();
+      if (resp.ok && json.enviados > 0) {
+        setAvisoEnvio({
+          ok: true,
+          texto: `Comparativo nº ${String(numero).padStart(4, "0")} enviado para ${e.contato_email}.`,
+        });
+        mudou();
+      } else if (json.sem_contato > 0) {
+        setAvisoEnvio({ ok: false, texto: "Esta empresa não tem e-mail de contato cadastrado — preencha no bloco Contato, aqui embaixo." });
+      } else {
+        setAvisoEnvio({
+          ok: false,
+          texto: json.falhas?.[0]?.erro ?? json.erro ?? "não foi possível enviar o comparativo",
+        });
+        mudou();
+      }
+    } catch {
+      setAvisoEnvio({ ok: false, texto: "falha de rede ao enviar" });
     } finally {
       setOcupado(null);
     }
@@ -545,6 +634,21 @@ export function PainelEmpresa({
 
           <Bloco titulo="Documentos e prova">
             <div className="space-y-2.5">
+              {/* O aviso fica ANTES dos botões e dentro do mesmo bloco: enviar
+                  e-mail não produz nada visível, então esta linha é a única
+                  prova que o contador tem de que o clique fez alguma coisa. */}
+              {avisoEnvio && (
+                <div
+                  className={`rounded-sm border p-2.5 text-[12px] ${
+                    avisoEnvio.ok
+                      ? "border-verde bg-verdewash text-verde"
+                      : "border-amarelo bg-amarelowash text-amarelo"
+                  }`}
+                >
+                  {avisoEnvio.texto}
+                </div>
+              )}
+
               <div className="flex items-center justify-between gap-2 rounded-sm border border-line p-3">
                 <div>
                   <div className="text-[13px] font-semibold">Laudo de enquadramento</div>
@@ -558,14 +662,28 @@ export function PainelEmpresa({
                   )}
                 </div>
                 {d.laudo && (
-                  <a
-                    href={`/doc/laudo/${d.laudo.id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="shrink-0 rounded-sm border border-line px-3 py-1.5 text-[12px] font-semibold text-accentdeep"
-                  >
-                    Abrir
-                  </a>
+                  <div className="flex shrink-0 gap-1.5">
+                    <button
+                      onClick={() => void enviarLaudo()}
+                      disabled={ocupado === "enviar-laudo"}
+                      title={
+                        e.contato_email
+                          ? `Enviar para ${e.contato_email}`
+                          : "Cadastre o e-mail de contato no bloco Contato"
+                      }
+                      className="rounded-sm bg-accentdeep px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
+                    >
+                      {ocupado === "enviar-laudo" ? "Enviando…" : "Enviar ao cliente"}
+                    </button>
+                    <a
+                      href={`/doc/laudo/${d.laudo.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-sm border border-line px-3 py-1.5 text-[12px] font-semibold text-accentdeep"
+                    >
+                      Abrir
+                    </a>
+                  </div>
                 )}
               </div>
 
@@ -607,20 +725,63 @@ export function PainelEmpresa({
               {d.comparativos.length > 0 && (
                 <div className="rounded-sm border border-line p-3">
                   <div className="mb-1.5 text-[13px] font-semibold">Comparativos de regime</div>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="space-y-1.5">
                     {d.comparativos.map((c) => (
-                      <a
-                        key={c.id}
-                        href={`/doc/comparativo/${c.id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-sm border border-line px-2.5 py-1 text-[11.5px] font-semibold text-accentdeep"
-                      >
-                        nº {String(c.numero).padStart(4, "0")} ·{" "}
-                        {new Date(c.emitido_em).toLocaleDateString("pt-BR")}
-                      </a>
+                      <div key={c.id} className="flex items-center justify-between gap-2">
+                        <a
+                          href={`/doc/comparativo/${c.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-sm border border-line px-2.5 py-1 text-[11.5px] font-semibold text-accentdeep"
+                        >
+                          nº {String(c.numero).padStart(4, "0")} ·{" "}
+                          {new Date(c.emitido_em).toLocaleDateString("pt-BR")}
+                        </a>
+                        <button
+                          onClick={() => void enviarComparativo(c.id, c.numero)}
+                          disabled={ocupado === `enviar-comp-${c.id}`}
+                          title={
+                            e.contato_email
+                              ? `Enviar para ${e.contato_email}`
+                              : "Cadastre o e-mail de contato no bloco Contato"
+                          }
+                          className="shrink-0 rounded-sm bg-accentdeep px-2.5 py-1 text-[11.5px] font-semibold text-white disabled:opacity-50"
+                        >
+                          {ocupado === `enviar-comp-${c.id}` ? "Enviando…" : "Enviar ao cliente"}
+                        </button>
+                      </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* O QUE JÁ SAIU. Antes disto, o contador mandava o convite de
+                  assinatura e nunca mais sabia se tinha saído — nenhum envio ao
+                  cliente era registrado em lugar nenhum. Os erros aparecem
+                  junto de propósito: falha escondida vira cliente que não
+                  recebeu e ninguém soube. */}
+              {d.envios?.length > 0 && (
+                <div className="rounded-sm bg-surface2 p-3">
+                  <div className="mb-1.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
+                    Enviado ao cliente
+                  </div>
+                  <ul className="space-y-1 text-[11.5px]">
+                    {d.envios.map((v) => (
+                      <li key={v.id} className="flex items-baseline justify-between gap-2">
+                        <span className={v.status === "erro" ? "text-amarelo" : "text-slate2"}>
+                          {ROTULO_ENVIO[v.tipo] ?? v.tipo} → {v.para}
+                          {v.status === "erro" && (
+                            <span className="ml-1 font-mono text-[10.5px]">
+                              · não saiu{v.erro ? `: ${v.erro}` : ""}
+                            </span>
+                          )}
+                        </span>
+                        <span className="shrink-0 font-mono text-[10.5px] text-muted">
+                          {new Date(v.criado_em).toLocaleDateString("pt-BR")}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
 

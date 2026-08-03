@@ -74,6 +74,7 @@ try {
     "lib/motor.ts", "lib/laudo.ts", "lib/triagem.ts", "lib/cockpit.ts",
     "lib/premissas-padrao.ts", "lib/coleta.ts", "lib/csv.ts", "lib/cnpj.ts",
     "lib/plano.ts", "lib/potencial.ts", "lib/reguas.ts", "lib/janela.ts",
+    "lib/emails-cliente.ts",
   ];
   const cfg = path.join(RAIZ, "tsconfig.testes.json");
   fs.writeFileSync(cfg, JSON.stringify({
@@ -110,7 +111,7 @@ const coleta = await import(path.join(TMP, "coleta.js"));
 
 /* ============================================ 1. SUÍTES DE FUNÇÃO PURA == */
 secao("Suítes de função pura");
-for (const suite of ["cockpit", "motor", "coleta", "muro", "reguas", "janela", "cnpj"]) {
+for (const suite of ["cockpit", "motor", "coleta", "muro", "reguas", "janela", "cnpj", "envio"]) {
   const arq = path.join(RAIZ, "testes", `${suite}.test.mjs`);
   if (!fs.existsSync(arq)) {
     ok(`suíte ${suite}`, false, "arquivo não encontrado");
@@ -136,6 +137,43 @@ secao("Auditoria de UX (percepção, não estética)");
   const regras = (saida.match(/^ok: /gm) || []).length;
   ok(`auditoria de UX (${regras} regras limpas)`, r.status === 0,
      r.status === 0 ? undefined : saida.split("\n").filter((l) => l.trim().startsWith("components/") || l.trim().startsWith("app/")).slice(0, 8));
+}
+
+/* ======================================= 1c. O QUE O CLIENTE ALCANÇA ==== */
+secao("Endereços públicos — o que chega ao cliente sem login");
+{
+  /**
+   * O cliente do contador NÃO TEM CONTA e nunca vai ter. Quatro endereços
+   * existem para ele, e todos dependem de continuar fora da guarda do
+   * middleware. Proteger um deles por engano não quebra build nem teste de
+   * função pura: quebra em produção, como um cliente batendo em tela de login
+   * para ler o laudo que pagou — e o contador só descobre quando reclamam.
+   */
+  const PUBLICAS = ["assinar", "coleta", "laudo", "comparativo"];
+  const mw = fs.readFileSync(path.join(RAIZ, "middleware.ts"), "utf8");
+  const guarda = mw.match(/path\.startsWith\("([^"]+)"\)/g) || [];
+  const prefixos = guarda.map((g) => g.match(/"([^"]+)"/)[1]);
+
+  for (const rota of PUBLICAS) {
+    const existe = fs.existsSync(path.join(RAIZ, "app", rota, "[token]", "page.tsx"));
+    const protegida = prefixos.some((p) => `/${rota}`.startsWith(p));
+    ok(`/${rota}/[token] existe e é pública`, existe && !protegida,
+       !existe ? "página não encontrada" : `bloqueada pelo middleware (${prefixos.join(", ")})`);
+  }
+
+  /**
+   * E a página pública NÃO pode ler com a sessão: `createClient` de
+   * supabase-server devolve o cliente do usuário, que não existe aqui. Uma
+   * página assim compila, sobe, e devolve 404 para todo cliente.
+   */
+  for (const rota of PUBLICAS) {
+    const arq = path.join(RAIZ, "app", rota, "[token]", "page.tsx");
+    if (!fs.existsSync(arq)) continue;
+    const src = fs.readFileSync(arq, "utf8");
+    ok(`/${rota}/[token] lê por token, não por sessão`,
+       src.includes("createAdminClient") && !/from "@\/lib\/supabase-server"/.test(src),
+       src.includes("supabase-server") ? "importa o cliente de sessão" : "não usa createAdminClient");
+  }
 }
 
 /* ============================================== 2. A MASSA NO PARSER ==== */

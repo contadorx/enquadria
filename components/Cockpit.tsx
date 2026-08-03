@@ -275,7 +275,7 @@ export function Cockpit({
     setGaveta({ id: l.id, aba: l.acao === "contato" || l.acao === "fora" ? "dossie" : "decisao" });
   }
 
-  function lote(chave: "analisar" | "emitir" | "termo") {
+  function lote(chave: "analisar" | "emitir" | "enviar" | "termo") {
     const ids = selecionadas.map((l) => l.id);
     const analises = selecionadas.map((l) => l.analise_id).filter(Boolean) as string[];
     if (chave === "analisar") {
@@ -292,6 +292,14 @@ export function Cockpit({
         return `${r.emitidos} laudos emitidos${r.ja_tinham ? `, ${r.ja_tinham} já existiam` : ""}${
           r.bloqueados ? `, ${r.bloqueados} bloqueados pelo limite do plano gratuito` : ""
         }.`;
+      });
+    }
+    if (chave === "enviar") {
+      return chamar("/api/laudo/enviar", { analise_ids: analises }, "lote-enviar", (j) => {
+        const r = j as { enviados: number; sem_contato: number; sem_laudo: number };
+        return `${r.enviados} laudos enviados ao cliente${
+          r.sem_contato ? `, ${r.sem_contato} sem e-mail de contato` : ""
+        }${r.sem_laudo ? `, ${r.sem_laudo} ainda sem laudo emitido` : ""}.`;
       });
     }
     return chamar(

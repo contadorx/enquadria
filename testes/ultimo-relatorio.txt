@@ -10,9 +10,20 @@ ok    suíte muro (11 asserções)
 ok    suíte reguas (14 asserções)
 ok    suíte janela (20 asserções)
 ok    suíte cnpj (34 asserções)
+ok    suíte envio (32 asserções)
 
 ── Auditoria de UX (percepção, não estética) ───────────────────
 ok    auditoria de UX (4 regras limpas)
+
+── Endereços públicos — o que chega ao cliente sem login ───────
+ok    /assinar/[token] existe e é pública
+ok    /coleta/[token] existe e é pública
+ok    /laudo/[token] existe e é pública
+ok    /comparativo/[token] existe e é pública
+ok    /assinar/[token] lê por token, não por sessão
+ok    /coleta/[token] lê por token, não por sessão
+ok    /laudo/[token] lê por token, não por sessão
+ok    /comparativo/[token] lê por token, não por sessão
 
 ── Massa de empresas no parser do app ──────────────────────────
 ok    lê 47 linhas
@@ -118,4 +129,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 97 verificações automáticas
+TUDO PASSOU — 106 verificações automáticas

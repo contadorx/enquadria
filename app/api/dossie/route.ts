@@ -89,6 +89,24 @@ export async function GET(req: Request) {
         .maybeSingle()
     : { data: null };
 
+  /**
+   * O QUE JÁ FOI ENVIADO AO CLIENTE. Mesma justificativa da coleta: a tabela
+   * tem RLS ligada e nenhuma policy, e a autorização já aconteceu quando
+   * `empresas` voltou preenchida pelo cliente do USUÁRIO.
+   *
+   * Traz também os envios com status 'erro'. Falha de entrega É informação: se
+   * ela sumir da tela, o contador reenvia achando que nunca mandou — ou, pior,
+   * não reenvia achando que chegou.
+   */
+  const { data: envios } = admin
+    ? await admin
+        .from("envios_cliente")
+        .select("id, tipo, documento_id, para, status, erro, caminho, criado_em")
+        .eq("empresa_id", id)
+        .order("criado_em", { ascending: false })
+        .limit(20)
+    : { data: null };
+
   return NextResponse.json({
     ok: true,
     empresa,
@@ -97,6 +115,7 @@ export async function GET(req: Request) {
     termo,
     coleta: coleta ?? null,
     comparativos: comparativos ?? [],
+    envios: envios ?? [],
     janelas: Object.fromEntries((janelas ?? []).map((j) => [j.id, j.nome])),
     trilha: assinado && termo ? trilhaEmTexto(termo as never) : [],
   });

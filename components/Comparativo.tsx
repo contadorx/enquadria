@@ -78,6 +78,9 @@ export function Comparativo({
   const [emitindo, setEmitindo] = useState(false);
   const [bloqueio, setBloqueio] = useState<string | null>(null);
   const [emitido, setEmitido] = useState<string | null>(null);
+  const [numeroEmitido, setNumeroEmitido] = useState<number | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null);
 
   // presunções acompanham o setor, mas o contador pode sobrescrever
   useEffect(() => {
@@ -114,6 +117,8 @@ export function Comparativo({
       const json = await resp.json();
       if (resp.ok && json.comparativo_id) {
         setEmitido(json.comparativo_id as string);
+        setNumeroEmitido((json.numero as number) ?? null);
+        setAviso(null);
         window.open(`/doc/comparativo/${json.comparativo_id}`, "_blank");
       } else if (json.bloqueado_por_plano) {
         setBloqueio(json.erro as string);
@@ -124,6 +129,47 @@ export function Comparativo({
       setEmitindo(false);
     }
   }
+  /**
+   * ENVIAR AO CLIENTE, no mesmo lugar onde o documento acabou de nascer.
+   *
+   * O comparativo é o documento de VENDA: o cliente lê ANTES de decidir, e é
+   * ele que faz a conversa acontecer. Deixar o envio só no dossiê significaria
+   * pedir ao contador que emitisse aqui, saísse, achasse a empresa e enviasse
+   * de lá — três passos entre produzir e entregar, que é onde a entrega morre.
+   */
+  async function enviarAoCliente() {
+    if (!emitido) return;
+    setEnviando(true);
+    setAviso(null);
+    try {
+      const resp = await fetch("/api/comparativo/enviar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ comparativo_ids: [emitido] }),
+      });
+      const json = await resp.json();
+      if (resp.ok && json.enviados > 0) {
+        setAviso({ ok: true, texto: "Comparativo enviado ao cliente." });
+      } else if (json.sem_contato > 0) {
+        setAviso({
+          ok: false,
+          texto: empresaId
+            ? "Esta empresa não tem e-mail de contato cadastrado — preencha no dossiê, no bloco Contato."
+            : "Cenário avulso não tem cliente vinculado. Abra o comparativo pelo dossiê de uma empresa para enviar.",
+        });
+      } else {
+        setAviso({
+          ok: false,
+          texto: json.falhas?.[0]?.erro ?? json.erro ?? "não foi possível enviar",
+        });
+      }
+    } catch {
+      setAviso({ ok: false, texto: "falha de rede ao enviar" });
+    } finally {
+      setEnviando(false);
+    }
+  }
+
   const maior = Math.max(...r.regimes.map((x) => x.total), 1);
 
   const setPct = (k: keyof Premissas) => (v: string) =>
@@ -146,14 +192,31 @@ export function Comparativo({
       </div>
 
       {emitido && (
-        <a
-          href={`/doc/comparativo/${emitido}`}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-3 block rounded-sm border border-verde bg-verdewash px-3 py-2 text-[12.5px] font-semibold text-verde"
-        >
-          Comparativo emitido — abrir o documento
-        </a>
+        <div className="mt-3 rounded-sm border border-verde bg-verdewash px-3 py-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <a
+              href={`/doc/comparativo/${emitido}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-[12.5px] font-semibold text-verde"
+            >
+              Comparativo{numeroEmitido ? ` nº ${String(numeroEmitido).padStart(4, "0")}` : ""} emitido
+              — abrir o documento
+            </a>
+            <button
+              onClick={() => void enviarAoCliente()}
+              disabled={enviando}
+              className="shrink-0 rounded-sm bg-accentdeep px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
+            >
+              {enviando ? "Enviando…" : "Enviar ao cliente"}
+            </button>
+          </div>
+          {aviso && (
+            <p className={`mt-2 text-[12px] ${aviso.ok ? "text-verde" : "text-amarelo"}`}>
+              {aviso.texto}
+            </p>
+          )}
+        </div>
       )}
 
       {bloqueio && (

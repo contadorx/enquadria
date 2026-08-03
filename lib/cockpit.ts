@@ -297,14 +297,28 @@ export const ACAO_ABRE_GAVETA: Record<Acao, boolean> = {
   fora: true,
 };
 
-/** ações que fazem sentido em lote, com o rótulo do botão */
-export const ACOES_LOTE: { chave: "analisar" | "emitir" | "termo"; rotulo: string; ajuda: string }[] = [
+/**
+ * Ações que fazem sentido em lote, com o rótulo do botão.
+ *
+ * A ORDEM É A DA ESTEIRA: analisar → emitir → ENTREGAR → formalizar. "Enviar
+ * laudos" entrou entre emitir e o termo porque era exatamente o degrau que
+ * faltava: o laudo era emitido e ficava no painel, e a entrega ao cliente
+ * dependia de imprimir em PDF e anexar, uma empresa por vez. Com 143 clientes e
+ * a janela fechando em 30 de setembro, entrega manual é entrega que não
+ * acontece — e laudo que o cliente nunca vê não renova contrato nenhum.
+ */
+export const ACOES_LOTE: { chave: "analisar" | "emitir" | "enviar" | "termo"; rotulo: string; ajuda: string }[] = [
   {
     chave: "analisar",
     rotulo: "Analisar",
     ajuda: "aplica as premissas típicas do CNAE e grava a análise — marcada como estimada",
   },
   { chave: "emitir", rotulo: "Emitir laudos", ajuda: "gera o documento numerado de quem já tem análise" },
+  {
+    chave: "enviar",
+    rotulo: "Enviar laudos",
+    ajuda: "manda o laudo já emitido para o e-mail do cliente, com link próprio",
+  },
   { chave: "termo", rotulo: "Enviar termos", ajuda: "gera o termo e envia o link de assinatura a quem tem contato" },
 ];
 
