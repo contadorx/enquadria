@@ -44,7 +44,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ erro: "limite de 5000 empresas por importação" }, { status: 400 });
   }
 
-  const { dados, ativo, configurado, falhas } = await enriquecer(linhas.map((l) => l.cnpj));
+  const { dados, ativo, configurado, falhas, detalhe } = await enriquecer(linhas.map((l) => l.cnpj));
 
   const registros = linhas.map((l) => {
     const enriquecido = fundir(l, dados[l.cnpj]);
@@ -138,6 +138,7 @@ export async function POST(req: Request) {
     receita_ativa: ativo,
     receita_configurada: configurado,
     receita_falhas: falhas,
+    receita_detalhe: detalhe ?? null,
     // sem os dados essenciais no arquivo E sem a Receita respondendo, a
     // triagem não separa nada — a tela precisa dizer isso em vez de exibir
     // uma carteira inteira em "baixo risco" como se fosse resultado

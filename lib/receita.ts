@@ -58,6 +58,17 @@ export interface ResultadoEnriquecimento {
   configurado: boolean;
   /** quantos lotes não responderam 200, para a tela poder dizer a verdade */
   falhas: number;
+  /**
+   * O QUE EXATAMENTE DEU ERRADO, em uma linha.
+   *
+   * "A base não respondeu" é diagnóstico de nada: 401 (token), 404 (rota),
+   * ENOTFOUND (DNS) e timeout exigem quatro ações diferentes. Sem isto, quem
+   * for depurar precisa adivinhar — e a única pessoa que pode olhar o servidor
+   * não é quem está lendo a tela.
+   */
+  detalhe?: string;
+  /** a URL efetivamente chamada, sem o token */
+  url?: string;
 }
 
 const CHUNK = 200;
@@ -87,6 +98,7 @@ export async function enriquecer(cnpjs: string[]): Promise<ResultadoEnriquecimen
   const dados: Record<string, DadosReceita> = {};
   let respondeu = false;
   let falhas = 0;
+  let detalhe: string | undefined;
 
   for (let i = 0; i < cnpjs.length; i += CHUNK) {
     const lote = cnpjs.slice(i, i + CHUNK);
@@ -106,19 +118,31 @@ export async function enriquecer(cnpjs: string[]): Promise<ResultadoEnriquecimen
       });
       if (!resp.ok) {
         falhas += 1;
+        if (!detalhe) {
+          const corpo = await resp.text().catch(() => "");
+          detalhe =
+            `HTTP ${resp.status}` +
+            (resp.status === 401 ? " — token recusado (RECEITA_API_TOKEN)" : "") +
+            (resp.status === 404 ? " — rota /lote não existe no servidor" : "") +
+            (corpo ? ` · ${corpo.slice(0, 120)}` : "");
+        }
         continue;
       }
       const json = (await resp.json()) as Record<string, DadosReceita>;
       Object.assign(dados, json);
       respondeu = true;
-    } catch {
+    } catch (e) {
       // rede fora, timeout ou endpoint indisponível — segue com o que já tem
       falhas += 1;
+      if (!detalhe) {
+        const m = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+        detalhe = /timeout|abort/i.test(m) ? `sem resposta em ${TIMEOUT_MS / 1000}s` : m;
+      }
       continue;
     }
   }
 
-  return { dados, ativo: respondeu, configurado: true, falhas };
+  return { dados, ativo: respondeu, configurado: true, falhas, detalhe, url };
 }
 
 /**

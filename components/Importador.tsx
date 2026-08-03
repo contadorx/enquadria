@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   parsearCarteira,
@@ -61,6 +61,7 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
   const [colando, setColando] = useState(false);
   const [texto, setTexto] = useState("");
   const [etapa, setEtapa] = useState<"gravando" | "analisando" | null>(null);
+  const previaRef = useRef<HTMLDivElement>(null);
   const [feito, setFeito] = useState<{
     gravadas: number;
     enriquecidas: number;
@@ -70,6 +71,29 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
     triagem_cega?: boolean;
     analisadas?: number;
   } | null>(null);
+  const [diag, setDiag] = useState<{
+    veredito: string; sugestao: string | null; url: string | null;
+    tem_token: boolean; tempo_ms: number; detalhe: string | null;
+  } | null>(null);
+  const [testando, setTestando] = useState(false);
+
+  /** o instrumento: uma chamada com CNPJ conhecido, e o motivo exato do erro */
+  async function testarReceita() {
+    setTestando(true);
+    setDiag(null);
+    try {
+      const r = await fetch("/api/receita/teste", { cache: "no-store" });
+      setDiag(await r.json());
+    } catch {
+      setDiag({
+        veredito: "não consegui nem chamar o diagnóstico",
+        sugestao: "Recarregue a página e tente de novo.",
+        url: null, tem_token: false, tempo_ms: 0, detalhe: null,
+      });
+    } finally {
+      setTestando(false);
+    }
+  }
 
   // triagem local só para a prévia — o servidor recalcula ao gravar
   const previaFaixas = parse
@@ -154,6 +178,20 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
     }
     setNomeArquivo(`${achados.length} CNPJs colados`);
     setParse(parsearCarteira(csvDeCnpjs(achados)));
+
+    /**
+     * LEVAR O OLHO ATÉ O RESULTADO.
+     *
+     * O botão "Ler CNPJs" parecia não fazer nada: ele montava a prévia, mas a
+     * prévia nasce noventa linhas abaixo, depois do bloco do CSV — fora da
+     * tela. Do ponto de vista de quem clicou, o clique não teve efeito, e a
+     * pessoa clica de novo. Fecho a caixa de colar (o trabalho dela terminou) e
+     * rolo até a prévia.
+     */
+    setColando(false);
+    requestAnimationFrame(() =>
+      previaRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    );
   }
 
   async function gravar() {
@@ -249,6 +287,16 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
             : "Enriquecimento da Receita não configurado — a triagem usou os dados do arquivo."}
         </p>
 
+        {!feito.receita_ativa && feito.receita_configurada && (
+          <button
+            onClick={testarReceita}
+            disabled={testando}
+            className="mt-2 text-[12.5px] font-semibold text-accentdeep underline underline-offset-2 disabled:opacity-40"
+          >
+            {testando ? "testando…" : "descobrir por quê"}
+          </button>
+        )}
+
         {feito.analisadas != null && feito.analisadas > 0 && (
           <p className="mt-1.5 text-[13.5px] text-slate2">
             <b>{feito.analisadas} já vieram com uma primeira recomendação</b>, calculada
@@ -264,6 +312,26 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
             risco&quot;. Isso não é diagnóstico, é falta de dado. Suba o CSV com a coluna de
             CNAE, ou repita a importação quando a base voltar.
           </p>
+        )}
+
+        {diag && (
+          <div className="mt-3 rounded-sm border border-line bg-surface2 p-3">
+            <div className="text-[13px] font-semibold">{diag.veredito}</div>
+            {diag.sugestao && (
+              <p className="mt-1 text-[12.5px] leading-relaxed text-slate2">{diag.sugestao}</p>
+            )}
+            <div className="mt-2 font-mono text-[11px] leading-relaxed text-muted">
+              url: {diag.url ?? "—"}
+              <br />
+              token enviado: {diag.tem_token ? "sim" : "NÃO"} · resposta em {diag.tempo_ms}ms
+              {diag.detalhe && (
+                <>
+                  <br />
+                  detalhe: {diag.detalhe}
+                </>
+              )}
+            </div>
+          </div>
         )}
 
         <div className="mt-4 flex gap-2">
@@ -415,7 +483,7 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
       )}
 
       {parse && previaFaixas && (
-        <div className="mt-6">
+        <div className="mt-6" ref={previaRef}>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <div className="text-[15px] font-bold">Prévia da triagem</div>
