@@ -98,3 +98,44 @@ export function traduzirErroAuth(erro: unknown, modo: "entrar" | "criar"): ErroA
   // Mensagem desconhecida mas legível: mostrar é melhor que engolir.
   return { texto: bruta, culpaDoServidor: false };
 }
+
+/* ────────────────────────────────────────────────────────────────────────
+ * O QUE ACONTECEU NO CADASTRO — quando não há erro nenhum.
+ *
+ * Caso real: o cadastro funcionava, o usuário era gravado, o e-mail saía —
+ * e a tela não mexia um pixel. A causa é que "criar conta" e "entrar" são
+ * coisas diferentes quando a confirmação de e-mail está ligada:
+ *
+ *   signUp devolve `session: null`, porque a pessoa ainda não provou que é
+ *   dona do endereço. O código empurrava para /painel assumindo que criar
+ *   conta é entrar; /painel não via sessão e devolvia para o login. Sem
+ *   erro, sem aviso, sem navegação aparente — a tela parecia travada.
+ *
+ * Há ainda um terceiro caso, silencioso de propósito: se o e-mail JÁ tem
+ * conta, o Supabase não devolve erro (isso permitiria descobrir quem é
+ * cadastrado). Ele devolve um usuário com `identities` vazio. Sem tratar
+ * isso, a tela também fica parada.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+export type ResultadoCadastro =
+  | { tipo: "entrou" }
+  | { tipo: "confirmar"; email: string }
+  | { tipo: "jaExiste" };
+
+export function interpretarCadastro(dados: unknown, email: string): ResultadoCadastro {
+  const d = (dados ?? {}) as {
+    session?: unknown;
+    user?: { identities?: unknown[] | null } | null;
+  };
+
+  // identities vazio = e-mail já cadastrado. O Supabase omite o erro de
+  // propósito; nós não podemos omitir a informação da pessoa.
+  const ids = d.user?.identities;
+  if (Array.isArray(ids) && ids.length === 0) return { tipo: "jaExiste" };
+
+  // com sessão, cadastrar já entrou: pode seguir para o painel
+  if (d.session) return { tipo: "entrou" };
+
+  // sem sessão e sem erro: conta criada, falta confirmar o e-mail
+  return { tipo: "confirmar", email };
+}

@@ -11,7 +11,7 @@ ok    suíte reguas (14 asserções)
 ok    suíte janela (20 asserções)
 ok    suíte cnpj (34 asserções)
 ok    suíte envio (68 asserções)
-ok    suíte erros-auth (12 asserções)
+ok    suíte erros-auth (20 asserções)
 
 ── Auditoria de UX (percepção, não estética) ───────────────────
 ok    auditoria de UX (4 regras limpas)

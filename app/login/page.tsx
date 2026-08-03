@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
-import { traduzirErroAuth } from "@/lib/erros-auth";
+import { traduzirErroAuth, interpretarCadastro } from "@/lib/erros-auth";
 
 export default function Login() {
   const router = useRouter();
@@ -13,12 +13,14 @@ export default function Login() {
   const [escritorio, setEscritorio] = useState("");
   const [erro, setErro] = useState<{ texto: string; culpaDoServidor: boolean } | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  // cadastro feito mas ainda sem sessão: a tela PRECISA dizer isso
+  const [confirmar, setConfirmar] = useState<string | null>(null);
 
   async function enviar() {
     setErro(null);
     setOcupado(true);
     const supabase = createClient();
-    const { error } =
+    const { data, error } =
       modo === "entrar"
         ? await supabase.auth.signInWithPassword({ email, password: senha })
         : await supabase.auth.signUp({
@@ -33,8 +35,74 @@ export default function Login() {
       setErro(traduzirErroAuth(error, modo));
       return;
     }
+
+    // Criar conta NÃO é entrar quando a confirmação de e-mail está ligada:
+    // o signUp volta sem sessão. Empurrar para /painel aqui faz a tela
+    // parecer travada, porque /painel devolve para cá sem sessão.
+    if (modo === "criar") {
+      const r = interpretarCadastro(data, email);
+      if (r.tipo === "confirmar") {
+        setConfirmar(r.email);
+        return;
+      }
+      if (r.tipo === "jaExiste") {
+        setErro({
+          texto: "Já existe uma conta com este e-mail. Use “Entrar”.",
+          culpaDoServidor: false,
+        });
+        return;
+      }
+    }
+
     router.push("/painel");
     router.refresh();
+  }
+
+  // Tela de "confirme seu e-mail". É um ESTADO, não um toast: a pessoa
+  // precisa sair do navegador, abrir o e-mail e voltar — um aviso que some
+  // sozinho perderia a instrução exatamente quando ela for executá-la.
+  if (confirmar) {
+    return (
+      <main className="flex min-h-screen items-center justify-center px-6">
+        <div className="w-full max-w-sm">
+          <div className="mb-8">
+            <div className="text-xl font-extrabold tracking-tight">
+              ENQUADRIA<span className="text-accent">.</span>
+            </div>
+          </div>
+          <div className="rounded border border-line bg-surface p-6 shadow-card">
+            <div className="mb-3 font-mono text-[11px] uppercase tracking-wider text-accent">
+              Conta criada
+            </div>
+            <p className="text-[13.5px] leading-relaxed">
+              Enviamos um link de confirmação para{" "}
+              <strong className="break-all">{confirmar}</strong>. Abra o e-mail e
+              clique no link para ativar o acesso.
+            </p>
+            <div className="mt-4 rounded-sm border border-line bg-surface2 px-3 py-2.5">
+              <p className="text-[12.5px] font-semibold leading-snug">
+                Não achou? Olhe na caixa de <strong>spam</strong> ou lixo eletrônico.
+              </p>
+              <p className="mt-1 text-[11.5px] leading-relaxed text-muted">
+                É comum na primeira mensagem que você recebe de nós. Marcando como
+                “não é spam”, as próximas chegam na caixa de entrada.
+              </p>
+            </div>
+            <p className="mt-3 text-[11.5px] text-muted">O link vale por 24 horas.</p>
+            <button
+              onClick={() => {
+                setConfirmar(null);
+                setModo("entrar");
+                setSenha("");
+              }}
+              className="mt-5 w-full rounded-sm border border-line py-2.5 text-sm font-semibold hover:border-accent"
+            >
+              Voltar para entrar
+            </button>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   return (
