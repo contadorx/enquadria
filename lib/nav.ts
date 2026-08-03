@@ -26,7 +26,13 @@ export const NAV: GrupoNav[] = [
     grupo: "Trabalho",
     itens: [
       { href: "/painel", label: "Cockpit", curto: "Cockpit" },
+      { href: "/painel/ajuda", label: "Ajuda", curto: "Ajuda" },
       { href: "/painel/config", label: "Escritório", curto: "Escritório" },
+      /* Planos saiu de dentro de Escritório e virou item próprio.
+         Contratar é a ação que o produto mais precisa que aconteça, e ela
+         estava dois cliques abaixo de "Configurações" — atrás de um nome que
+         ninguém associa a comprar. */
+      { href: "/painel/planos", label: "Planos", curto: "Planos" },
     ],
   },
 ];
@@ -43,6 +49,7 @@ export const NAV_PLATAFORMA: GrupoNav = {
     { href: "/painel/negocio/cobrancas", label: "Cobranças" },
     { href: "/painel/negocio/emails", label: "E-mails proativos" },
     { href: "/painel/negocio/planos", label: "Planos & Asaas" },
+    { href: "/painel/negocio/ajuda", label: "Central de ajuda" },
   ],
 };
 
@@ -50,7 +57,6 @@ export const NAV_PLATAFORMA: GrupoNav = {
 export const ABAS_ESCRITORIO: ItemNav[] = [
   { href: "/painel/config", label: "Configurações" },
   { href: "/painel/equipe", label: "Equipe" },
-  { href: "/painel/planos", label: "Planos" },
 ];
 
 /** O menu que a pessoa realmente vê. */
@@ -62,6 +68,8 @@ export function navDe(ehSuperadmin: boolean): GrupoNav[] {
 export function atalhosDe(ehSuperadmin: boolean): ItemNav[] {
   const base: ItemNav[] = [
     { href: "/painel", label: "Cockpit", curto: "Cockpit" },
+    { href: "/painel/ajuda", label: "Ajuda", curto: "Ajuda" },
+    { href: "/painel/planos", label: "Planos", curto: "Planos" },
     { href: "/painel/config", label: "Escritório", curto: "Escritório" },
   ];
   return ehSuperadmin ? [...base, { href: "/painel/negocio", label: "Negócio", curto: "Negócio" }] : base;
@@ -71,6 +79,7 @@ export function atalhosDe(ehSuperadmin: boolean): ItemNav[] {
 export function tituloDaRota(pathname: string): string {
   if (pathname.startsWith("/painel/empresa")) return "Empresa";
   if (pathname.startsWith("/painel/importar")) return "Importar carteira";
+  if (pathname.startsWith("/painel/ajuda/")) return "Ajuda";
   const todos = [...NAV, NAV_PLATAFORMA].flatMap((g) => g.itens).concat(ABAS_ESCRITORIO);
   // a rota mais específica que casa com o caminho vence
   const achado = todos
