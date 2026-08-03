@@ -58,9 +58,16 @@ export async function POST(req: Request) {
     .maybeSingle();
   const t = perfil?.tenants as { nome?: string; crc?: string; logo_url?: string } | null;
   const escritorio = t?.nome || "Seu contador";
+  /**
+   * A RESPOSTA DO CLIENTE VAI PARA O CONTADOR, não para o nada. O e-mail
+   * termina com "é só responder", e o remetente do Postal é `nao-responda@`:
+   * sem isto, o convite a responder seria uma promessa falsa.
+   */
+  const responderPara = user.email ? { email: user.email, nome: t?.nome } : undefined;
 
   // A leitura dos laudos passa pelo cliente do USUÁRIO: é a RLS da carteira que
   // decide o que este contador enxerga. Nada aqui pode enviar documento alheio.
+  // schema-ok: laudos.token é criado pela migration 0028 (alter dinâmico, invisível ao parser)
   let q = supabase.from("laudos").select("id, numero, token, analise_id");
   q = corpo.laudo_ids?.length
     ? q.in("id", corpo.laudo_ids)
@@ -140,6 +147,7 @@ export async function POST(req: Request) {
         decisao,
       }),
       tag: "laudo-cliente",
+      responderPara,
     });
 
     if (envio.enviado) enviados++;

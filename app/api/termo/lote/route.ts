@@ -150,6 +150,10 @@ export async function POST(req: Request) {
           link: `${base}/assinar/${token}`,
           decisao,
         }),
+        tag: "termo-convite",
+        // "se preferir conversar antes de assinar, é só responder" — e a
+        // resposta precisa chegar a quem pode conversar
+        responderPara: user.email ? { email: user.email, nome: escritorio } : undefined,
       });
       if (envio.enviado) enviados++;
     }

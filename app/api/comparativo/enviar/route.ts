@@ -49,9 +49,12 @@ export async function POST(req: Request) {
     .maybeSingle();
   const t = perfil?.tenants as { nome?: string; crc?: string; logo_url?: string } | null;
   const escritorio = t?.nome || "Seu contador";
+  // o cliente responde ao comparativo pedindo reunião — tem de cair no contador
+  const responderPara = user.email ? { email: user.email, nome: t?.nome } : undefined;
 
   const { data: docs, error } = await supabase
     .from("comparativos")
+    // schema-ok: comparativos.token é criado pela migration 0028 (alter dinâmico)
     .select("id, numero, token, empresa_id, resultado, escritorio")
     .in("id", corpo.comparativo_ids)
     .limit(200);
@@ -124,6 +127,7 @@ export async function POST(req: Request) {
         menor: r?.menor?.nome ?? null,
       }),
       tag: "comparativo-cliente",
+      responderPara,
     });
 
     if (envio.enviado) enviados++;

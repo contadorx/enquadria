@@ -139,6 +139,22 @@ secao("Auditoria de UX (percepção, não estética)");
      r.status === 0 ? undefined : saida.split("\n").filter((l) => l.trim().startsWith("components/") || l.trim().startsWith("app/")).slice(0, 8));
 }
 
+/* ============================================ 1b2. SCHEMA SEM LASTRO ==== */
+secao("Auditoria de schema (colunas que ninguém garante que existem)");
+{
+  /**
+   * O cliente do Supabase não é tipado aqui: `select()` recebe uma string, e
+   * pedir uma coluna inexistente compila, passa nos testes de função pura e só
+   * quebra em produção. Aconteceu com `termos.tenant_id`, dentro da rota de
+   * ASSINATURA — o fecho da esteira derrubado por um aviso acessório.
+   */
+  const r = spawnSync("node", [path.join(RAIZ, "testes", "auditar-schema.mjs")], { encoding: "utf8" });
+  const saida = (r.stdout || "") + (r.stderr || "");
+  const tabelas = (saida.match(/^ok: /gm) || []).length;
+  ok(`auditoria de schema (${tabelas} tabelas com proveniência)`, r.status === 0,
+     r.status === 0 ? undefined : saida.split("\n").filter((l) => l.startsWith("SUSPEITA")).slice(0, 6));
+}
+
 /* ======================================= 1c. O QUE O CLIENTE ALCANÇA ==== */
 secao("Endereços públicos — o que chega ao cliente sem login");
 {

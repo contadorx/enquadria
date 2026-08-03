@@ -40,6 +40,19 @@ function limpar(s: string): string {
   return s.replace(/["<>\r\n]/g, "").trim();
 }
 
+/**
+ * PARA ONDE VAI A RESPOSTA — e por que isto não é detalhe.
+ *
+ * O remetente padrão do Postal é `nao-responda@enquadria.com.br`. Os e-mails
+ * que vão ao CLIENTE do contador terminam com "é só responder a este e-mail" —
+ * e sem `responderPara` essa frase era mentira: a resposta caía numa caixa que
+ * ninguém lê. Pior que não convidar a responder é convidar e sumir.
+ *
+ * Com o reply-to no e-mail do contador, o cliente responde e a conversa chega a
+ * quem tem de atender. É também o que sustenta a tese do produto: quem aparece
+ * é o profissional, não a ferramenta — mesmo saindo de um domínio verificado,
+ * que é o que garante a entrega sem pedir DNS a cada escritório.
+ */
 export async function enviarEmail(params: {
   para: string;
   nome?: string;
@@ -47,6 +60,8 @@ export async function enviarEmail(params: {
   html: string;
   /** rótulo do Postal, para separar no painel o que é o quê */
   tag?: string;
+  /** o cliente responde e cai aqui — quase sempre o contador */
+  responderPara?: { email: string; nome?: string };
 }): Promise<ResultadoEnvio> {
   const tag = params.tag ?? "app";
 
@@ -57,6 +72,7 @@ export async function enviarEmail(params: {
       subject: params.assunto,
       html_body: params.html,
       tag,
+      ...(params.responderPara ? { reply_to: params.responderPara.email } : {}),
       headers: { "Auto-Submitted": "auto-generated" },
     });
 

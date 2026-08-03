@@ -451,6 +451,7 @@ export async function carregarContexto(db: any): Promise<Contexto> {
       db.from("plataforma_reguas").select("*").order("ordem", { ascending: true }),
       db.from("plataforma_config").select("chave, valor"),
       db.from("plataforma_envios").select("chave_unica").limit(20000),
+      // schema-ok: planos.limite_analises é editado em components/NegocioUI.tsx (painel de planos)
       db.from("planos").select("limite_analises").eq("id", "gratis").maybeSingle(),
     ]);
 

@@ -28,7 +28,13 @@
  * Rodado por testes/rodar-tudo.mjs.
  */
 
-import { htmlLaudoCliente, htmlComparativoCliente } from "./emails-cliente.js";
+import {
+  htmlLaudoCliente,
+  htmlComparativoCliente,
+  htmlColetaRespondida,
+  htmlTermoAssinadoContador,
+  htmlTermoAssinadoCliente,
+} from "./emails-cliente.js";
 
 let f = 0;
 const ok = (c, m, e) => {
@@ -126,6 +132,112 @@ const malicioso = htmlLaudoCliente({
 ok(!malicioso.includes("<script>"), "nome de empresa não injeta tag");
 ok(malicioso.includes("&lt;script&gt;"), "nome de empresa sai escapado");
 ok(!/<b>x/.test(malicioso), "nome de escritório não injeta tag");
+
+/* ── os três avisos que fecham os silêncios ────────────────────────── */
+const COLETA = htmlColetaRespondida({
+  empresa: "Aurora Autopeças", escritorio: "Oliveira Contabilidade",
+  link: "https://e/painel/empresa/1", respondente: "Marcos Aurélio",
+});
+ok(/respondeu/i.test(COLETA), "coleta: diz o que aconteceu");
+ok(COLETA.includes("Marcos Aurélio"), "coleta: nomeia quem respondeu");
+ok(/conferir|escritura/i.test(COLETA), "coleta: lembra que o contador confere antes de aplicar");
+ok(!/aplicad[oa] (automaticamente|sozinh)/i.test(COLETA),
+   "coleta: NÃO diz que a resposta entrou sozinha na análise");
+ok(botoes(COLETA) === 1, "coleta: um botão");
+
+const ASSIN_CONT = htmlTermoAssinadoContador({
+  empresa: "Aurora", escritorio: "Oliveira Contabilidade",
+  link: "https://e/painel/empresa/1", assinante: "Marcos", decisao: "optar",
+});
+ok(ASSIN_CONT.includes("Marcos"), "termo/contador: nomeia quem assinou");
+ok(/optar/i.test(ASSIN_CONT), "termo/contador: registra a decisão");
+ok(/trilha de auditoria|evid[êe]ncia/i.test(ASSIN_CONT), "termo/contador: aponta a prova");
+
+const ASSIN_CLI = htmlTermoAssinadoCliente({
+  empresa: "Aurora", escritorio: "Oliveira Contabilidade",
+  link: "https://e/assinar/tok", decisao: "permanecer",
+});
+ok(/recebemos sua assinatura/i.test(ASSIN_CLI), "termo/cliente: confirma o recebimento");
+ok(/permanecer/i.test(ASSIN_CLI), "termo/cliente: repete a decisão registrada");
+ok(/n[ãa]o pode ser alterada/i.test(ASSIN_CLI), "termo/cliente: avisa que a decisão trava no semestre");
+for (const [re, oque] of PROIBIDO) {
+  ok(!re.test(soTexto(ASSIN_CLI)), `termo/cliente não contém ${oque}`);
+}
+
+/* ── a promessa de "é só responder" precisa de reply-to ────────────── */
+/**
+ * Estes e-mails convidam o cliente a responder, e o remetente do Postal é
+ * `nao-responda@enquadria.com.br`. Sem `responderPara` no chamador, o convite
+ * é falso: a resposta cai numa caixa que ninguém lê. Pior que não convidar a
+ * responder é convidar e sumir — e quem leva a culpa é o contador.
+ *
+ * Este teste é ESTÁTICO de propósito: o que precisa ser garantido não é o
+ * texto, é que todo lugar que convida a responder passe o reply-to.
+ */
+import fsE from "node:fs";
+import pathE from "node:path";
+
+/**
+ * A raiz é DESCOBERTA, não calculada por "../..".
+ *
+ * O executor copia cada suíte para `.tmp-rodar/` e roda de lá — um caminho
+ * relativo ao arquivo apontaria para dentro da pasta temporária, e o teste
+ * falharia dizendo que as rotas não existem. Sobe até achar o package.json.
+ */
+function acharRaiz(dir) {
+  for (let i = 0; i < 6; i++) {
+    if (fsE.existsSync(pathE.join(dir, "package.json")) && fsE.existsSync(pathE.join(dir, "app"))) {
+      return dir;
+    }
+    dir = pathE.dirname(dir);
+  }
+  return null;
+}
+const RAIZ_E = acharRaiz(process.cwd());
+
+const CONVIDAM = [
+  "app/api/laudo/enviar/route.ts",
+  "app/api/comparativo/enviar/route.ts",
+  "app/api/termo/route.ts",
+  "app/api/termo/lote/route.ts",
+];
+ok(!!RAIZ_E, "achei a raiz do projeto a partir de " + process.cwd());
+/**
+ * A VERIFICAÇÃO OLHA DENTRO DA CHAMADA, não o arquivo inteiro.
+ *
+ * A primeira versão testava `/responderPara/.test(src)` — e passava com o
+ * código quebrado, porque a linha `const responderPara = ...` continuava lá
+ * mesmo depois de eu tirar a variável de dentro do `enviarEmail({...})`. É o
+ * mesmo defeito da primeira auditoria de UX: a regra media a presença da
+ * palavra, não o comportamento. Aqui cada chamada de envio é isolada e cada
+ * uma tem de carregar o reply-to.
+ */
+for (const rel of CONVIDAM) {
+  if (!RAIZ_E) break;
+  const arq = pathE.join(RAIZ_E, rel);
+  if (!fsE.existsSync(arq)) { ok(false, `${rel} existe`); continue; }
+  const src = fsE.readFileSync(arq, "utf8");
+
+  const chamadas = [];
+  for (const m of src.matchAll(/enviarEmail\(\s*\{/g)) {
+    // fecha a chave contando profundidade — regex sozinha não casa aninhamento
+    let i = m.index + m[0].length - 1, prof = 0;
+    for (; i < src.length; i++) {
+      if (src[i] === "{") prof++;
+      else if (src[i] === "}") { prof--; if (prof === 0) break; }
+    }
+    chamadas.push(src.slice(m.index, i + 1));
+  }
+
+  ok(chamadas.length > 0, `${rel} tem chamada de envio`);
+  const semReply = chamadas.filter((c) => !/responderPara/.test(c)).length;
+  ok(semReply === 0, `${rel}: toda chamada manda a resposta ao contador`,
+     semReply ? `${semReply} de ${chamadas.length} sem responderPara` : undefined);
+}
+
+// e o texto que faz a promessa continua fazendo — se sumir, o reply-to vira órfão
+ok(/responder a este e-mail/i.test(LAUDO), "laudo convida a responder");
+ok(/responder a este e-mail/i.test(COMP), "comparativo convida a responder");
 
 console.log(f === 0 ? "TODOS OS TESTES PASSARAM" : `${f} FALHAS`);
 process.exit(f ? 1 : 0);

@@ -81,6 +81,7 @@ export function Comparativo({
   const [numeroEmitido, setNumeroEmitido] = useState<number | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null);
+  const [copiadoLink, setCopiadoLink] = useState(false);
 
   // presunções acompanham o setor, mas o contador pode sobrescrever
   useEffect(() => {
@@ -170,6 +171,25 @@ export function Comparativo({
     }
   }
 
+  /** o mesmo documento, pelo canal que o contador escolher */
+  async function copiarLink() {
+    if (!emitido) return;
+    setAviso(null);
+    try {
+      const resp = await fetch(`/api/documento/link?tipo=comparativo&id=${emitido}`, { cache: "no-store" });
+      const json = await resp.json();
+      if (!resp.ok || !json.link) {
+        setAviso({ ok: false, texto: json.erro ?? "não consegui montar o link" });
+        return;
+      }
+      await navigator.clipboard?.writeText(json.link);
+      setCopiadoLink(true);
+      setTimeout(() => setCopiadoLink(false), 2500);
+    } catch {
+      setAviso({ ok: false, texto: "não consegui copiar o link" });
+    }
+  }
+
   const maior = Math.max(...r.regimes.map((x) => x.total), 1);
 
   const setPct = (k: keyof Premissas) => (v: string) =>
@@ -203,13 +223,22 @@ export function Comparativo({
               Comparativo{numeroEmitido ? ` nº ${String(numeroEmitido).padStart(4, "0")}` : ""} emitido
               — abrir o documento
             </a>
-            <button
-              onClick={() => void enviarAoCliente()}
-              disabled={enviando}
-              className="shrink-0 rounded-sm bg-accentdeep px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
-            >
-              {enviando ? "Enviando…" : "Enviar ao cliente"}
-            </button>
+            <div className="flex shrink-0 gap-1.5">
+              <button
+                onClick={() => void copiarLink()}
+                title="Copiar o link para mandar por WhatsApp ou pelo seu e-mail"
+                className="rounded-sm border border-verde bg-surface px-3 py-1.5 text-[12px] font-semibold text-verde"
+              >
+                {copiadoLink ? "Copiado ✓" : "Copiar link"}
+              </button>
+              <button
+                onClick={() => void enviarAoCliente()}
+                disabled={enviando}
+                className="rounded-sm bg-accentdeep px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
+              >
+                {enviando ? "Enviando…" : "Enviar ao cliente"}
+              </button>
+            </div>
           </div>
           {aviso && (
             <p className={`mt-2 text-[12px] ${aviso.ok ? "text-verde" : "text-amarelo"}`}>

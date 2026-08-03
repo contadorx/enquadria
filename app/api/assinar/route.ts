@@ -11,6 +11,8 @@ import {
 } from "@/lib/esign";
 import { carimbar } from "@/lib/carimbo";
 import { enviarEmail, htmlCodigoOtp } from "@/lib/email";
+import { htmlTermoAssinadoCliente, htmlTermoAssinadoContador } from "@/lib/emails-cliente";
+import { donoDoTenant } from "@/lib/dono";
 
 /**
  * Página pública de assinatura — sem sessão, opera pelo service role (como o
@@ -48,7 +50,7 @@ export async function POST(req: Request) {
 
   const { data: termo } = await supabase
     .from("termos")
-    .select("id, assinatura_status, analise_id, hash_documento, otp_hash, otp_expira, otp_tentativas")
+    .select("id, token, decisao, assinatura_status, analise_id, hash_documento, otp_hash, otp_expira, otp_tentativas")
     .eq("token", corpo.token)
     .maybeSingle();
 
@@ -154,6 +156,86 @@ export async function POST(req: Request) {
     if (upErr) return NextResponse.json({ erro: upErr.message }, { status: 500 });
 
     await supabase.from("analises").update({ status: "decidida" }).eq("id", termo.analise_id);
+
+    /**
+     * OS DOIS AVISOS DO FECHO DA ESTEIRA.
+     *
+     * O termo assinado é o fim do serviço e a prova de que ele foi entregue — e
+     * acontecia em silêncio absoluto: nem quem assinou recebia comprovante, nem
+     * o contador ficava sabendo. Quem clica "assinar" e não recebe nada liga
+     * para o contador perguntando se deu certo, e é o contador que atende.
+     *
+     * NENHUM DOS DOIS PODE DERRUBAR A ASSINATURA. Ela já está gravada, com
+     * carimbo de tempo e evidência. Falhar o e-mail depois disso não desfaz
+     * nada, e mostrar erro ao signatário faria com que ele assinasse de novo.
+     */
+    try {
+      /**
+       * O TENANT VEM DA ANÁLISE, não do termo.
+       *
+       * `termos` NÃO tem coluna `tenant_id` — a migration 0020 conta termos por
+       * escritório fazendo join com `analises` justamente por isso. Pedir
+       * `termo.tenant_id` no select principal não daria erro de compilação:
+       * daria erro do Postgres no meio da rota de ASSINATURA, derrubando o
+       * fecho da esteira inteiro para acrescentar um aviso.
+       */
+      const { data: analiseA } = await supabase
+        .from("analises")
+        .select("empresa_id, tenant_id")
+        .eq("id", termo.analise_id)
+        .maybeSingle();
+      const { data: empresaA } = analiseA
+        ? await supabase
+            .from("empresas")
+            .select("razao_social")
+            .eq("id", analiseA.empresa_id)
+            .maybeSingle()
+        : { data: null };
+
+      const dono = await donoDoTenant(supabase, analiseA?.tenant_id ?? null);
+      const nomeEmpresa = (empresaA as { razao_social?: string } | null)?.razao_social ?? "a empresa";
+      const escritorio = dono?.escritorio ?? "Seu contador";
+      const decisao = (termo.decisao === "optar" ? "optar" : "permanecer") as "optar" | "permanecer";
+      const base = new URL(req.url).origin;
+      const linkTermo = termo.token ? `${base}/assinar/${termo.token}` : base;
+
+      // comprovante a quem assinou — o e-mail é o que ele acabou de digitar
+      if (corpo.email) {
+        const r = await enviarEmail({
+          para: corpo.email,
+          nome: corpo.nome,
+          assunto: `${nomeEmpresa} — termo de ciência assinado`,
+          html: htmlTermoAssinadoCliente({
+            empresa: nomeEmpresa,
+            escritorio,
+            link: linkTermo,
+            decisao,
+          }),
+          tag: "termo-assinado-cliente",
+          responderPara: dono ? { email: dono.email, nome: dono.escritorio } : undefined,
+        });
+        if (!r.enviado) console.error(`[assinar] comprovante não saiu: ${r.motivo}`);
+      }
+
+      // e o aviso ao contador, que é quem cobra pelo serviço que acabou de fechar
+      if (dono) {
+        const r = await enviarEmail({
+          para: dono.email,
+          assunto: `${nomeEmpresa} assinou o termo de ciência`,
+          html: htmlTermoAssinadoContador({
+            empresa: nomeEmpresa,
+            escritorio,
+            link: analiseA ? `${base}/painel/empresa/${analiseA.empresa_id}` : base,
+            assinante: corpo.nome ?? "O responsável",
+            decisao,
+          }),
+          tag: "termo-assinado-contador",
+        });
+        if (!r.enviado) console.error(`[assinar] aviso ao contador não saiu: ${r.motivo}`);
+      }
+    } catch (e) {
+      console.error("[assinar] falha ao avisar do termo assinado:", e instanceof Error ? e.message : e);
+    }
 
     return NextResponse.json({ ok: true, metodo, assinado_em: agora });
   }

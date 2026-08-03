@@ -25,6 +25,8 @@ export async function enviarPelaBrevo(params: {
   nome?: string;
   assunto: string;
   html: string;
+  /** para onde a RESPOSTA do cliente deve ir — normalmente o contador */
+  responderPara?: { email: string; nome?: string };
 }): Promise<ResultadoEmail> {
   const key = process.env.BREVO_API_KEY;
   if (!key) return { enviado: false, motivo: "BREVO_API_KEY ausente" };
@@ -45,6 +47,9 @@ export async function enviarPelaBrevo(params: {
         to: [{ email: params.para, name: params.nome || params.para }],
         subject: params.assunto,
         htmlContent: params.html,
+        ...(params.responderPara
+          ? { replyTo: { email: params.responderPara.email, name: params.responderPara.nome } }
+          : {}),
       }),
       cache: "no-store",
     });

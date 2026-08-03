@@ -131,6 +131,32 @@ export function PainelEmpresa({
    * nada visível acontecendo, então o aviso É a única prova para o contador.
    */
   const [avisoEnvio, setAvisoEnvio] = useState<{ ok: boolean; texto: string } | null>(null);
+  /**
+   * QUAL LINK ACABOU DE SER COPIADO.
+   *
+   * Enviar pelo sistema não pode ser o único caminho. Boa parte da relação do
+   * contador com o cliente acontece no WhatsApp, e há empresa que só lê o que
+   * chega pelo endereço pessoal do sócio — que não é o `contato_email` da
+   * carteira. Quem decide o canal é quem conhece o cliente.
+   */
+  const [linkCopiado, setLinkCopiado] = useState<string | null>(null);
+
+  async function copiarLinkPublico(tipo: "laudo" | "comparativo", id: string) {
+    setAvisoEnvio(null);
+    try {
+      const resp = await fetch(`/api/documento/link?tipo=${tipo}&id=${id}`, { cache: "no-store" });
+      const json = await resp.json();
+      if (!resp.ok || !json.link) {
+        setAvisoEnvio({ ok: false, texto: json.erro ?? "não consegui montar o link" });
+        return;
+      }
+      await navigator.clipboard?.writeText(json.link);
+      setLinkCopiado(id);
+      setTimeout(() => setLinkCopiado(null), 2500);
+    } catch {
+      setAvisoEnvio({ ok: false, texto: "não consegui copiar o link" });
+    }
+  }
   const [nomeSig, setNomeSig] = useState("");
   const [emailSig, setEmailSig] = useState("");
   /**
@@ -342,6 +368,22 @@ export function PainelEmpresa({
       const json = await resp.json();
       if (resp.ok && json.link_assinatura) {
         setLink(window.location.origin + json.link_assinatura);
+        /**
+         * O aviso diz se o CONVITE SAIU. Esta rota passou a enviar (antes só a
+         * de lote enviava), e sem esta linha o contador não teria como
+         * distinguir "gerou e mandou" de "gerou e o e-mail falhou" — ele copiaria
+         * o link e mandaria de novo, ou não mandaria achando que já foi.
+         */
+        setAvisoEnvio(
+          json.enviado
+            ? { ok: true, texto: `Termo gerado e convite enviado para ${emailSig}.` }
+            : {
+                ok: false,
+                texto: `Termo gerado, mas o convite não saiu${
+                  json.motivo_envio ? ` (${json.motivo_envio})` : ""
+                }. Copie o link abaixo e mande você mesmo.`,
+              }
+        );
         mudou();
       } else {
         setBloqueio(json.erro ?? "não foi possível gerar o termo");
@@ -520,10 +562,29 @@ export function PainelEmpresa({
                   </p>
                 )}
 
+                {/* O RESULTADO DO ENVIO FICA AQUI, na aba onde o botão "Gerar
+                    termo" vive. O mesmo aviso existe no bloco de documentos, na
+                    aba Dossiê — e é outra tela. Mostrar só lá repetiria o
+                    defeito que os dois "botões que não funcionam" ensinaram:
+                    efeito que nasce fora da vista é lido como clique perdido. */}
+                {avisoEnvio && (
+                  <div
+                    className={`mt-3 rounded-sm border p-2.5 text-[12px] ${
+                      avisoEnvio.ok
+                        ? "border-verde bg-verdewash text-verde"
+                        : "border-amarelo bg-amarelowash text-amarelo"
+                    }`}
+                  >
+                    {avisoEnvio.texto}
+                  </div>
+                )}
+
                 {link && !assinado && (
                   <div className="mt-3 rounded-sm border border-accent bg-accentwash p-3">
                     <div className="text-[12px] font-semibold text-accentdeep">
-                      Link de assinatura — envie ao cliente
+                      {avisoEnvio?.ok
+                        ? "Link de assinatura — se precisar reenviar"
+                        : "Link de assinatura — envie ao cliente"}
                     </div>
                     <div className="mt-1.5 flex items-center gap-2">
                       <input
@@ -664,6 +725,13 @@ export function PainelEmpresa({
                 {d.laudo && (
                   <div className="flex shrink-0 gap-1.5">
                     <button
+                      onClick={() => void copiarLinkPublico("laudo", d.laudo!.id)}
+                      title="Copiar o link para mandar por WhatsApp ou pelo seu e-mail"
+                      className="rounded-sm border border-line px-3 py-1.5 text-[12px] font-semibold text-slate2"
+                    >
+                      {linkCopiado === d.laudo.id ? "Copiado ✓" : "Copiar link"}
+                    </button>
+                    <button
                       onClick={() => void enviarLaudo()}
                       disabled={ocupado === "enviar-laudo"}
                       title={
@@ -727,7 +795,7 @@ export function PainelEmpresa({
                   <div className="mb-1.5 text-[13px] font-semibold">Comparativos de regime</div>
                   <div className="space-y-1.5">
                     {d.comparativos.map((c) => (
-                      <div key={c.id} className="flex items-center justify-between gap-2">
+                      <div key={c.id} className="flex flex-wrap items-center justify-between gap-1.5">
                         <a
                           href={`/doc/comparativo/${c.id}`}
                           target="_blank"
@@ -737,6 +805,13 @@ export function PainelEmpresa({
                           nº {String(c.numero).padStart(4, "0")} ·{" "}
                           {new Date(c.emitido_em).toLocaleDateString("pt-BR")}
                         </a>
+                        <button
+                          onClick={() => void copiarLinkPublico("comparativo", c.id)}
+                          title="Copiar o link para mandar você mesmo"
+                          className="shrink-0 rounded-sm border border-line px-2.5 py-1 text-[11.5px] font-semibold text-slate2"
+                        >
+                          {linkCopiado === c.id ? "Copiado ✓" : "Copiar link"}
+                        </button>
                         <button
                           onClick={() => void enviarComparativo(c.id, c.numero)}
                           disabled={ocupado === `enviar-comp-${c.id}`}

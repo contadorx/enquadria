@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { PERGUNTAS, derivar, type RespostasColeta, type ChaveColeta } from "@/lib/coleta";
+import { enviarEmail } from "@/lib/email";
+import { htmlColetaRespondida } from "@/lib/emails-cliente";
+import { donoDoTenant } from "@/lib/dono";
 
 /**
  * A RESPOSTA DA EMPRESA — rota PÚBLICA, sem login, só com o token.
@@ -39,7 +42,7 @@ export async function POST(req: Request, { params }: { params: { token: string }
   const token = (params.token ?? "").toUpperCase().trim();
   const { data: coleta } = await admin
     .from("coletas")
-    .select("id, status")
+    .select("id, status, empresa_id, tenant_id")
     .eq("token", token)
     .maybeSingle();
 
@@ -90,6 +93,46 @@ export async function POST(req: Request, { params }: { params: { token: string }
 
   if (error) {
     return NextResponse.json({ erro: "Não consegui gravar agora. Tente de novo." }, { status: 500 });
+  }
+
+  /**
+   * AVISA O CONTADOR. Antes disto a resposta voltava e ficava esperando alguém
+   * abrir o dossiê por acaso — cinco das oito perguntas da análise só existem na
+   * cabeça do cliente, então enquanto ninguém aplica, o contador chuta ou trava.
+   * Era o ponto mais caro do silêncio: o cliente fez a parte dele e o trabalho
+   * ficou parado.
+   *
+   * O AVISO NUNCA DERRUBA A RESPOSTA. Ela já está gravada acima; se o e-mail
+   * falhar, o cliente não pode ver erro numa coisa que deu certo. Por isso o
+   * try/catch engole — e o console registra, porque falha de e-mail invisível
+   * é o defeito que corrói entrega por semanas sem ninguém perceber.
+   */
+  try {
+    const dono = await donoDoTenant(admin, coleta.tenant_id);
+    if (dono) {
+      const { data: emp } = await admin
+        .from("empresas")
+        .select("razao_social")
+        .eq("id", coleta.empresa_id)
+        .maybeSingle();
+      const base = new URL(req.url).origin;
+      const envio = await enviarEmail({
+        para: dono.email,
+        assunto: `${(emp as { razao_social?: string } | null)?.razao_social ?? "Uma empresa"} respondeu o formulário`,
+        html: htmlColetaRespondida({
+          empresa: (emp as { razao_social?: string } | null)?.razao_social ?? "A empresa",
+          escritorio: dono.escritorio,
+          link: `${base}/painel/empresa/${coleta.empresa_id}`,
+          respondente: nome,
+        }),
+        tag: "coleta-respondida",
+      });
+      if (!envio.enviado) {
+        console.error(`[coleta] aviso ao contador não saiu: ${envio.motivo}`);
+      }
+    }
+  } catch (e) {
+    console.error("[coleta] falha ao avisar o contador:", e instanceof Error ? e.message : e);
   }
 
   return NextResponse.json({ ok: true });

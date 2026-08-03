@@ -1,12 +1,17 @@
 /**
- * OS E-MAILS QUE VÃO AO CLIENTE DO CONTADOR.
+ * OS E-MAILS DO FLUXO DO CLIENTE.
+ *
+ * A maioria vai AO cliente do contador; dois vão ao contador SOBRE o cliente
+ * (coleta respondida, termo assinado). Estão juntos porque pertencem ao mesmo
+ * ciclo: pedir dados → entregar documento → colher a ciência. Separá-los por
+ * destinatário separaria coisas que mudam juntas.
  *
  * Separados de lib/brevo.ts de propósito: aquele arquivo é o driver da Brevo e
  * ganhou dois templates por conveniência. Estes aqui são produto — o momento em
  * que o trabalho do contador chega a quem paga por ele — e vão mudar por
  * motivos de negócio, não de infraestrutura.
  *
- * TRÊS REGRAS QUE VALEM PARA TODOS
+ * TRÊS REGRAS QUE VALEM PARA OS QUE VÃO AO CLIENTE
  *
  * 1. A VOZ É DO CONTADOR, NÃO DO ENQUADRIA. Quem manda é o escritório; a
  *    ferramenta não aparece. O cliente não comprou software, comprou o
@@ -131,5 +136,103 @@ export function htmlComparativoCliente(params: {
     <p style="font-size:13px;color:#64748B">O comparativo é um estudo de cenários, não uma apuração:
     a decisão sobre mudança de regime depende de fatores que vão além desta conta e é sempre nossa,
     em conjunto com você. Vale marcarmos uma conversa — é só responder a este e-mail.</p>`,
+  });
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   OS DOIS QUE VÃO AO CONTADOR
+
+   Regra diferente: aqui o destinatário é quem usa o produto, então o e-mail
+   PODE ser direto e operacional. O que ele não pode ser é dispensável — um
+   aviso que não muda o que a pessoa vai fazer é ruído, e ruído treina o
+   destinatário a ignorar a próxima mensagem. Cada um destes existe porque
+   destrava um passo que estava parado esperando informação que ninguém deu.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/**
+ * A EMPRESA RESPONDEU A COLETA.
+ *
+ * Sem este aviso, o formulário voltava e ficava esperando alguém abrir o dossiê
+ * por acaso. Cinco das oito perguntas da análise só existem na cabeça do
+ * cliente — enquanto a resposta não é aplicada, o contador ou chuta ou trava.
+ * Este é o e-mail mais operacional do conjunto: ele desbloqueia trabalho.
+ */
+export function htmlColetaRespondida(params: {
+  empresa: string;
+  escritorio: string;
+  link: string;
+  respondente?: string | null;
+}): string {
+  const quem = params.respondente ? ` por <strong>${escapar(params.respondente)}</strong>` : "";
+  return moldura({
+    escritorio: params.escritorio,
+    corpo: `
+    <p><strong>${escapar(params.empresa)}</strong> respondeu o formulário de dados${quem}.</p>
+    <p>As respostas já estão no dossiê da empresa, prontas para você conferir contra a
+    escrituração e aplicar na análise. Nada foi alterado sozinho — quem decide o que entra
+    no laudo é você.</p>
+    ${botao(params.link, "Abrir o dossiê")}`,
+  });
+}
+
+/**
+ * O TERMO FOI ASSINADO — aviso ao contador.
+ *
+ * O termo assinado é o fim da esteira e a prova de que o serviço foi entregue.
+ * Antes disto ele acontecia em silêncio: o cliente assinava e o contador só
+ * descobria abrindo a tela. Quem cobra pelo serviço precisa saber a hora em que
+ * ele fechou.
+ */
+export function htmlTermoAssinadoContador(params: {
+  empresa: string;
+  escritorio: string;
+  link: string;
+  assinante: string;
+  decisao: "optar" | "permanecer";
+}): string {
+  const decisao =
+    params.decisao === "optar"
+      ? "optar pelo recolhimento de IBS/CBS por fora do DAS"
+      : "permanecer no regime tradicional do Simples Nacional";
+  return moldura({
+    escritorio: params.escritorio,
+    corpo: `
+    <p><strong>${escapar(params.assinante)}</strong> assinou o termo de ciência da
+    <strong>${escapar(params.empresa)}</strong>.</p>
+    <p>Decisão registrada: <strong>${decisao}</strong>.</p>
+    <p>A evidência da assinatura — carimbo de tempo, hash do documento e método — está na
+    trilha de auditoria do dossiê.</p>
+    ${botao(params.link, "Ver o termo assinado")}`,
+  });
+}
+
+/**
+ * O TERMO FOI ASSINADO — comprovante a quem assinou.
+ *
+ * Quem assina um documento espera receber uma cópia. Não receber nada depois de
+ * clicar "assinar" é a experiência que faz a pessoa ligar para o contador
+ * perguntando se deu certo — e é o contador que atende essa ligação.
+ */
+export function htmlTermoAssinadoCliente(params: {
+  empresa: string;
+  escritorio: string;
+  link: string;
+  decisao: "optar" | "permanecer";
+}): string {
+  const decisao =
+    params.decisao === "optar"
+      ? "optar pelo recolhimento de IBS/CBS por fora do DAS a partir de 2027"
+      : "permanecer no regime tradicional do Simples Nacional";
+  return moldura({
+    escritorio: params.escritorio,
+    corpo: `
+    <p>Recebemos sua assinatura no termo de ciência da
+    <strong>${escapar(params.empresa)}</strong>. Obrigado.</p>
+    <p>Decisão registrada: <strong>${decisao}</strong>.</p>
+    ${botao(params.link, "Guardar uma cópia do termo")}
+    <p style="font-size:13px;color:#64748B">A decisão vale pelo semestre e não pode ser alterada
+    dentro do período. Guarde este e-mail: o link acima abre o documento assinado a qualquer
+    momento. Qualquer dúvida, é só responder.</p>`,
   });
 }

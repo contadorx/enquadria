@@ -211,6 +211,7 @@ export async function reconciliarAssinatura(
   // quantos dias o plano concede — o conserto do "365 dias para todo mundo"
   const { data: plano } = await db
     .from("planos")
+      // schema-ok: planos.dias_acesso é editado em components/NegocioUI.tsx (painel de planos)
     .select("dias_acesso")
     .eq("id", a.plano_id ?? "")
     .maybeSingle();
