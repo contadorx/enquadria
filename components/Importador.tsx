@@ -30,7 +30,7 @@ const CAMPOS: { chave: keyof LinhaCarteira; rotulo: string; papel: string; essen
 const MODELO_CSV = `cnpj,razao_social,cnae_principal,porte,regime,anexo,rbt12,contato,email,telefone
 11.222.333/0001-81,Distribuidora Exemplo Ltda,4649-4/08,EPP,Simples Nacional,1,480000,Marcos Aurélio,marcos@exemplo.com.br,(11) 90000-0000
 07.526.557/0001-00,Restaurante Exemplo ME,5611-2/01,ME,Simples Nacional,3,220000,Helena Prado,helena@exemplo.com.br,(11) 90000-0001
-22.333.444/0001-55,Transportes Exemplo Ltda,4930-2/02,EPP,Simples Nacional,3,1200000,Jorge Valle,jorge@exemplo.com.br,(11) 90000-0002`;
+22.333.444/0001-81,Transportes Exemplo Ltda,4930-2/02,EPP,Simples Nacional,3,1200000,Jorge Valle,jorge@exemplo.com.br,(11) 90000-0002`;
 
 function baixarModelo() {
   const blob = new Blob(["﻿" + MODELO_CSV], { type: "text/csv;charset=utf-8;" });
@@ -394,7 +394,7 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
               value={texto}
               onChange={(e) => setTexto(e.target.value)}
               rows={6}
-              placeholder={"11.222.333/0001-81\n07.526.557/0001-00\n22.333.444/0001-55"}
+              placeholder={"11.222.333/0001-81\n07.526.557/0001-00\n22.333.444/0001-81"}
               className="w-full rounded-sm border border-line bg-white p-3 font-mono text-[16px] leading-relaxed md:text-[13px]"
             />
             <div className="mt-2 flex flex-wrap gap-2">

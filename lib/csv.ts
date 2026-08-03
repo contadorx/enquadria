@@ -184,14 +184,21 @@ export function parsearCarteira(texto: string): ResultadoParse {
  * telefone, data e valor em reais caem fora pelo tamanho, sem precisar de uma
  * regra especial para cada um.
  *
+ * ACEITA ALFANUMÉRICO. Partir o texto em `[^\d.\-/]` quebrava no meio de um
+ * CNPJ com letra: "PC3D315K000193" virava os tokens "3", "315" e "000193" e
+ * sumia inteiro. Agora a letra faz parte do token, e o filtro exige o formato
+ * — 12 alfanuméricas + 2 dígitos — o que já derruba a palavra de 14 letras
+ * que venha arrastada junto de uma planilha.
+ *
  * Não valida dígito verificador de propósito — quem faz isso é o parser, e é
  * lá que o contador vê quantos foram descartados.
  */
 export function extrairCnpjs(texto: string): string[] {
   return (texto || "")
-    .split(/[^\d.\-/]+/)
-    .map((s) => s.replace(/\D/g, ""))
-    .filter((s) => s.length === 14);
+    .toUpperCase()
+    .split(/[^0-9A-Z.\-/]+/)
+    .map((s) => s.replace(/[^0-9A-Z]/g, ""))
+    .filter((s) => /^[0-9A-Z]{12}\d{2}$/.test(s));
 }
 
 /** monta o CSV de uma coluna que o parser já sabe ler */
@@ -202,4 +209,4 @@ export function csvDeCnpjs(cnpjs: string[]): string {
 export const CSV_EXEMPLO = `cnpj,razao_social,cnae_principal,porte,regime,rbt12,contato,email
 11.222.333/0001-81,Distribuidora Aurora Autopeças Ltda,4649-4/08,EPP,Simples Nacional,480000,Marcos Aurélio,marcos@aurora.com.br
 07.526.557/0001-00,Casa Nova Restaurante ME,5611-2/01,ME,Simples Nacional,220000,Helena Prado,helena@casanova.com.br
-22.333.444/0001-55,Transportes Vale Verde Ltda,4930-2/02,EPP,Simples Nacional,1200000,Jorge Valle,jorge@valeverde.com.br`;
+22.333.444/0001-81,Transportes Vale Verde Ltda,4930-2/02,EPP,Simples Nacional,1200000,Jorge Valle,jorge@valeverde.com.br`;

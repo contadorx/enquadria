@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createHash } from "crypto";
 import { createAdminClient } from "@/lib/supabase-admin";
-import { soDigitos, cnpjValido } from "@/lib/cnpj";
+import { limparCnpj, cnpjValido } from "@/lib/cnpj";
 
 /**
  * VERIFICAÇÃO PÚBLICA DE DOCUMENTOS.
@@ -25,7 +25,9 @@ import { soDigitos, cnpjValido } from "@/lib/cnpj";
 export const dynamic = "force-dynamic";
 
 const mascararCnpjPublico = (cnpj?: string | null) => {
-  const d = (cnpj || "").replace(/\D/g, "");
+  // limparCnpj e nao replace(/\D/g): o alfanumerico perderia as letras e
+  // mascararia a empresa errada na pagina publica de verificacao.
+  const d = limparCnpj(cnpj || "");
   if (d.length !== 14) return "—";
   return `**.***.${d.slice(5, 8)}/${d.slice(8, 12)}-**`;
 };
@@ -132,14 +134,14 @@ export async function POST(req: Request) {
   const numero = parseInt(String(corpo.numero ?? "").replace(/\D/g, ""), 10);
   // ATENÇÃO: normalizarCnpj() completa com zeros à esquerda — CNPJ vazio viraria
   // 14 caracteres e passaria por uma checagem de tamanho. Aqui se exige que os
-  // 14 dígitos tenham sido REALMENTE digitados, e que o verificador confira.
-  const cnpj = soDigitos(String(corpo.cnpj ?? ""));
+  // 14 caracteres tenham sido REALMENTE digitados, e que o verificador confira.
+  const cnpj = limparCnpj(String(corpo.cnpj ?? ""));
   if (!Number.isFinite(numero) || numero <= 0) {
     return NextResponse.json({ erro: "informe o número do documento" }, { status: 400 });
   }
   if (cnpj.length !== 14) {
     return NextResponse.json(
-      { erro: "informe o CNPJ completo da empresa, com 14 dígitos" },
+      { erro: "informe o CNPJ completo da empresa, com 14 caracteres" },
       { status: 400 }
     );
   }
@@ -169,7 +171,7 @@ export async function POST(req: Request) {
 
   const achado = (candidatos ?? []).find((l) => {
     const snap = l.snapshot as { empresa?: { cnpj?: string } } | null;
-    return soDigitos(snap?.empresa?.cnpj ?? "") === cnpj;
+    return limparCnpj(snap?.empresa?.cnpj ?? "") === cnpj;
   });
 
   if (!achado) return NextResponse.json(NAO_ENCONTRADO);

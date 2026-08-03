@@ -11,7 +11,7 @@
  * clique.
  *
  * CONTRATO ESPERADO do endpoint (POST):
- *   entrada:  { "cnpjs": ["11222333000181", ...] }   (só dígitos)
+ *   entrada:  { "cnpjs": ["11222333000181", "PC3D315K000193", ...] }
  *   saída:    { "11222333000181": {
  *                 razao_social, nome_fantasia, cnae_principal,
  *                 cnaes_secundarios, porte, situacao, anexo, ...

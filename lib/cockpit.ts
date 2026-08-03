@@ -251,18 +251,26 @@ export function filtrarPorEtapa(linhas: Linha[], etapa: keyof Esteira | null): L
 const semAcento = (s: string) =>
   s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
-/** Busca por nome, CNPJ ou CNAE — o que o contador digita quando procura uma empresa. */
+/**
+ * Busca por nome, CNPJ ou CNAE — o que o contador digita quando procura.
+ *
+ * A busca por CNPJ usa a chave ALFANUMÉRICA, não só os dígitos: com
+ * `replace(/\D/g, "")` procurar "PC3D315K" viraria procurar "3", e o pedaço
+ * que o contador reconhece na tela é justamente a raiz, com as letras.
+ * O CNAE continua numérico porque ele é numérico.
+ */
 export function buscar(linhas: Linha[], termo: string): Linha[] {
   const t = termo.trim();
   if (!t) return linhas;
   const alvo = semAcento(t);
+  const chave = t.toUpperCase().replace(/[^0-9A-Z]/g, "");
   const digitos = t.replace(/\D/g, "");
-  const porNumero = digitos.length >= 2;
+  const chaveDe = (v: string) => v.toUpperCase().replace(/[^0-9A-Z]/g, "");
   return linhas.filter((l) => {
     if (semAcento(l.razao_social).includes(alvo)) return true;
-    if (!porNumero) return false;
-    if (l.cnpj.replace(/\D/g, "").includes(digitos)) return true;
-    return (l.cnae ?? "").replace(/\D/g, "").includes(digitos);
+    if (chave.length >= 2 && chaveDe(l.cnpj).includes(chave)) return true;
+    if (digitos.length >= 2 && (l.cnae ?? "").replace(/\D/g, "").includes(digitos)) return true;
+    return false;
   });
 }
 
