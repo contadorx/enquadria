@@ -7,15 +7,14 @@ ok    suíte cockpit (24 asserções)
 ok    suíte motor (79 asserções)
 ok    suíte coleta (42 asserções)
 ok    suíte muro (11 asserções)
-ok    suíte reguas (14 asserções)
+ok    suíte reguas (25 asserções)
 ok    suíte janela (20 asserções)
 ok    suíte cnpj (34 asserções)
 ok    suíte envio (87 asserções)
 ok    suíte erros-auth (20 asserções)
 ok    suíte ajuda (41 asserções)
-ok    suíte cobranca (43 asserções)
+ok    suíte cobranca (15 asserções)
 ok    suíte nps (31 asserções)
-ok    suíte onboarding (23 asserções)
 
 ── Auditoria de UX (percepção, não estética) ───────────────────
 ok    auditoria de UX (6 regras limpas)
@@ -137,4 +136,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 112 verificações automáticas
+TUDO PASSOU — 111 verificações automáticas

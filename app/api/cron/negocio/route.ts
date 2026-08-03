@@ -82,20 +82,17 @@ export async function GET(req: Request) {
   }
 
   /**
-   * ⚠️ DOIS MOTORES PARALELOS — as chamadas foram REMOVIDAS daqui.
+   * UM MOTOR SÓ — `lib/reguas.ts`.
    *
-   * Em 03/08 eu construí `lib/cobranca-executar` e `lib/onboarding-executar`
-   * sem antes olhar que `lib/reguas.ts` JÁ fazia as duas coisas:
+   * Em 03/08 chegaram a existir dois: `cobranca-executar` e
+   * `onboarding-executar`, escritos sem que se tivesse olhado que este aqui já
+   * fazia as duas coisas, com copy em tabela e tela de edição. Ligados juntos,
+   * o mesmo cliente receberia a mesma cobrança por dois caminhos, e a trava de
+   * um não enxergava a do outro.
    *
-   *   ativacao_boas_vindas · ativacao_sem_carteira · ativacao_sem_laudo
-   *   cobranca_gerada · cobranca_pre_vencimento · cobranca_d1 · cobranca_d5
-   *
-   * Com os três ligados, o mesmo cliente receberia a mesma cobrança duas
-   * vezes, por caminhos diferentes — e a trava de cada motor não enxerga a do
-   * outro, então nenhuma das duas impediria.
-   *
-   * Os módulos continuam no repositório, testados, para a decisão de
-   * consolidação. Ligados, não.
+   * Os dois foram removidos e o que tinham de melhor veio para cá: os degraus
+   * `cobranca_no_dia` e `cobranca_d10`, e os testes da escada e da regra de
+   * parar, em testes/reguas.test.mjs.
    */
 
   return NextResponse.json({

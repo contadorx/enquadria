@@ -377,10 +377,23 @@ export function planejar(ctx: Contexto): Envio[] {
             });
           }
         } else {
-          // escada: só o degrau MAIS ALTO já atingido
+          /**
+           * Escada: só o degrau MAIS ALTO já atingido.
+           *
+           * `cobranca_no_dia` (degrau 0) e `cobranca_d10` entraram em 03/08.
+           * O primeiro fechava um buraco real: com a escada começando em D+1,
+           * quem vencia HOJE não recebia nada — o dia do vencimento era
+           * justamente o único silencioso.
+           *
+           * O d10 é o aviso de suspensão. Ele fecha a régua: sem um último
+           * degrau que diga o que vai acontecer, o corte de acesso chega sem
+           * ter sido anunciado.
+           */
           const escada: [string, number][] = [
+            ["cobranca_no_dia", regras["cobranca_no_dia"]?.dias ?? 0],
             ["cobranca_d1", regras["cobranca_d1"]?.dias ?? 1],
             ["cobranca_d5", regras["cobranca_d5"]?.dias ?? 5],
+            ["cobranca_d10", regras["cobranca_d10"]?.dias ?? 10],
           ];
           const atingidos = escada.filter(([, d]) => atraso >= d);
           const alvo = atingidos.length ? atingidos[atingidos.length - 1] : null;

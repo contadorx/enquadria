@@ -150,5 +150,97 @@ const todas = chaves(CTX());
 ok(!(todas.includes("pos_janela_revisao") && todas.includes("proxima_janela")),
    "revisão e próxima janela nunca saem no mesmo dia");
 
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * A ESCADA DE COBRANÇA E A REGRA DE PARAR
+ *
+ * Trazidas na consolidação de 03/08, quando um segundo motor de régua foi
+ * removido. São as duas famílias que ninguém cobria aqui:
+ *
+ *   ESCADA — só o degrau mais alto atingido sai. É o que faz um cron que
+ *   falhou três dias mandar UMA cobrança, e não três.
+ *
+ *   PARAR — "vi que a carteira ainda não subiu" mandado para quem acabou de
+ *   subir 143 empresas é o e-mail que faz a pessoa parar de ler todos os
+ *   outros. E é o mais fácil de mandar por engano, porque a régua já estava
+ *   agendada.
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+const REGRAS_COB = [
+  REGRA("cobranca_gerada"),
+  REGRA("cobranca_pre_vencimento", 3),
+  REGRA("cobranca_no_dia", 0),
+  REGRA("cobranca_d1", 1),
+  REGRA("cobranca_d5", 5),
+  REGRA("cobranca_d10", 10),
+];
+
+const emDias = (n) => new Date(hoje.getTime() + n * 86400000).toISOString();
+
+const comFatura = (venc) => ({
+  ...ESCRITORIO,
+  status: "pendente",
+  assinatura_id: "a1",
+  checkout_url: "https://pag/x",
+  valor_centavos: 29700,
+  vencimento: venc,
+});
+
+const chavesCob = (venc, jaEnviados = new Set()) =>
+  planejar({
+    regras: REGRAS_COB,
+    escritorios: [comFatura(venc)],
+    jaEnviados,
+    config: {},
+    limiteGratis: 2,
+  }).map((e) => e.regra);
+
+// o degrau do DIA do vencimento: era o único silencioso antes de 03/08
+ok(chavesCob(emDias(0)).includes("cobranca_no_dia"),
+   "vence hoje: o degrau do dia sai");
+
+// escada: atraso de 7 dias manda o d5, não o d1 nem os dois
+const sete = chavesCob(emDias(-7));
+ok(sete.includes("cobranca_d5"), "7 dias de atraso: sai o degrau de 5");
+ok(!sete.includes("cobranca_d1"), "e NÃO sai também o de 1 — só o degrau mais alto");
+ok(sete.filter((c) => c.startsWith("cobranca_d")).length === 1,
+   "um único e-mail de atraso por rodada, mesmo com vários degraus vencidos");
+
+// o último degrau existe: sem ele, o corte de acesso chega sem aviso
+ok(chavesCob(emDias(-12)).includes("cobranca_d10"),
+   "12 dias de atraso: sai o aviso de suspensão");
+
+// antes do vencimento, dentro da janela configurada
+ok(chavesCob(emDias(2)).includes("cobranca_pre_vencimento"),
+   "faltando 2 dias: sai o pré-vencimento");
+ok(!chavesCob(emDias(30)).includes("cobranca_pre_vencimento"),
+   "faltando 30 dias: ainda não incomoda");
+
+// a trava: o que já saiu não sai de novo
+ok(!chavesCob(emDias(-7), new Set(["cobranca_d5:a1"])).includes("cobranca_d5"),
+   "degrau já enviado não repete");
+
+/* ── a regra de parar, na ativação ───────────────────────────────────── */
+const novaConta = (over) => ({
+  ...ESCRITORIO,
+  criado_em: diasAtras(3),
+  empresas: 0,
+  faixa_a: 0,
+  analises: 0,
+  laudos: 0,
+  ultima_analise: null,
+  ...over,
+});
+const chavesAtiv = (esc) =>
+  planejar({ regras: REGRAS, escritorios: [esc], jaEnviados: new Set(), config: {}, limiteGratis: 2 })
+    .map((e) => e.regra);
+
+ok(chavesAtiv(novaConta({})).includes("ativacao_sem_carteira"),
+   "conta nova sem carteira: cobra a carteira");
+ok(!chavesAtiv(novaConta({ empresas: 143, faixa_a: 40 })).includes("ativacao_sem_carteira"),
+   "SUBIU 143 EMPRESAS: nunca mais recebe 'vi que a carteira não subiu'");
+ok(!chavesAtiv(novaConta({ empresas: 143, faixa_a: 40, analises: 5, laudos: 1 })).includes("ativacao_sem_laudo"),
+   "emitiu laudo: para de cobrar o laudo");
+
 console.log(f === 0 ? "TODOS OS TESTES PASSARAM" : `${f} FALHAS`);
 process.exit(f ? 1 : 0);
