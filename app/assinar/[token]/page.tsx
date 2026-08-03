@@ -65,6 +65,18 @@ export default async function AssinarPage({ params }: { params: { token: string 
             {termo.assinado_em ? ` em ${new Date(termo.assinado_em).toLocaleString("pt-BR")}` : ""}.
           </p>
           <p className="mt-3 break-all font-mono text-[10.5px] text-muted">hash: {termo.hash_documento}</p>
+          {/*
+            Quem volta a este endereço veio buscar o DOCUMENTO — é para cá que
+            aponta o botão "guardar uma cópia" do e-mail de confirmação. Antes
+            encontrava só o aviso, e a via imprimível ficava atrás do login do
+            contador.
+          */}
+          <a
+            href={`/termo/${params.token}`}
+            className="mt-4 inline-block rounded-sm bg-ink px-4 py-2.5 text-[13px] font-semibold text-white"
+          >
+            Abrir e salvar o termo assinado
+          </a>
         </div>
       </Casca>
     );

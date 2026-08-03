@@ -161,13 +161,13 @@ secao("Auditoria de schema (colunas que ninguém garante que existem)");
 secao("Endereços públicos — o que chega ao cliente sem login");
 {
   /**
-   * O cliente do contador NÃO TEM CONTA e nunca vai ter. Quatro endereços
+   * O cliente do contador NÃO TEM CONTA e nunca vai ter. Cinco endereços
    * existem para ele, e todos dependem de continuar fora da guarda do
    * middleware. Proteger um deles por engano não quebra build nem teste de
    * função pura: quebra em produção, como um cliente batendo em tela de login
    * para ler o laudo que pagou — e o contador só descobre quando reclamam.
    */
-  const PUBLICAS = ["assinar", "coleta", "laudo", "comparativo"];
+  const PUBLICAS = ["assinar", "coleta", "laudo", "comparativo", "termo"];
   const mw = fs.readFileSync(path.join(RAIZ, "middleware.ts"), "utf8");
   const guarda = mw.match(/path\.startsWith\("([^"]+)"\)/g) || [];
   const prefixos = guarda.map((g) => g.match(/"([^"]+)"/)[1]);
@@ -191,6 +191,34 @@ secao("Endereços públicos — o que chega ao cliente sem login");
     ok(`/${rota}/[token] lê por token, não por sessão`,
        src.includes("createAdminClient") && !/from "@\/lib\/supabase-server"/.test(src),
        src.includes("supabase-server") ? "importa o cliente de sessão" : "não usa createAdminClient");
+  }
+
+  /**
+   * O BOTÃO DO E-MAIL PRECISA ABRIR O DOCUMENTO.
+   *
+   * Bug real: o comprovante de assinatura dizia "guardar uma cópia do termo" e
+   * apontava para /assinar/[token], que depois de assinado mostra um aviso e o
+   * hash. O cliente ficava sem via nenhuma — e isso não aparece em build, em
+   * tipo nem em teste de função: aparece na hora em que alguém contesta a
+   * decisão e a única via imprimível está atrás do login da outra parte.
+   */
+  {
+    const api = fs.readFileSync(path.join(RAIZ, "app/api/assinar/route.ts"), "utf8");
+    const linha = (api.match(/const linkTermo = [^\n]+/) || [""])[0];
+    ok("o comprovante do cliente linka o termo, não a página de assinatura",
+       linha.includes("/termo/") && !linha.includes("/assinar/"), linha || "linha não encontrada");
+  }
+
+  /**
+   * E O VÍDEO DA AULA aceita o link que o YouTube entrega no botão
+   * compartilhar. `src={aula.video}` cru obrigava a colar a URL de embed —
+   * quem colasse youtu.be publicava uma aula com o player recusando carregar.
+   */
+  {
+    const aula = fs.readFileSync(path.join(RAIZ, "app/curso/[slug]/page.tsx"), "utf8");
+    ok("a aula normaliza a URL do vídeo antes do iframe",
+       aula.includes("urlDeEmbed") && !/src=\{aula\.video\}/.test(aula),
+       /src=\{aula\.video\}/.test(aula) ? "iframe recebe a URL crua" : "não chama urlDeEmbed");
   }
 }
 

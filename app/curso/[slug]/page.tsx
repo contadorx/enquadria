@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { CursoMateriais } from "@/components/CursoMateriais";
+import { urlDeEmbed } from "@/lib/ajuda";
 import {
   CURSO,
   RESSALVA,
@@ -42,6 +43,24 @@ export default function AulaPage({ params }: { params: { slug: string } }) {
   const proxima = i < TODAS_AULAS.length - 1 ? TODAS_AULAS[i + 1] : null;
   const materiais = materiaisDe(aula.materiais);
 
+  /**
+   * O LINK QUE VOCÊ COLA É O LINK QUE VOCÊ COPIOU.
+   *
+   * Antes, `aula.video` ia direto para o `src` do iframe. Isso obrigava a colar
+   * a URL de EMBED (`youtube.com/embed/ID`) — e a URL que o YouTube entrega no
+   * botão de compartilhar é `youtu.be/ID`, que num iframe carrega uma página de
+   * recusa, não o player. O erro só aparecia depois de publicar.
+   *
+   * `urlDeEmbed` (a mesma função da central de ajuda, já testada) converte
+   * watch / youtu.be / live / embed e vimeo para a forma de player. O fallback
+   * para a URL crua existe porque este campo é código, não formulário: se um
+   * dia a gravação for para outro provedor, o `https://` dele passa. O que não
+   * passa é um `javascript:` — e é isso que a checagem impede.
+   */
+  const embed =
+    urlDeEmbed(aula.video) ??
+    (aula.video && /^https:\/\//i.test(aula.video) ? aula.video : null);
+
   return (
     <div className="min-h-screen bg-bg">
       <header className="border-b border-line bg-ink">
@@ -70,10 +89,10 @@ export default function AulaPage({ params }: { params: { slug: string } }) {
 
         {/* ---------------------------------------------------------- vídeo */}
         <div className="mt-6 overflow-hidden rounded-lg border border-line bg-ink">
-          {aula.video ? (
+          {embed ? (
             <div className="relative w-full pb-[56.25%]">
               <iframe
-                src={aula.video}
+                src={embed}
                 title={aula.titulo}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture"
                 allowFullScreen

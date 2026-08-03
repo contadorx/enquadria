@@ -197,7 +197,12 @@ export async function POST(req: Request) {
       const escritorio = dono?.escritorio ?? "Seu contador";
       const decisao = (termo.decisao === "optar" ? "optar" : "permanecer") as "optar" | "permanecer";
       const base = new URL(req.url).origin;
-      const linkTermo = termo.token ? `${base}/assinar/${termo.token}` : base;
+      /**
+       * O BOTÃO DO E-MAIL DIZ "guardar uma cópia do termo" — então ele precisa
+       * abrir o termo, não a página de assinatura. Apontando para /assinar, o
+       * cliente caía num aviso de "já assinado" com o hash e nada para guardar.
+       */
+      const linkTermo = termo.token ? `${base}/termo/${termo.token}` : base;
 
       // comprovante a quem assinou — o e-mail é o que ele acabou de digitar
       if (corpo.email) {

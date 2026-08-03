@@ -99,8 +99,19 @@ export function Assinatura({ token, empresa, cnpj, decisao, clausulas, hash, lin
         <p className="mt-3 break-all font-mono text-[10.5px] text-muted">
           hash do documento: {hash}
         </p>
-        <p className="mt-4 text-[12.5px] text-muted">
-          Uma cópia foi arquivada no dossiê do seu contador. Você já pode fechar esta página.
+        {/*
+          "Você já pode fechar esta página" era o fim da conversa — e a pessoa
+          saía sem a via dela. Agora a via sai daqui, na hora, e o mesmo link
+          chega por e-mail.
+        */}
+        <a
+          href={`/termo/${token}`}
+          className="mt-4 inline-block rounded-sm bg-ink px-4 py-2.5 text-[13px] font-semibold text-white"
+        >
+          Baixar a sua via em PDF
+        </a>
+        <p className="mt-3 text-[12.5px] text-muted">
+          O mesmo link vai para o seu e-mail, e uma cópia fica arquivada no dossiê do seu contador.
         </p>
       </div>
     );

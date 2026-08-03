@@ -27,10 +27,14 @@ ok    /assinar/[token] existe e é pública
 ok    /coleta/[token] existe e é pública
 ok    /laudo/[token] existe e é pública
 ok    /comparativo/[token] existe e é pública
+ok    /termo/[token] existe e é pública
 ok    /assinar/[token] lê por token, não por sessão
 ok    /coleta/[token] lê por token, não por sessão
 ok    /laudo/[token] lê por token, não por sessão
 ok    /comparativo/[token] lê por token, não por sessão
+ok    /termo/[token] lê por token, não por sessão
+ok    o comprovante do cliente linka o termo, não a página de assinatura
+ok    a aula normaliza a URL do vídeo antes do iframe
 
 ── Massa de empresas no parser do app ──────────────────────────
 ok    lê 47 linhas
@@ -136,4 +140,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 111 verificações automáticas
+TUDO PASSOU — 115 verificações automáticas

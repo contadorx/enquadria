@@ -173,6 +173,21 @@ export function PainelEmpresa({
       setAvisoEnvio({ ok: false, texto: "não consegui copiar o link" });
     }
   }
+  /**
+   * O termo já carrega o token no painel — não precisa de ida ao servidor para
+   * montar o endereço, ao contrário do laudo e do comparativo.
+   */
+  async function copiarLinkTermo(id: string, token: string) {
+    setAvisoEnvio(null);
+    try {
+      await navigator.clipboard?.writeText(`${window.location.origin}/termo/${token}`);
+      setLinkCopiado(id);
+      setTimeout(() => setLinkCopiado(null), 2500);
+    } catch {
+      setAvisoEnvio({ ok: false, texto: "não consegui copiar o link" });
+    }
+  }
+
   const [nomeSig, setNomeSig] = useState("");
   const [emailSig, setEmailSig] = useState("");
   /**
@@ -889,7 +904,7 @@ export function PainelEmpresa({
                   </p>
                 </div>
                 {d.termo && (
-                  <div className="flex shrink-0 gap-1.5">
+                  <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
                     {!assinado && d.termo.token && (
                       <a
                         href={`/assinar/${d.termo.token}`}
@@ -900,13 +915,28 @@ export function PainelEmpresa({
                         Link
                       </a>
                     )}
+                    {/*
+                      Assinado, o cliente tem direito à via dele. O link público
+                      abre o mesmo documento — com hash e trilha — sem exigir
+                      conta. Copiar aqui evita o pedido "me manda o termo" por
+                      WhatsApp virar um print do painel.
+                    */}
+                    {assinado && d.termo.token && (
+                      <button
+                        onClick={() => void copiarLinkTermo(d.termo!.id, d.termo!.token!)}
+                        title="Link da via do cliente — abre o termo assinado sem login"
+                        className="rounded-sm border border-line px-3 py-1.5 text-[12px] font-semibold text-slate2"
+                      >
+                        {linkCopiado === d.termo.id ? "Copiado ✓" : "Copiar via do cliente"}
+                      </button>
+                    )}
                     <a
                       href={`/doc/termo/${d.termo.id}`}
                       target="_blank"
                       rel="noreferrer"
                       className="rounded-sm border border-line px-3 py-1.5 text-[12px] font-semibold text-slate2"
                     >
-                      Abrir
+                      Abrir / PDF
                     </a>
                   </div>
                 )}

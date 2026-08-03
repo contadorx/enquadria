@@ -21,7 +21,15 @@ export interface Aula {
   topicos: string[];
   /** onda de publicação (1, 2 ou 3) */
   onda: number;
-  /** URL do vídeo; enquanto for null a aula aparece como "em breve" */
+  /**
+   * URL do vídeo; enquanto for null a aula aparece como "em breve".
+   *
+   * Pode ser o link NORMAL do YouTube — o do botão compartilhar
+   * (`https://youtu.be/ID`), o da barra de endereço (`.../watch?v=ID`), o de
+   * live ou o de embed. A página da aula converte para a forma de player antes
+   * de montar o iframe (ver `urlDeEmbed`). Vimeo idem. Não é preciso lembrar
+   * de nenhum formato específico na hora de colar.
+   */
   video?: string | null;
   /** materiais liberados nesta aula */
   materiais?: string[];
