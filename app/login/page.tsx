@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { traduzirErroAuth, interpretarCadastro } from "@/lib/erros-auth";
@@ -15,6 +15,18 @@ export default function Login() {
   const [ocupado, setOcupado] = useState(false);
   // cadastro feito mas ainda sem sessão: a tela PRECISA dizer isso
   const [confirmar, setConfirmar] = useState<string | null>(null);
+
+  /**
+   * Erro devolvido pelo /auth/callback — link expirado, já usado, ou aberto em
+   * outro navegador. Chega pela URL porque quem detecta é o servidor.
+   */
+  useEffect(() => {
+    // lido de window.location e não de useSearchParams: o hook exige um limite
+    // de Suspense em volta da página inteira, e não vale reestruturar o login
+    // para ler um parâmetro que só existe quando o link de e-mail falhou
+    const vindoDoLink = new URLSearchParams(window.location.search).get("erro");
+    if (vindoDoLink) setErro(traduzirErroAuth({ message: vindoDoLink, status: 400 }, "entrar"));
+  }, []);
 
   async function enviar() {
     setErro(null);
@@ -56,14 +68,37 @@ export default function Login() {
       }
     }
 
-    // NÃO soltamos `ocupado` aqui de propósito. A navegação para /painel
-    // ainda vai acontecer e leva tempo: carregar a rota, buscar os dados,
-    // desenhar. Se o botão voltasse ao normal agora, a pessoa veria a tela
-    // parada com um botão pronto para clicar de novo — que foi exatamente o
-    // relato ("parece erro"). O estado de espera tem que durar até o efeito,
-    // não até a resposta da API.
-    router.push("/painel");
-    router.refresh();
+    /**
+     * NAVEGAÇÃO DURA, não `router.push`.
+     *
+     * O cookie de sessão é escrito pelo navegador no fim do login. Um
+     * `router.push` faz uma busca interna do Next que pode sair ANTES do
+     * cookie estar disponível para o servidor — o middleware então não vê
+     * sessão, devolve para /login, e a pessoa fica presa numa tela que diz
+     * "Entrando…" para sempre. Foi exatamente o relato: só entrava abrindo
+     * outra aba, porque a aba nova carregava com o cookie já gravado.
+     *
+     * `window.location.assign` recarrega de verdade: o navegador manda o
+     * cookie recém-escrito e o servidor enxerga a sessão na primeira tentativa.
+     */
+    window.location.assign("/painel");
+
+    /**
+     * A SAÍDA DE EMERGÊNCIA.
+     *
+     * Segurar o "Entrando…" até a navegação foi decisão minha e estava certa —
+     * mas sem um limite ela vira armadilha: se a navegação não acontece, não
+     * há botão, não há mensagem, não há nada. Passados 8 segundos, devolvo o
+     * controle e digo o que fazer.
+     */
+    setTimeout(() => {
+      setOcupado(false);
+      setErro({
+        texto:
+          "Entrei na sua conta, mas a tela não trocou. Clique aqui para abrir o painel — se insistir, recarregue a página.",
+        culpaDoServidor: true,
+      });
+    }, 8000);
   }
 
   // Tela de "confirme seu e-mail". É um ESTADO, não um toast: a pessoa
@@ -181,10 +216,22 @@ export default function Login() {
           {erro && (
             <div className="mb-3 rounded-sm bg-vermelhowash px-3 py-2 text-[12.5px] text-vermelho">
               <p>{erro.texto}</p>
-              {erro.culpaDoServidor && (
-                <p className="mt-1 text-[11px] opacity-80">
-                  Nada do que você digitou causou isso.
-                </p>
+              {/* o link só aparece quando a conta JÁ entrou e a tela é que não
+                  trocou — nos demais erros ele mandaria a pessoa para uma tela
+                  que vai devolvê-la para cá */}
+              {erro.texto.includes("a tela não trocou") ? (
+                <a
+                  href="/painel"
+                  className="mt-1 inline-block font-semibold underline underline-offset-2"
+                >
+                  Abrir o painel
+                </a>
+              ) : (
+                erro.culpaDoServidor && (
+                  <p className="mt-1 text-[11px] opacity-80">
+                    Nada do que você digitou causou isso.
+                  </p>
+                )
               )}
             </div>
           )}

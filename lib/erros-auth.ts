@@ -43,6 +43,10 @@ const CONHECIDAS: Array<[string, string]> = [
   ["error sending confirmation", "Não foi possível enviar o e-mail de confirmação. A conta NÃO foi criada."],
   ["error sending", "Não foi possível enviar o e-mail. A conta NÃO foi criada."],
   ["failed to fetch", "Não consegui falar com o servidor. Verifique sua conexão."],
+  // vindos do link de confirmação, via /auth/callback
+  ["expired", "Este link de confirmação expirou. Peça um novo entrando com seu e-mail e senha."],
+  ["invalid request", "Este link de confirmação já foi usado ou não vale mais. Tente entrar direto."],
+  ["code verifier", "O link foi aberto em um navegador diferente do que fez o cadastro. Abra no mesmo navegador, ou entre direto com e-mail e senha."],
 ];
 
 /**
