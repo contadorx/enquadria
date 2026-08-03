@@ -26,6 +26,8 @@ import {
   naMesa,
   filtrarPorEtapa,
   buscar,
+  proximoEmpurrao,
+  porOndeComecar,
 } from "./cockpit.js";
 
 const empresas = [
@@ -77,6 +79,53 @@ ok(buscar(linhas, "6201").length === 1, "busca por CNAE");
 const antes = linhas.map((l) => l.id).join();
 ordenarFila(linhas);
 ok(antes === linhas.map((l) => l.id).join(), "ordenarFila não muta a lista original");
+
+/* ─────────────────────────── O EMPURRÃO (conserto 3 e 5 do funil) ────── */
+
+// A fixture do topo já tem laudo na empresa 1, então o empurrão dela é o
+// termo. Para testar o primeiro degrau, monto uma carteira SEM laudo nenhum.
+const semLaudo = montarFila(empresas, analises, [], []);
+const e1 = proximoEmpurrao(semLaudo);
+ok(e1?.tipo === "emitir_primeiro", "carteira analisada e sem laudo pede o primeiro laudo");
+ok(e1?.alvo?.razao_social === "Alfa Atacado Ltda", "aponta a empresa, não só a ação");
+
+// a empresa 2 tem premissas ESTIMADAS (origem lote_cnae) — não pode ser
+// escolhida para o primeiro laudo, porque laudo em cima de chute é o erro
+// que não tem conserto
+ok(porOndeComecar(semLaudo)?.id === "1", "não sugere empresa com premissa estimada");
+
+// entre duas candidatas boas, ganha a de menor repasse exigido
+const duas = montarFila(
+  [empresas[0], { ...empresas[1], id: "9", faixa: "A", prioridade_maxima: true }],
+  [
+    { id: "anA", empresa_id: "1", saida: "S4", re: 0.09, prioridade: true, parametros: {}, calculado_em: "2026-07-20T10:00:00Z" },
+    { id: "anB", empresa_id: "9", saida: "S4", re: 0.03, prioridade: true, parametros: {}, calculado_em: "2026-07-20T10:00:00Z" },
+  ],
+  [], []
+);
+ok(porOndeComecar(duas)?.id === "9", "empatadas em prioridade, ganha a de menor repasse");
+
+// com laudo emitido e contato, o empurrão vira o termo
+const e2 = proximoEmpurrao(linhas);
+ok(e2?.tipo === "termo_pendente", "laudo emitido sem termo vira o empurrão do termo");
+ok(e2?.quantidade === 1, "conta quantos estão sem termo");
+
+// laudo emitido para quem NÃO tem contato não vira cobrança de termo:
+// não dá para pedir assinatura de quem não tem e-mail
+const semContato = montarFila(
+  [{ ...empresas[0], contato_nome: null, contato_email: null }],
+  [{ id: "an1", empresa_id: "1", saida: "S4", re: 0.06, prioridade: true, parametros: {}, calculado_em: "2026-07-20T10:00:00Z" }],
+  [{ id: "l1", analise_id: "an1", numero: 7 }],
+  []
+);
+ok(proximoEmpurrao(semContato) === null, "sem contato não cobra termo — cobraria o impossível");
+
+// carteira só com MEI e descarte não tem o que empurrar
+const soFora = montarFila([empresas[3]], [], [], []);
+ok(proximoEmpurrao(soFora) === null, "silêncio quando não há nada a fazer");
+
+ok(proximoEmpurrao([]) === null, "carteira vazia não inventa empurrão");
+
 
 console.log(falhas === 0 ? "\nTODOS OS TESTES PASSARAM" : `\n${falhas} FALHAS`);
 process.exit(falhas ? 1 : 0);

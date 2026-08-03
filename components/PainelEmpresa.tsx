@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { MuroPlano } from "@/components/MuroPlano";
+import type { Muro } from "@/lib/plano";
 import { useRouter } from "next/navigation";
 import { formatarCnpj } from "@/lib/cnpj";
 import { pct, moeda, SAIDAS, ehOptar, type Saida, type Respostas } from "@/lib/motor";
@@ -101,6 +103,7 @@ export function PainelEmpresa({
   const [aba, setAba] = useState<Aba>(abaInicial);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [bloqueio, setBloqueio] = useState<string | null>(null);
+  const [muro, setMuro] = useState<Muro | null>(null);
   const [link, setLink] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
   const [nomeSig, setNomeSig] = useState("");
@@ -189,6 +192,7 @@ export function PainelEmpresa({
     if (!a) return;
     setOcupado("laudo");
     setBloqueio(null);
+    setMuro(null);
     try {
       const resp = await fetch("/api/laudo", {
         method: "POST",
@@ -200,7 +204,8 @@ export function PainelEmpresa({
         window.open(`/doc/laudo/${json.laudo_id}`, "_blank");
         mudou();
       } else if (json.bloqueado_por_plano) {
-        setBloqueio(json.erro as string);
+        if (json.muro) setMuro(json.muro as Muro);
+        else setBloqueio(json.erro as string);
       } else {
         setBloqueio(json.erro ?? "não foi possível emitir o laudo");
       }
@@ -281,16 +286,26 @@ export function PainelEmpresa({
         ))}
       </div>
 
-      {bloqueio && (
-        <div className="mb-3 rounded-sm border border-accent bg-accentwash p-3.5">
-          <p className="text-[12.5px] text-slate2">{bloqueio}</p>
-          <a
-            href="/painel/planos"
-            className="mt-2 inline-block rounded-sm bg-accent px-3.5 py-2 text-[12.5px] font-bold text-[#04212B]"
-          >
-            Ver o PRO — R$ 47/mês
-          </a>
+      {/* O muro vem do servidor com o preço REAL do banco. O bloco de baixo é
+          o fallback para erro que não é de plano — e não cita cifra nenhuma,
+          porque preço escrito à mão na tela é preço que um dia diverge da
+          página de planos sem ninguém perceber. */}
+      {muro ? (
+        <div className="mb-3">
+          <MuroPlano muro={muro} aoFechar={() => setMuro(null)} />
         </div>
+      ) : (
+        bloqueio && (
+          <div className="mb-3 rounded-sm border border-accent bg-accentwash p-3.5">
+            <p className="text-[12.5px] text-slate2">{bloqueio}</p>
+            <a
+              href="/painel/planos"
+              className="mt-2 inline-block rounded-sm bg-accent px-3.5 py-2 text-[12.5px] font-bold text-[#04212B]"
+            >
+              Ver os planos
+            </a>
+          </div>
+        )
       )}
 
       {/* ------------------------------------------------------------ DECISÃO */}

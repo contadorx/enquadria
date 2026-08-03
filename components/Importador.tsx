@@ -52,7 +52,7 @@ const COR: Record<Faixa, string> = {
   FORA: "text-muted",
 };
 
-export function Importador() {
+export function Importador({ jaTem = 0 }: { jaTem?: number }) {
   const router = useRouter();
   const [nomeArquivo, setNomeArquivo] = useState<string>("");
   const [parse, setParse] = useState<ResultadoParse | null>(null);
@@ -230,7 +230,8 @@ export function Importador() {
         <div className="flex items-center gap-2 text-verde">
           <span className="font-mono text-sm">✓</span>
           <span className="text-[15px] font-semibold">
-            {feito.gravadas} empresas na carteira
+            {feito.gravadas} {feito.gravadas === 1 ? "empresa" : "empresas"}{" "}
+            {jaTem > 0 ? "adicionadas à carteira" : "na carteira"}
           </span>
         </div>
         {/*
@@ -276,7 +277,7 @@ export function Importador() {
             onClick={() => setFeito(null)}
             className="rounded-sm border border-line px-4 py-2 text-sm font-semibold text-slate2"
           >
-            Importar outro
+            Adicionar mais empresas
           </button>
         </div>
       </div>
@@ -292,7 +293,9 @@ export function Importador() {
         distância; quem não tem agora consegue começar mesmo assim.
       */}
       <div className="rounded border border-dashed border-line bg-surface p-6">
-        <div className="text-[15px] font-bold">Comece pelos CNPJs</div>
+        <div className="text-[15px] font-bold">
+          {jaTem > 0 ? "Cole os CNPJs das novas empresas" : "Comece pelos CNPJs"}
+        </div>
         <p className="mt-1 max-w-[68ch] text-[12.5px] leading-relaxed text-muted">
           Não precisa exportar nada. Cole a lista de CNPJs dos seus clientes — um por linha,
           ou separados por vírgula — e o resto (razão social, CNAE, porte, situação) vem da
@@ -430,7 +433,9 @@ export function Importador() {
                 ? "Gravando..."
                 : etapa === "analisando"
                 ? "Rodando a primeira análise..."
-                : `Gravar e analisar ${parse.linhas.length} empresas`}
+                : jaTem > 0
+                ? `Adicionar e analisar ${parse.linhas.length} ${parse.linhas.length === 1 ? "empresa" : "empresas"}`
+                : `Gravar e analisar ${parse.linhas.length} ${parse.linhas.length === 1 ? "empresa" : "empresas"}`}
             </button>
           </div>
 

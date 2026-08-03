@@ -3,9 +3,12 @@
 ok    compila sem erro
 
 ── Suítes de função pura ───────────────────────────────────────
-ok    suíte cockpit (15 asserções)
+ok    suíte cockpit (24 asserções)
 ok    suíte motor (79 asserções)
 ok    suíte coleta (42 asserções)
+ok    suíte muro (11 asserções)
+ok    suíte reguas (14 asserções)
+ok    suíte janela (20 asserções)
 
 ── Massa de empresas no parser do app ──────────────────────────
 ok    lê 47 linhas
@@ -23,6 +26,10 @@ ok    triagem: faixa D = 9
 ok    triagem: faixa MEI = 2
 ok    triagem: faixa FORA = 4
 ok    prioridade máxima na de faixa textual
+
+── Links das réguas apontam para rotas que existem ─────────────
+ok    rotas citadas nos e-mails: importar
+ok    nenhum e-mail semeado aponta para rota removida
 
 ── CNPJs colados — o caminho sem export do sistema ─────────────
 ok    um por linha, formatado
@@ -107,4 +114,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 90 verificações automáticas
+TUDO PASSOU — 95 verificações automáticas

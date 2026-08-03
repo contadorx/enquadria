@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase-server";
 import { Cockpit, type Aviso } from "@/components/Cockpit";
 import { contarEsteira, montarFila, type AnaliseCru, type EmpresaCru, type Linha } from "@/lib/cockpit";
-import { estadoDaJanela } from "@/lib/janela";
+import { estadoDaJanela, faseDaJanela } from "@/lib/janela";
 import { decidir, PARAMETROS_2027, type Respostas } from "@/lib/motor";
 import { atingidas, ordenar, type EmpresaRadar, type ItemRadar } from "@/lib/radar";
 
@@ -93,6 +93,7 @@ export default async function Painel() {
   );
   const esteira = contarEsteira(linhas);
   const janela = estadoDaJanela();
+  const fase = faseDaJanela();
 
   // ---------------------------------------------------------------- avisos
   const empresasRadar: EmpresaRadar[] = linhas.map((l) => ({
@@ -180,6 +181,7 @@ export default async function Painel() {
         esteira={esteira}
         dias={janela.dias}
         posPct={janela.posPct}
+        fase={fase}
         avisos={avisos}
         totalCarteira={linhas.length}
         temEscritorio={temEscritorio}

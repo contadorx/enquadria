@@ -67,13 +67,29 @@ function secao(t) {
 secao("Compilando o TypeScript das funções puras");
 fs.rmSync(TMP, { recursive: true, force: true });
 try {
-  execSync(
-    `npx tsc lib/motor.ts lib/laudo.ts lib/triagem.ts lib/cockpit.ts ` +
-      `lib/premissas-padrao.ts lib/coleta.ts lib/csv.ts lib/cnpj.ts ` +
-      `--outDir ${TMP} --module esnext --target es2020 ` +
-      `--moduleResolution bundler --skipLibCheck`,
-    { cwd: RAIZ, stdio: "pipe" }
-  );
+  // tsconfig próprio em vez de flags soltas: `lib/reguas.ts` faz um
+  // `await import("@/lib/email")` e o alias "@/" só existe com baseUrl+paths.
+  // Sem isto o compilador para na primeira linha e nenhuma suíte roda.
+  const ARQUIVOS = [
+    "lib/motor.ts", "lib/laudo.ts", "lib/triagem.ts", "lib/cockpit.ts",
+    "lib/premissas-padrao.ts", "lib/coleta.ts", "lib/csv.ts", "lib/cnpj.ts",
+    "lib/plano.ts", "lib/potencial.ts", "lib/reguas.ts", "lib/janela.ts",
+  ];
+  const cfg = path.join(RAIZ, "tsconfig.testes.json");
+  fs.writeFileSync(cfg, JSON.stringify({
+    compilerOptions: {
+      outDir: TMP, module: "esnext", target: "es2020",
+      moduleResolution: "bundler", skipLibCheck: true, strict: true,
+      esModuleInterop: true, baseUrl: ".", paths: { "@/*": ["./*"] },
+      lib: ["dom", "esnext"], noEmit: false,
+    },
+    files: ARQUIVOS,
+  }, null, 2));
+  try {
+    execSync(`npx tsc -p tsconfig.testes.json`, { cwd: RAIZ, stdio: "pipe" });
+  } finally {
+    fs.rmSync(cfg, { force: true });
+  }
   // o compilador não escreve a extensão nos imports; o Node ESM exige
   for (const f of fs.readdirSync(TMP).filter((f) => f.endsWith(".js"))) {
     const p = path.join(TMP, f);
@@ -94,7 +110,7 @@ const coleta = await import(path.join(TMP, "coleta.js"));
 
 /* ============================================ 1. SUÍTES DE FUNÇÃO PURA == */
 secao("Suítes de função pura");
-for (const suite of ["cockpit", "motor", "coleta"]) {
+for (const suite of ["cockpit", "motor", "coleta", "muro", "reguas", "janela"]) {
   const arq = path.join(RAIZ, "testes", `${suite}.test.mjs`);
   if (!fs.existsSync(arq)) {
     ok(`suíte ${suite}`, false, "arquivo não encontrado");
@@ -146,6 +162,37 @@ if (!fs.existsSync(CSV)) {
      triagem.triar({ cnpj: faixaTxt?.cnpj ?? "", razao_social: "x", cnae_principal: "4639-7/01",
                      porte: "EPP", situacao: "ATIVA", regime: "Simples Nacional",
                      faturamento_faixa: "acima de 3,6mi" }).prioridade_maxima === true);
+}
+
+/* ============================ 2a. ROTAS CITADAS NOS E-MAILS EXISTEM? ===== */
+secao("Links das réguas apontam para rotas que existem");
+{
+  // O painel foi de treze rotas para uma. As réguas semeadas na 0020 ficaram
+  // apontando para /painel/entrega, /fila, /lote e /radar — quatro 404 dentro
+  // de e-mails de ativação e conversão, mandados justamente para quem tinha
+  // acabado de decidir agir. Nada na tela acusa isso, e nenhum teste de
+  // runtime pega: o link é DADO, mora no banco e no seed.
+  const migr = path.join(RAIZ, "supabase", "migrations");
+  const rotas = new Set();
+  for (const f of fs.readdirSync(migr).filter((f) => f.endsWith(".sql"))) {
+    const txt = fs.readFileSync(path.join(migr, f), "utf8");
+    for (const m of txt.matchAll(/\{\{\s*link_app\s*\}\}\/painel\/([a-z-]+)/g)) {
+      // a 0025 é a que CONSERTA — o que ela cita entre aspas de regexp não conta
+      if (f.startsWith("0025")) continue;
+      rotas.add(m[1]);
+    }
+  }
+  const existem = new Set(
+    fs.readdirSync(path.join(RAIZ, "app", "painel"), { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name)
+  );
+  const mortas = [...rotas].filter((r) => !existem.has(r));
+  ok(`rotas citadas nos e-mails: ${[...rotas].join(", ") || "(nenhuma)"}`, true);
+  ok("nenhum e-mail semeado aponta para rota removida", mortas.length === 0, mortas);
+  if (mortas.length > 0) {
+    ok("(a migration 0025 reescreve esses links no banco — rode-a)", false, mortas);
+  }
 }
 
 /* ===================================== 2b. CNPJs COLADOS (importação) ==== */
@@ -331,8 +378,22 @@ if (chromium && fs.existsSync(SITE)) {
 
     await p.fill('[data-gate-form] input[type=email]', "teste@exemplo.com.br");
     await p.click("[data-gate-form] button");
-    await p.waitForTimeout(400);
-    const livres2 = await p.$$eval(".mat-link", (e) => e.filter((x) => x.offsetParent !== null).length);
+    // ESPERA POR CONDIÇÃO, NÃO POR RELÓGIO. O gate só libera depois do
+    // Promise.allSettled das duas chamadas de rede reais; com um sleep fixo de
+    // 400ms este teste falhava sozinho de vez em quando, e teste que grita
+    // sem motivo é pior do que teste que não existe — em pouco tempo ninguém
+    // olha mais o resultado.
+    let livres2 = 0;
+    try {
+      await p.waitForFunction(
+        () => [...document.querySelectorAll(".mat-link")].some((x) => x.offsetParent !== null),
+        null,
+        { timeout: 8000 }
+      );
+      livres2 = await p.$$eval(".mat-link", (e) => e.filter((x) => x.offsetParent !== null).length);
+    } catch {
+      livres2 = 0;
+    }
     ok("materiais liberam depois do e-mail", livres2 > 0, livres2);
 
     const prog = () => p.$eval("[data-prog-texto]", (e) => e.textContent.trim());

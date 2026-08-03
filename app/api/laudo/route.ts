@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
-import { situacaoPlano, mensagemBloqueio, type Assinatura } from "@/lib/plano";
+import { situacaoPlano, mensagemBloqueio, montarMuro, type Assinatura } from "@/lib/plano";
+import { HONORARIO_PADRAO } from "@/lib/potencial";
 
 /**
  * Emite o laudo de uma análise (RPC atômica que numera por tenant).
@@ -42,12 +43,28 @@ export async function POST(req: Request) {
 
     const situacao = situacaoPlano(assinatura, count ?? 0);
     if (situacao.bloqueado) {
+      // O PREÇO VEM DO BANCO, não de constante no código. O muro cita um valor
+      // ao lado do honorário do contador; se essa cifra divergir da página de
+      // planos, o argumento inteiro perde a força — e é o tipo de divergência
+      // que ninguém percebe até um cliente apontar. Pego o plano público mais
+      // caro, que é o anual.
+      const { data: plano } = await supabase
+        .from("planos")
+        .select("preco_centavos")
+        .eq("ativo", true)
+        .eq("publico", true)
+        .gt("preco_centavos", 0)
+        .order("preco_centavos", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
       return NextResponse.json(
         {
           erro: mensagemBloqueio(situacao),
           bloqueado_por_plano: true,
           usados: situacao.usados,
           limite: situacao.limite,
+          muro: montarMuro(situacao, HONORARIO_PADRAO, plano?.preco_centavos ?? null),
         },
         { status: 402 }
       );

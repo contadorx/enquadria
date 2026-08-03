@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { mascararCnpj } from "@/lib/cnpj";
+import type { FaseAtual } from "@/lib/janela";
 import { moeda, pct } from "@/lib/motor";
 import { ROTULO_FAIXA, type Faixa } from "@/lib/triagem";
 import { EXPLICA_FAIXA, HONORARIO_PADRAO } from "@/lib/potencial";
@@ -18,6 +19,7 @@ import {
   filtrarPorEtapa,
   naMesa,
   ordenarFila,
+  proximoEmpurrao,
   type Acao,
   type Esteira,
   type Linha,
@@ -76,6 +78,7 @@ export function Cockpit({
   esteira,
   dias,
   posPct,
+  fase,
   avisos,
   totalCarteira,
   temEscritorio,
@@ -84,6 +87,7 @@ export function Cockpit({
   esteira: Esteira;
   dias: number;
   posPct: number;
+  fase: FaseAtual;
   avisos: Aviso[];
   totalCarteira: number;
   temEscritorio: boolean;
@@ -158,6 +162,41 @@ export function Cockpit({
   const visiveis = filtradas.slice(0, mostrar);
   const mesa = naMesa(linhas, honorario);
   const selecionadas = filtradas.filter((l) => selecao.has(l.id));
+
+  // O empurrão sai da carteira INTEIRA, não da fila filtrada: ele responde
+  // "o que fazer agora", e essa resposta não pode mudar porque o contador
+  // digitou algo na busca.
+  const empurrao = useMemo(() => proximoEmpurrao(linhas), [linhas]);
+
+  function agirEmpurrao() {
+    if (!empurrao) return;
+    if (empurrao.tipo === "emitir_primeiro" && empurrao.alvo?.analise_id) {
+      return chamar(
+        "/api/laudo",
+        { analise_id: empurrao.alvo.analise_id },
+        "empurrao",
+        (j) => {
+          const id = (j as { laudo_id?: string }).laudo_id;
+          if (id) window.open(`/doc/laudo/${id}`, "_blank");
+          return `Primeiro laudo emitido para ${empurrao.alvo?.razao_social}.`;
+        }
+      );
+    }
+    if (empurrao.tipo === "termo_pendente") {
+      const ids = linhas
+        .filter((l) => l.laudo_id && !l.termo_id && l.tem_contato)
+        .map((l) => l.analise_id)
+        .filter(Boolean) as string[];
+      return chamar("/api/termo/lote", { analise_ids: ids, enviar_email: true }, "empurrao", (j) => {
+        const r = j as { criados: number; enviados: number };
+        return `${r.criados} termos gerados${r.enviados ? ` e ${r.enviados} enviados por e-mail` : ""}.`;
+      });
+    }
+    // cobrar_assinatura: não há ação em massa segura — leva para quem falta
+    setEtapa("laudos");
+    setGrupo("trabalho");
+    setBusca("");
+  }
 
   function alternar(id: string) {
     setSelecao((s) => {
@@ -332,18 +371,40 @@ export function Cockpit({
             <span className="hidden font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted md:inline">
               Linha de produção
             </span>
-            <span className="rounded-full bg-accentwash px-2 py-0.5 font-mono text-[10.5px] font-semibold text-accentdeep">
-              {dias > 0 ? `faltam ${dias} dias` : "janela encerrada"}
+            {/* O selo saía de `dias > 0 ? ... : "janela encerrada"`, e a partir
+                de 1º de outubro dizia "encerrada" para sempre — o contador que
+                acabou de assinar lendo que o serviço acabou. Agora ele conta a
+                FASE: alíquota sendo fixada, prazo de cancelamento, próxima
+                janela. Ver lib/janela.ts. */}
+            <span
+              title={fase.chamada}
+              className="rounded-full bg-accentwash px-2 py-0.5 font-mono text-[10.5px] font-semibold text-accentdeep"
+            >
+              {fase.selo}
+              {fase.previsto && <span className="ml-1 opacity-70">(prevista)</span>}
             </span>
           </div>
-          <a
-            href="/doc/relatorio"
-            target="_blank"
-            rel="noreferrer"
-            className="font-mono text-[10.5px] text-accentdeep underline underline-offset-2"
-          >
-            relatório do escritório
-          </a>
+          <div className="flex items-center gap-3">
+            {/* SEMPRE VISÍVEL, e não só na tela vazia.
+                O link de importar existia apenas no estado inicial e no passo 2
+                da trilha — os dois somem assim que a primeira carteira entra. A
+                partir dali o contador que recebe um cliente novo não tinha por
+                onde adicionar, e carteira de escritório muda toda semana. */}
+            <Link
+              href="/painel/importar"
+              className="rounded-sm border border-line px-2.5 py-1 font-mono text-[10.5px] font-semibold text-accentdeep"
+            >
+              + empresas
+            </Link>
+            <a
+              href="/doc/relatorio"
+              target="_blank"
+              rel="noreferrer"
+              className="font-mono text-[10.5px] text-accentdeep underline underline-offset-2"
+            >
+              relatório do escritório
+            </a>
+          </div>
         </div>
 
         <div className="h-1 overflow-hidden rounded-full bg-linesoft">
@@ -403,6 +464,28 @@ export function Cockpit({
           </label>
         </div>
       </div>
+
+      {/* ================================= 3b. O EMPURRÃO — a UMA coisa a fazer
+          Vem ANTES dos avisos de propósito. Avisos são uma lista do que existe;
+          o empurrão é a próxima ação, com a empresa pelo nome. Quando os dois
+          aparecem juntos, o que decide se o contador age é qual está no topo. */}
+      {empurrao && (
+        <div className="mt-3 rounded border-l-[3px] border-accent border-y border-r border-line bg-accentwash px-4 py-3.5 shadow-card">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="max-w-[62ch]">
+              <div className="text-[14.5px] font-bold text-ink">{empurrao.titulo}</div>
+              <p className="mt-1 text-[12.5px] leading-relaxed text-slate2">{empurrao.corpo}</p>
+            </div>
+            <button
+              onClick={agirEmpurrao}
+              disabled={ocupado === "empurrao"}
+              className="shrink-0 rounded-sm bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+            >
+              {ocupado === "empurrao" ? "..." : empurrao.rotulo_acao}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ========================================== 4. AVISOS QUE GERAM TRABALHO */}
       {avisos.length > 0 && (

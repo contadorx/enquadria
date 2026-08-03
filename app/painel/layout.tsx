@@ -4,7 +4,7 @@ import { Regua } from "@/components/Regua";
 import { BotaoSair } from "@/components/BotaoSair";
 import { NavMobile } from "@/components/NavMobile";
 import { navDe } from "@/lib/nav";
-import { JANELA, estadoDaJanela } from "@/lib/janela";
+import { JANELA, estadoDaJanela, faseDaJanela } from "@/lib/janela";
 
 export default async function PainelLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
@@ -59,7 +59,7 @@ export default async function PainelLayout({ children }: { children: React.React
             ENQUADRIA<span className="text-accentbright">.</span>
           </div>
           <div className="min-w-0 flex-1">
-            <Regua abre={JANELA.abre} fecha={JANELA.fecha} />
+            <Regua abre={JANELA.abre} fecha={JANELA.fecha} fase={faseDaJanela()} />
           </div>
         </div>
       </header>

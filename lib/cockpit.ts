@@ -299,3 +299,125 @@ export const ACOES_LOTE: { chave: "analisar" | "emitir" | "termo"; rotulo: strin
   { chave: "emitir", rotulo: "Emitir laudos", ajuda: "gera o documento numerado de quem já tem análise" },
   { chave: "termo", rotulo: "Enviar termos", ajuda: "gera o termo e envia o link de assinatura a quem tem contato" },
 ];
+
+/* ══════════════════════════════════════════════════════════════════════
+   O EMPURRÃO — a UMA coisa a fazer agora, com a empresa pelo nome.
+
+   Por que uma só. O cockpit já mostra a fila inteira, e fila inteira é
+   exatamente o que trava: a tela devolve ao contador a decisão de por onde
+   começar, que é justamente o trabalho que ele veio terceirizar. Três avisos
+   simultâneos não são três ajudas, são três formas de não começar.
+
+   A ordem abaixo é o funil medido, de trás para frente — cada teste é um
+   ponto onde a esteira vaza:
+
+     1. analisou e NUNCA emitiu   → 40% param aqui. Falta empurrão, não
+                                     permissão: os 2 laudos são grátis e quase
+                                     ninguém percebe que são.
+     2. emitiu e não mandou termo → não aparece na conta de receita, mas é o
+                                     que decide a RENOVAÇÃO. Laudo que fica no
+                                     computador do contador o cliente nunca vê;
+                                     termo assinado é o que faz o cliente
+                                     perceber que pagou por alguma coisa.
+     3. termo enviado sem assinar → cobrar é barato e o documento só vale
+                                     assinado.
+
+   Retorna null quando não há nada a empurrar — silêncio é resposta válida, e
+   banner permanente vira paisagem.
+   ══════════════════════════════════════════════════════════════════════ */
+
+export interface Empurrao {
+  tipo: "emitir_primeiro" | "termo_pendente" | "cobrar_assinatura";
+  titulo: string;
+  corpo: string;
+  rotulo_acao: string;
+  /** a empresa por onde começar, quando o empurrão aponta para uma só */
+  alvo: { id: string; razao_social: string; analise_id: string | null } | null;
+  quantidade: number;
+}
+
+/**
+ * POR ONDE COMEÇAR o primeiro laudo.
+ *
+ * Escolher também é atrito: mandar "emita o primeiro" sem dizer em quem só
+ * empurra o problema uma tela para frente. A escolha é a de decisão mais
+ * CLARA, não a de maior valor — o objetivo aqui é o contador ver um laudo
+ * pronto, não maximizar honorário na primeira tentativa.
+ *
+ * Critério, em ordem: recomendação de optar (S4/S5, onde a conversa com o
+ * cliente é mais fácil) · prioridade máxima · menor repasse exigido, que é a
+ * que tem mais folga na negociação.
+ */
+export function porOndeComecar(linhas: Linha[]): Linha | null {
+  const candidatas = linhas.filter(
+    (l) => l.analise_id && !l.laudo_id && !l.estimada && FAIXAS_TRABALHO.includes(l.faixa)
+  );
+  if (candidatas.length === 0) return null;
+
+  const optar = candidatas.filter((l) => l.saida === "S4" || l.saida === "S5");
+  const pool = optar.length > 0 ? optar : candidatas;
+
+  return [...pool].sort((a, b) => {
+    if (a.prioridade !== b.prioridade) return a.prioridade ? -1 : 1;
+    const ra = a.re ?? Number.POSITIVE_INFINITY;
+    const rb = b.re ?? Number.POSITIVE_INFINITY;
+    return ra - rb;
+  })[0];
+}
+
+export function proximoEmpurrao(linhas: Linha[]): Empurrao | null {
+  const comLaudo = linhas.filter((l) => l.laudo_id);
+
+  // 1 · nunca emitiu — o degrau mais alto do funil
+  if (comLaudo.length === 0) {
+    const alvo = porOndeComecar(linhas);
+    if (!alvo) return null;
+    return {
+      tipo: "emitir_primeiro",
+      titulo: "Você tem 2 laudos inclusos. Emita o primeiro.",
+      corpo:
+        `Comece por ${alvo.razao_social} — é a de decisão mais clara da sua carteira. ` +
+        "O laudo sai com a marca do seu escritório e código de verificação pública.",
+      rotulo_acao: "Emitir este laudo",
+      alvo: { id: alvo.id, razao_social: alvo.razao_social, analise_id: alvo.analise_id },
+      quantidade: 1,
+    };
+  }
+
+  // 2 · laudo emitido e termo nunca gerado
+  const semTermo = comLaudo.filter((l) => !l.termo_id && l.tem_contato);
+  if (semTermo.length > 0) {
+    const n = semTermo.length;
+    return {
+      tipo: "termo_pendente",
+      titulo: `${n} ${n === 1 ? "laudo emitido" : "laudos emitidos"} sem termo enviado.`,
+      corpo:
+        "Laudo sem termo é meio serviço: o cliente não assinou nada, e é a assinatura dele " +
+        "que registra que você avaliou e comunicou. É o documento que responde a pergunta de 2027.",
+      rotulo_acao: n === 1 ? "Enviar o termo" : `Enviar os ${n} termos`,
+      alvo:
+        n === 1
+          ? { id: semTermo[0].id, razao_social: semTermo[0].razao_social, analise_id: semTermo[0].analise_id }
+          : null,
+      quantidade: n,
+    };
+  }
+
+  // 3 · termo no ar, esperando assinatura
+  const naoAssinados = comLaudo.filter((l) => l.termo_id && !l.assinado);
+  if (naoAssinados.length > 0) {
+    const n = naoAssinados.length;
+    return {
+      tipo: "cobrar_assinatura",
+      titulo: `${n} ${n === 1 ? "termo aguarda" : "termos aguardam"} assinatura.`,
+      corpo:
+        "O termo só vale assinado. Reenviar o link custa um clique e é o que fecha a esteira " +
+        "de cada empresa.",
+      rotulo_acao: "Ver quem falta",
+      alvo: null,
+      quantidade: n,
+    };
+  }
+
+  return null;
+}

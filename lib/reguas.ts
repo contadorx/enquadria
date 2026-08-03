@@ -22,6 +22,8 @@
  * houver algo importante a dizer.
  */
 
+import { faseDaJanela } from "./janela";
+
 const DIA = 86_400_000;
 
 export const APP_URL =
@@ -57,6 +59,9 @@ export interface EscritorioRegua {
   faixa_a: number;
   analises: number;
   laudos: number;
+  /** termos gerados e assinados — a RPC já devolvia os dois, faltava declarar */
+  termos?: number;
+  assinados?: number;
   ultima_analise: string | null;
 }
 
@@ -164,6 +169,8 @@ export function htmlRegua(corpo: string): string {
 // ---------------------------------------------------------------------------
 // PLANEJAMENTO — puro
 // ---------------------------------------------------------------------------
+const MARCOS_PROXIMA = "2027-03";
+
 export function planejar(ctx: Contexto): Envio[] {
   const regras: Record<string, Regra> = {};
   for (const r of ctx.regras) if (r.ativa) regras[r.chave] = r;
@@ -247,6 +254,31 @@ export function planejar(ctx: Contexto): Envio[] {
       }
     }
 
+    /**
+     * LAUDO SEM TERMO — fora da janela de idade, de propósito.
+     *
+     * Este não é gatilho de calendário, é de FATO DE USO: quem emitiu laudo e
+     * não gerou termo está no mesmo ponto tenha a conta uma semana ou um ano.
+     *
+     * Por que ele importa mais do que parece: laudo é o trabalho do contador e
+     * fica no computador dele; termo é o que chega ao cliente final. Sem termo,
+     * o cliente não vê nada do que foi feito — e é a percepção do cliente que
+     * sustenta o honorário, que por sua vez sustenta a renovação aqui.
+     *
+     * A chave de dedupe leva o número de laudos: se ele emitir mais laudos
+     * depois e continuar sem termo, é uma situação nova e vale um toque novo.
+     * Sem isso, o e-mail sairia uma vez na vida e a lacuna cresceria calada.
+     */
+    const termos = e.termos ?? 0;
+    if (e.laudos > 0 && termos === 0) {
+      monta(
+        "uso_laudo_sem_termo",
+        e,
+        `uso_laudo_sem_termo:${e.id}:${e.laudos}`,
+        `${e.laudos} laudo(s), nenhum termo`
+      );
+    }
+
     // --------------------------------------------------------- conversão
     // Estas NÃO têm janela de idade: são disparadas por um fato do uso, não
     // pelo calendário. Quem bate no limite hoje é lead quente, tenha a conta
@@ -287,6 +319,40 @@ export function planejar(ctx: Contexto): Envio[] {
         }
       } else if (-diasParaFechar >= (regras["janela_fechou"]?.dias ?? 1)) {
         monta("janela_fechou", e, `janela_fechou:${e.id}:${fechaJanela}`, "janela encerrada");
+      }
+
+      /**
+       * O PÓS-JANELA — a parte que quase ninguém trabalha.
+       *
+       * Depois de 30/09 o produto parava de falar. Só que a alíquota é fixada
+       * até 31/10 e o cancelamento vai até 30/11: quem emitiu laudo em setembro
+       * fez com ESTIMATIVA, e cada um desses laudos vira uma revisão cobrável
+       * quando o número real sair. É a segunda onda de honorário da mesma
+       * carteira — e o motivo de o plano anual valer a pena.
+       *
+       * Condição: ter emitido laudo. Sem laudo não há o que revisar, e o e-mail
+       * viraria propaganda de uma coisa que a pessoa não fez.
+       */
+      const f = faseDaJanela();
+      if (e.laudos > 0 && (f.fase === "aliquota" || f.fase === "cancelamento")) {
+        monta(
+          "pos_janela_revisao",
+          e,
+          `pos_janela_revisao:${e.id}:${f.fase}`,
+          `fase ${f.fase} com ${e.laudos} laudo(s) emitido(s)`,
+          { dias: f.dias ?? 0 }
+        );
+      }
+
+      // a janela seguinte: a mesma carteira volta à mesa, agora com histórico
+      if (f.fase === "efeito" && e.empresas > 0) {
+        monta(
+          "proxima_janela",
+          e,
+          `proxima_janela:${e.id}:${MARCOS_PROXIMA}`,
+          "regime em vigor, próxima janela à frente",
+          { dias: f.dias ?? 0 }
+        );
       }
     }
 
