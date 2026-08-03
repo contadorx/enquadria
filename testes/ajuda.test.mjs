@@ -5,7 +5,7 @@
  * deixar tag passar, é injeção. E o "há novidade" decide se uma correção da
  * Reforma chega ou não em quem precisa dela.
  */
-import { renderizarCorpo, temNovidade, contarNovidades, urlDeEmbed, rotuloCategoria } from "./ajuda.js";
+import { renderizarCorpo, temNovidade, contarNovidades, urlDeEmbed, rotuloCategoria, buscar, normalizar, ordenarAjuda } from "./ajuda.js";
 
 let falhas = 0;
 const ok = (c, m) => { if (c) console.log("ok:", m); else { console.log("FALHOU:", m); falhas++; } };
@@ -65,5 +65,49 @@ ok(urlDeEmbed("https://sitequalquer.com/v") === null, "domínio arbitrário é r
 ok(urlDeEmbed(null) === null, "sem vídeo, sem iframe");
 
 ok(rotuloCategoria("reforma") === "Reforma tributária", "categoria tem rótulo legível");
+
+
+
+/* ── a origem "coleta": quem respondeu, o cliente ou o escritório? ────── */
+/**
+ * O laudo já dizia "informada pelo cliente" para qualquer coisa que chegasse
+ * preenchida — inclusive palpite do contador ao reabrir uma análise antiga.
+ * Isso é afirmação de proveniência num documento técnico, e afirmar errado ali
+ * é pior que não afirmar.
+ */
+import { rotuloOrigem } from "./laudo.js";
+ok(rotuloOrigem("coleta") === "respondida pelo cliente no formulário",
+   "coleta tem rótulo próprio, distinto de informada");
+ok(rotuloOrigem("informada") === "informada pelo cliente", "informada continua existindo");
+ok(rotuloOrigem("padrao") === "padrão do sistema", "padrão segue sendo padrão");
+ok(rotuloOrigem("inventada") === "padrão do sistema", "valor desconhecido cai no mais fraco, não no mais forte");
+
+
+
+/* ── busca: acento não pode ser barreira ─────────────────────────────── */
+const base = [
+  { titulo: "Crédito presumido na saída", resumo: null, corpo: "regra do crédito" },
+  { titulo: "Importar a carteira", resumo: "CSV e CNPJ", corpo: "suba o arquivo" },
+  { titulo: "Segregação de receita", resumo: null, corpo: "dois anexos, crédito diferente" },
+];
+ok(buscar(base, "credito").length === 2, "sem acento acha o que foi escrito com acento");
+ok(buscar(base, "CRÉDITO").length === 2, "maiúscula e acento também");
+ok(buscar(base, "cnpj").length === 1, "acha pelo resumo");
+ok(buscar(base, "arquivo").length === 1, "e pelo corpo, que é onde a pessoa lembra do termo");
+// todas as palavras precisam bater: senão "credito presumido" devolveria tudo que cita crédito
+ok(buscar(base, "credito presumido").length === 1, "duas palavras exigem as duas");
+ok(buscar(base, "").length === 3, "busca vazia devolve tudo, não nada");
+ok(normalizar("Ação Ímpar") === "acao impar", "normalização remove acento e caixa");
+
+/* ── ordem: destaque em cima, depois a ordem manual ──────────────────── */
+const itens = [
+  { id: "a", destaque: false, ordem: 1 },
+  { id: "b", destaque: true, ordem: 9 },
+  { id: "c", destaque: false, ordem: 2 },
+];
+const ord = ordenarAjuda(itens).map((i) => i.id);
+ok(ord[0] === "b", "destaque sobe mesmo com ordem alta");
+ok(ord[1] === "a" && ord[2] === "c", "o resto respeita a ordem manual");
+ok(itens[0].id === "a", "ordenarAjuda não mexe no array original");
 
 process.exit(falhas ? 1 : 0);

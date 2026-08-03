@@ -189,11 +189,14 @@ export function ehLaudoCurto(faixa?: string | null): boolean {
 export interface PremissaImpressa {
   pergunta: string;
   resposta: string;
-  origem: "informada" | "estimada" | "padrao";
+  origem: "coleta" | "informada" | "estimada" | "padrao";
   composicao?: string;
 }
 
 const ORIGEM_ROTULO: Record<string, string> = {
+  // respondida pelo próprio cliente, no formulário — o grau mais forte de
+  // proveniência que uma premissa pode ter neste produto
+  coleta: "respondida pelo cliente no formulário",
   informada: "informada pelo cliente",
   estimada: "estimada pelo contador",
   padrao: "padrão do sistema",
@@ -209,7 +212,7 @@ export function premissasComOrigem(a: AnaliseGravada): PremissaImpressa[] {
   const p = a.parametros ?? {};
   const o = (k: string): PremissaImpressa["origem"] => {
     const v = p.origens?.[k];
-    if (v === "informada" || v === "estimada" || v === "padrao") return v;
+    if (v === "coleta" || v === "informada" || v === "estimada" || v === "padrao") return v;
     return p.origem_premissas === "lote_cnae" ? "estimada" : "padrao";
   };
   const dq = p.detalhes?.qual;

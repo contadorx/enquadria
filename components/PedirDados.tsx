@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   PERGUNTAS,
   rotuloDaResposta,
@@ -60,6 +60,48 @@ export function PedirDados({
   const [copiado, setCopiado] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState<string | null>(null);
+
+  /**
+   * O CLIENTE RESPONDE ENQUANTO O CONTADOR OLHA A TELA.
+   *
+   * Cenário real e comum: o contador manda o link pelo WhatsApp com o cliente
+   * ao telefone. O cliente responde em três minutos. Sem isto, a tela continua
+   * dizendo "aguardando" até alguém pensar em recarregar — e a impressão é que
+   * o formulário não funcionou.
+   *
+   * Sondagem, não tempo real. Realtime exigiria configurar replicação na
+   * tabela e abrir websocket para todo mundo; aqui basta perguntar de vez em
+   * quando enquanto ALGUÉM ESTÁ OLHANDO. Só roda com a aba visível: contador
+   * com quinze abas abertas não precisa de quinze sondagens.
+   */
+  useEffect(() => {
+    // só faz sentido esperar enquanto o link está aberto: respondida e
+    // cancelada são estados finais e sondá-los seria consulta pura perda
+    if (coleta?.status !== "aberta") return;
+    let vivo = true;
+
+    async function espiar() {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const resp = await fetch(`/api/coleta/${coleta!.token}/status`, { cache: "no-store" });
+        if (!resp.ok || !vivo) return;
+        const j = (await resp.json()) as { status?: string };
+        // só mexe na tela quando o estado REALMENTE mudou: recarregar à toa
+        // faria o formulário piscar debaixo da mão de quem está usando
+        if (j.status && j.status !== coleta!.status) aoMudar();
+      } catch {
+        // rede instável não é motivo para alarme numa sondagem de fundo
+      }
+    }
+
+    const t = setInterval(espiar, 15000);
+    document.addEventListener("visibilitychange", espiar);
+    return () => {
+      vivo = false;
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", espiar);
+    };
+  }, [coleta?.status, coleta?.token, aoMudar]);
 
   const base = typeof window !== "undefined" ? window.location.origin : "";
   const link = coleta?.token ? `${base}/coleta/${coleta.token}` : "";

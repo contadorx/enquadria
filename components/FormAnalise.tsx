@@ -43,7 +43,7 @@ import { Gauge } from "@/components/Gauge";
  * e `cred`, então as análises antigas seguem válidas.
  */
 
-type Origem = "informada" | "estimada" | "padrao";
+type Origem = "coleta" | "informada" | "estimada" | "padrao";
 
 /** o contador conhece os anexos pelo número; o rótulo é para não errar a linha */
 const ROTULO_ANEXO: Record<number, string> = {
@@ -55,6 +55,7 @@ const ROTULO_ANEXO: Record<number, string> = {
 };
 
 const ROTULO_ORIGEM: Record<Origem, string> = {
+  coleta: "respondida pelo cliente no formulário",
   informada: "informada pelo cliente",
   estimada: "estimada pelo contador",
   padrao: "padrão do sistema",
@@ -88,16 +89,31 @@ function Escolha({
   opcoes,
   valor,
   onEscolher,
+  doCliente,
 }: {
   titulo: string;
   dica?: string;
   opcoes: Opcao[];
   valor: number;
   onEscolher: (v: number) => void;
+  /**
+   * Esta resposta veio do formulário que o CLIENTE preencheu — e ainda não foi
+   * tocada pelo contador. Sem o selo, uma resposta do cliente e um padrão do
+   * sistema são visualmente idênticos: o contador não sabe o que pode ajustar
+   * à vontade e o que já é informação de quem conhece o negócio.
+   */
+  doCliente?: boolean;
 }) {
   return (
     <div className="mb-3.5 border-b border-linesoft pb-3.5 last:mb-0 last:border-b-0 last:pb-0">
-      <div className="text-[13.5px] font-semibold">{titulo}</div>
+      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span className="text-[13.5px] font-semibold">{titulo}</span>
+        {doCliente && (
+          <span className="rounded-sm bg-accentwash px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-wider text-accentdeep">
+            resposta do cliente
+          </span>
+        )}
+      </div>
       {dica && <p className="mb-1 mt-0.5 text-[12px] text-muted">{dica}</p>}
       <div className="mt-2 flex flex-wrap gap-1.5">
         {opcoes.map(([rotulo, v]) => {
@@ -131,6 +147,7 @@ export function FormAnalise({
   custoInicial,
   segmentosIniciais,
   estimada,
+  chavesDaColeta,
   aoSalvar,
 }: {
   empresaId: string;
@@ -144,6 +161,15 @@ export function FormAnalise({
   segmentosIniciais?: Segmento[] | null;
   /** premissas vieram do lote por CNAE — o contador precisa confirmar antes do papel */
   estimada?: boolean;
+  /**
+   * Chaves cujo valor veio do formulário respondido pelo CLIENTE.
+   *
+   * Existe separado de `respostasIniciais` porque as duas coisas chegam pelo
+   * mesmo caminho e significam o oposto: reabrir uma análise antiga também
+   * preenche as respostas, mas ali quem respondeu foi o contador. Sem separar,
+   * o laudo diria "informada pelo cliente" sobre um palpite do escritório.
+   */
+  chavesDaColeta?: string[];
   aoSalvar?: (analiseId: string) => void;
 }) {
   const inicial = respostasIniciais ?? RESPOSTAS_PADRAO;
@@ -192,8 +218,12 @@ export function FormAnalise({
   }
 
   /** origem de cada premissa: quem não foi tocado é padrão (ou estimado, se veio do lote) */
+  const daColeta = new Set(chavesDaColeta ?? []);
+
   function origemDe(chave: string): Origem {
+    // tocar sobrepõe tudo: se o contador mexeu, a premissa é dele
     if (tocadas.has(chave)) return "informada";
+    if (daColeta.has(chave)) return "coleta";
     if (estimada) return "estimada";
     if (respostasIniciais) return "informada";
     return "padrao";
@@ -491,6 +521,7 @@ export function FormAnalise({
             setR({ ...r, b2b: v });
             tocar("b2b");
           }}
+          doCliente={origemDe("b2b") === "coleta"}
         />
 
         <Escolha
@@ -587,6 +618,7 @@ export function FormAnalise({
             setR({ ...r, preco: v });
             tocar("preco");
           }}
+          doCliente={origemDe("preco") === "coleta"}
         />
         <Escolha
           titulo="Os concorrentes diretos estão majoritariamente fora do Simples?"
@@ -596,6 +628,7 @@ export function FormAnalise({
             setR({ ...r, conc: v });
             tocar("conc");
           }}
+          doCliente={origemDe("conc") === "coleta"}
         />
         <Escolha
           titulo="Algum cliente já sinalizou que vai exigir crédito integral em 2027?"
@@ -605,6 +638,7 @@ export function FormAnalise({
             setR({ ...r, exig: v });
             tocar("exig");
           }}
+          doCliente={origemDe("exig") === "coleta"}
         />
       </div>
 

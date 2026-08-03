@@ -530,6 +530,7 @@ export function PainelEmpresa({
             cnae={e.cnae_principal}
             rbt12Inicial={e.rbt12 != null ? Number(e.rbt12) : null}
             respostasIniciais={daColeta?.respostas ?? (a?.respostas as unknown as Respostas) ?? null}
+            chavesDaColeta={daColeta ? ["b2b", "qual", "cred", "preco", "conc", "exig"] : undefined}
             detalhesIniciais={daColeta?.detalhes ?? a?.parametros?.detalhes ?? null}
             segmentosIniciais={a?.parametros?.segmentos ?? null}
             custoInicial={a?.parametros?.custo_apuracao_anual ?? null}

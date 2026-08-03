@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
-import { CATEGORIAS, temNovidade, type Artigo } from "@/lib/ajuda";
+import { CATEGORIAS, temNovidade, ordenarAjuda, type Artigo } from "@/lib/ajuda";
 
 /**
  * A CENTRAL DE AJUDA vista pelo contador.
@@ -23,7 +23,8 @@ export default async function AjudaPage() {
 
   const { data: artigos } = await supabase
     .from("ajuda_artigos")
-    .select("id, slug, titulo, resumo, categoria, publicado, ordem, atualizado_em")
+    .select("id, slug, titulo, resumo, corpo, categoria, tipo, destaque, publicado, ordem, atualizado_em")
+    .eq("tipo", "ajuda")
     .eq("publicado", true)
     .order("ordem", { ascending: true });
 
@@ -34,15 +35,17 @@ export default async function AjudaPage() {
     (lidos ?? []).map((l) => [l.artigo_id as string, l.lido_em as string])
   );
 
-  const lista = (artigos ?? []) as unknown as Artigo[];
+  const lista = ordenarAjuda((artigos ?? []) as unknown as Artigo[]);
 
   return (
     <div>
       <h1 className="text-[19px] font-bold tracking-tight">Central de ajuda</h1>
       <p className="mt-0.5 max-w-[70ch] text-[13px] text-muted">
-        O que muda na Reforma, como usar cada tela e como vender o serviço. Os artigos da
-        Reforma são atualizados conforme a regulamentação sai — quando isso acontece, eles
-        voltam a aparecer como novidade aqui.
+        Como usar cada tela e como vender o serviço. O que muda na Reforma fica no{" "}
+        <a href="/painel/reforma" className="text-accentdeep underline underline-offset-2">
+          quadro da Reforma
+        </a>{" "}
+        — lá a ordem é cronológica, porque notícia velha entulharia esta lista.
       </p>
 
       {lista.length === 0 && (

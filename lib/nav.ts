@@ -26,8 +26,12 @@ export const NAV: GrupoNav[] = [
     grupo: "Trabalho",
     itens: [
       { href: "/painel", label: "Cockpit", curto: "Cockpit" },
+      /* Duas entradas, não uma: ajuda é consultada sob demanda, a Reforma é
+         empurrada. Um menu só faria a notícia depender de a pessoa lembrar de
+         procurar — que é justamente o que ela não sabe que precisa fazer. */
+      { href: "/painel/reforma", label: "Reforma", curto: "Reforma" },
       { href: "/painel/ajuda", label: "Ajuda", curto: "Ajuda" },
-      { href: "/painel/config", label: "Escritório", curto: "Escritório" },
+      { href: "/painel/config", label: "Configurações", curto: "Config" },
       /* Planos saiu de dentro de Escritório e virou item próprio.
          Contratar é a ação que o produto mais precisa que aconteça, e ela
          estava dois cliques abaixo de "Configurações" — atrás de um nome que
@@ -68,9 +72,9 @@ export function navDe(ehSuperadmin: boolean): GrupoNav[] {
 export function atalhosDe(ehSuperadmin: boolean): ItemNav[] {
   const base: ItemNav[] = [
     { href: "/painel", label: "Cockpit", curto: "Cockpit" },
-    { href: "/painel/ajuda", label: "Ajuda", curto: "Ajuda" },
+    { href: "/painel/reforma", label: "Reforma", curto: "Reforma" },
     { href: "/painel/planos", label: "Planos", curto: "Planos" },
-    { href: "/painel/config", label: "Escritório", curto: "Escritório" },
+    { href: "/painel/config", label: "Configurações", curto: "Config" },
   ];
   return ehSuperadmin ? [...base, { href: "/painel/negocio", label: "Negócio", curto: "Negócio" }] : base;
 }
@@ -85,6 +89,6 @@ export function tituloDaRota(pathname: string): string {
   const achado = todos
     .filter((i) => pathname === i.href || pathname.startsWith(i.href + "/"))
     .sort((a, b) => b.href.length - a.href.length)[0];
-  if (achado) return achado.label === "Configurações" ? "Escritório" : achado.label;
+  if (achado) return achado.label;
   return "Cockpit";
 }

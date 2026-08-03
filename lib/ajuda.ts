@@ -15,9 +15,25 @@
 
 export type CategoriaAjuda = "reforma" | "produto" | "comercial";
 
+/**
+ * DUAS SEÇÕES, porque são dois comportamentos.
+ *
+ * `ajuda` é PUXADA: a pessoa chega com dúvida, quer achar e sair. Ordem
+ * estável, busca, destaque no topo.
+ *
+ * `noticia` é EMPURRADA: a pessoa não sabe que precisa saber. Cronologia,
+ * mais recente primeiro, aviso de novidade.
+ *
+ * Uma lista só faria a ajuda encher de notícia velha e a notícia se perder
+ * ordenada por relevância em vez de data.
+ */
+export type TipoAjuda = "ajuda" | "noticia";
+
 export interface Artigo {
   id: string;
   slug: string;
+  tipo: TipoAjuda;
+  destaque: boolean;
   titulo: string;
   resumo: string | null;
   categoria: CategoriaAjuda;
@@ -188,4 +204,43 @@ export function renderizarCorpo(md: string): string {
   }
   fecharLista();
   return saida.join("\n");
+}
+
+/**
+ * BUSCA NA AJUDA — com acento normalizado.
+ *
+ * Quem procura "credito" não deve ficar sem resposta porque o artigo escreveu
+ * "crédito". É o erro mais comum de busca em português e o mais fácil de
+ * evitar: normaliza os dois lados e compara.
+ *
+ * Procura no título, no resumo e no corpo. O corpo importa: a pessoa lembra de
+ * um termo que apareceu no meio do texto, não do título que alguém escolheu.
+ */
+export function normalizar(s: string): string {
+  return (s ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+export function buscar<T extends { titulo: string; resumo?: string | null; corpo?: string }>(
+  itens: T[],
+  termo: string
+): T[] {
+  const q = normalizar(termo).trim();
+  if (!q) return itens;
+  // todas as palavras precisam aparecer, em qualquer campo: buscar "credito
+  // presumido" não pode devolver todo artigo que cite crédito
+  const partes = q.split(/\s+/);
+  return itens.filter((i) => {
+    const alvo = normalizar(`${i.titulo} ${i.resumo ?? ""} ${i.corpo ?? ""}`);
+    return partes.every((p) => alvo.includes(p));
+  });
+}
+
+/** Destaques primeiro, depois a ordem manual — o que resolve rápido fica em cima. */
+export function ordenarAjuda<T extends { destaque: boolean; ordem: number }>(itens: T[]): T[] {
+  return [...itens].sort((a, b) =>
+    a.destaque === b.destaque ? a.ordem - b.ordem : a.destaque ? -1 : 1
+  );
 }

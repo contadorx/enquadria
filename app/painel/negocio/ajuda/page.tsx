@@ -23,6 +23,8 @@ const VAZIO = {
   titulo: "",
   resumo: "",
   categoria: "produto" as CategoriaAjuda,
+  tipo: "ajuda" as "ajuda" | "noticia",
+  destaque: false,
   corpo: "",
   video_url: "",
   capa_url: "",
@@ -71,6 +73,8 @@ export default function AjudaAdmin() {
       titulo: a.titulo,
       resumo: a.resumo ?? "",
       categoria: a.categoria,
+      tipo: a.tipo ?? "ajuda",
+      destaque: a.destaque ?? false,
       corpo: a.corpo,
       video_url: a.video_url ?? "",
       capa_url: a.capa_url ?? "",
@@ -107,6 +111,8 @@ export default function AjudaAdmin() {
       titulo: f.titulo.trim(),
       resumo: f.resumo.trim() || null,
       categoria: f.categoria,
+      tipo: f.tipo,
+      destaque: f.destaque,
       corpo: f.corpo,
       video_url: f.video_url.trim() || null,
       capa_url: f.capa_url.trim() || null,
@@ -209,6 +215,17 @@ export default function AjudaAdmin() {
               />
             </label>
             <label className="block">
+              <span className="mb-1 block text-[12.5px] font-semibold">Seção</span>
+              <select
+                value={f.tipo}
+                onChange={(e) => setF({ ...f, tipo: e.target.value as "ajuda" | "noticia" })}
+                className="w-full rounded-sm border border-line px-3 py-2 text-sm"
+              >
+                <option value="ajuda">Ajuda do sistema (consultada sob demanda)</option>
+                <option value="noticia">Quadro da Reforma (empurrada, por data)</option>
+              </select>
+            </label>
+            <label className="block">
               <span className="mb-1 block text-[12.5px] font-semibold">Categoria</span>
               <select
                 value={f.categoria}
@@ -290,7 +307,16 @@ export default function AjudaAdmin() {
             />
           )}
 
-          <label className="mt-4 flex items-center gap-2 text-[13px] font-semibold">
+          <label className="mt-3 flex items-center gap-2 text-[13px] font-semibold">
+            <input
+              type="checkbox"
+              checked={f.destaque}
+              onChange={(e) => setF({ ...f, destaque: e.target.checked })}
+            />
+            Destaque (sobe para o topo da ajuda)
+          </label>
+
+          <label className="mt-2 flex items-center gap-2 text-[13px] font-semibold">
             <input
               type="checkbox"
               checked={f.publicado}
