@@ -9,9 +9,12 @@ interface Props {
   decisao: "optar" | "permanecer";
   clausulas: string[];
   hash: string;
+  /** link público do laudo que embasa esta decisão (null se não houver) */
+  linkLaudo?: string | null;
+  numeroLaudo?: number | null;
 }
 
-export function Assinatura({ token, empresa, cnpj, decisao, clausulas, hash }: Props) {
+export function Assinatura({ token, empresa, cnpj, decisao, clausulas, hash, linkLaudo, numeroLaudo }: Props) {
   const [etapa, setEtapa] = useState<"form" | "confirmar" | "ok">("form");
   const [metodo, setMetodo] = useState<"simples" | "avancada">("simples");
   const [nome, setNome] = useState("");
@@ -118,6 +121,29 @@ export function Assinatura({ token, empresa, cnpj, decisao, clausulas, hash }: P
             <li key={i} className="mb-1">{c}</li>
           ))}
         </ul>
+
+        {/* Assinar ciência de uma decisão sem poder abrir a conta que a
+            sustenta é assinatura no escuro. O laudo fica AQUI, dentro do
+            termo — não em outro e-mail que pode ter caído no spam. */}
+        {linkLaudo && (
+          <a
+            href={linkLaudo}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-4 flex items-center justify-between gap-3 rounded-sm border border-accent bg-accentwash px-3 py-2.5 text-[12.5px] font-semibold text-accentdeep"
+          >
+            <span>
+              Ler o laudo que embasa esta decisão
+              {numeroLaudo ? (
+                <span className="font-mono font-normal"> · nº {String(numeroLaudo).padStart(4, "0")}</span>
+              ) : null}
+              <span className="mt-0.5 block text-[11.5px] font-normal text-slate2">
+                Traz a memória de cálculo completa — os números, a fórmula e o resultado.
+              </span>
+            </span>
+            <span aria-hidden>→</span>
+          </a>
+        )}
       </div>
 
       {erro && <p className="mb-3 rounded-sm bg-vermelhowash px-3 py-2 text-[13px] text-vermelho">{erro}</p>}

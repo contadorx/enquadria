@@ -398,19 +398,23 @@ export function Cockpit({
                 da trilha — os dois somem assim que a primeira carteira entra. A
                 partir dali o contador que recebe um cliente novo não tinha por
                 onde adicionar, e carteira de escritório muda toda semana. */}
+            {/* Os dois eram mono 10,5px — um deles um sublinhado solto. Tinham
+                tamanho de legenda e nome de substantivo ("+ empresas",
+                "relatório do escritório"), então não liam como coisa clicável.
+                Viraram botões com verbo: o que a pessoa procura é a AÇÃO. */}
             <Link
               href="/painel/importar"
-              className="rounded-sm border border-line px-2.5 py-1 font-mono text-[10.5px] font-semibold text-accentdeep"
+              className="rounded-sm border border-line bg-surface px-3 py-1.5 text-[12px] font-semibold text-accentdeep hover:border-accent"
             >
-              + empresas
+              Adicionar empresas
             </Link>
             <a
               href="/doc/relatorio"
               target="_blank"
               rel="noreferrer"
-              className="font-mono text-[10.5px] text-accentdeep underline underline-offset-2"
+              className="rounded-sm border border-line bg-surface px-3 py-1.5 text-[12px] font-semibold text-accentdeep hover:border-accent"
             >
-              relatório do escritório
+              Abrir relatório do escritório
             </a>
           </div>
         </div>

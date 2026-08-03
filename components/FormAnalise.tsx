@@ -318,15 +318,37 @@ export function FormAnalise({
         </div>
 
         <div className="mb-3.5 border-b border-linesoft pb-3.5">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <div className="text-[13.5px] font-semibold">Anexo do Simples</div>
-            <button
-              onClick={() => setSegregar(!segregar)}
-              className="text-[12px] font-semibold text-accentdeep underline underline-offset-2"
+          <div className="text-[13.5px] font-semibold">Anexo do Simples</div>
+
+          {/* A segregação vivia como link sublinhado no canto DIREITO, alinhado
+              pelo justify-between. Ninguém via — e empresa que fatura em dois
+              anexos analisada como se fosse um só produz laudo errado, não
+              apenas incompleto. Virou controle à esquerda, no fluxo de leitura,
+              com estado visível de ligado/desligado. */}
+          <button
+            onClick={() => setSegregar(!segregar)}
+            aria-pressed={segregar}
+            className={`mt-2 flex items-center gap-2 rounded-sm border px-2.5 py-1.5 text-left text-[12px] font-semibold ${
+              segregar
+                ? "border-accent bg-accentwash text-accentdeep"
+                : "border-line bg-surface text-slate2 hover:border-accent"
+            }`}
+          >
+            <span
+              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] border ${
+                segregar ? "border-accentdeep bg-accentdeep text-white" : "border-line bg-surface"
+              }`}
             >
-              {segregar ? "voltar ao anexo único" : "a empresa segrega receita entre anexos"}
-            </button>
-          </div>
+              {segregar ? "✓" : ""}
+            </span>
+            A empresa fatura em mais de um anexo
+          </button>
+          {!segregar && (
+            <p className="mt-1.5 text-[11.5px] leading-relaxed text-muted">
+              Marque se a receita se divide entre anexos diferentes — comércio e serviço, por
+              exemplo. A alíquota muda, e com ela a conclusão do laudo.
+            </p>
+          )}
 
           {!segregar ? (
             <div className="mt-2 flex gap-1.5">

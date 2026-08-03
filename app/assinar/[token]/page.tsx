@@ -35,6 +35,26 @@ export default async function AssinarPage({ params }: { params: { token: string 
     ? await supabase.from("empresas").select("razao_social, cnpj").eq("id", analise.empresa_id).maybeSingle()
     : { data: null };
 
+  /**
+   * O LAUDO QUE EMBASA A DECISÃO — anexado ao termo, não citado de memória.
+   *
+   * O termo pede que o cliente declare ciência de uma escolha tributária com
+   * efeito em 2027. Ele estava assinando a conclusão sem poder abrir a conta
+   * que levou até ela: o laudo existia, com memória de cálculo completa, e
+   * ficava a um e-mail de distância — em outra mensagem, que pode ter caído no
+   * spam ou nem ter sido enviada.
+   *
+   * Ciência sem acesso ao documento é assinatura no escuro, e é exatamente o
+   * que um termo de ciência não pode ser.
+   */
+  // schema-ok: laudos.token é criado pela migration 0028 (alter dinâmico)
+  const { data: laudo } = await supabase
+    .from("laudos")
+    .select("token, numero")
+    .eq("analise_id", termo.analise_id)
+    .maybeSingle();
+  const linkLaudo = laudo?.token ? `/laudo/${laudo.token}` : null;
+
   if (termo.assinatura_status === "assinado") {
     return (
       <Casca>
@@ -58,6 +78,8 @@ export default async function AssinarPage({ params }: { params: { token: string 
         cnpj={empresa?.cnpj ? formatarCnpj(empresa.cnpj) : ""}
         decisao={(termo.decisao ?? "permanecer") as "optar" | "permanecer"}
         clausulas={CLAUSULAS_CIENCIA}
+        linkLaudo={linkLaudo}
+        numeroLaudo={laudo?.numero ?? null}
         hash={termo.hash_documento ?? ""}
       />
     </Casca>
