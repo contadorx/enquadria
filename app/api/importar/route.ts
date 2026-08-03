@@ -44,7 +44,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ erro: "limite de 5000 empresas por importação" }, { status: 400 });
   }
 
-  const { dados, ativo } = await enriquecer(linhas.map((l) => l.cnpj));
+  const { dados, ativo, configurado, falhas } = await enriquecer(linhas.map((l) => l.cnpj));
 
   const registros = linhas.map((l) => {
     const enriquecido = fundir(l, dados[l.cnpj]);
@@ -121,11 +121,29 @@ export async function POST(req: Request) {
     return NextResponse.json({ erro: upErr.message }, { status: 500 });
   }
 
+  // ids das empresas que entram na fila de análise — a tela usa para disparar
+  // o lote logo em seguida e nunca mostrar uma carteira sem recomendação
+  const { data: paraAnalisar } = await supabase
+    .from("empresas")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("importacao_id", imp.id)
+    .in("faixa", ["A", "B"])
+    .limit(1000);
+
   return NextResponse.json({
     ok: true,
     gravadas: registros.length,
     enriquecidas,
     receita_ativa: ativo,
+    receita_configurada: configurado,
+    receita_falhas: falhas,
+    // sem os dados essenciais no arquivo E sem a Receita respondendo, a
+    // triagem não separa nada — a tela precisa dizer isso em vez de exibir
+    // uma carteira inteira em "baixo risco" como se fosse resultado
+    triagem_cega:
+      !ativo && registros.every((r) => !r.cnae_principal),
+    empresas_para_analisar: (paraAnalisar ?? []).map((e) => e.id),
     resumo,
   });
 }

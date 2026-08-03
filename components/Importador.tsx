@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { parsearCarteira, CSV_EXEMPLO, type ResultadoParse, type LinhaCarteira } from "@/lib/csv";
+import {
+  parsearCarteira,
+  extrairCnpjs,
+  csvDeCnpjs,
+  CSV_EXEMPLO,
+  type ResultadoParse,
+  type LinhaCarteira,
+} from "@/lib/csv";
 import { ROTULO_FAIXA, triar, type Faixa } from "@/lib/triagem";
 
 /** o que cada campo faz — mostrado na confirmação de leitura do arquivo */
@@ -51,10 +58,17 @@ export function Importador() {
   const [parse, setParse] = useState<ResultadoParse | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [colando, setColando] = useState(false);
+  const [texto, setTexto] = useState("");
+  const [etapa, setEtapa] = useState<"gravando" | "analisando" | null>(null);
   const [feito, setFeito] = useState<{
     gravadas: number;
     enriquecidas: number;
     receita_ativa: boolean;
+    receita_configurada?: boolean;
+    receita_falhas?: number;
+    triagem_cega?: boolean;
+    analisadas?: number;
   } | null>(null);
 
   // triagem local só para a prévia — o servidor recalcula ao gravar
@@ -108,13 +122,44 @@ export function Importador() {
   function usarExemplo() {
     setErro(null);
     setFeito(null);
+    setColando(false);
     setNomeArquivo("exemplo.csv");
     setParse(parsearCarteira(CSV_EXEMPLO));
+  }
+
+  /**
+   * COLAR CNPJs — o caminho que tira o export do sistema da frente.
+   *
+   * Era aqui que a maior parte dos contadores parava: criava a conta, chegava
+   * na importação e precisava ir buscar um CSV em outro programa. Metade não
+   * voltava. O parser já aceitava um arquivo só com a coluna cnpj; faltava
+   * oferecer isso na tela.
+   *
+   * A extração e a montagem do CSV vivem em `lib/csv.ts` (extrairCnpjs /
+   * csvDeCnpjs) porque estão cobertas por teste — a primeira versão delas
+   * quebrava no caso mais comum e ninguém teria percebido pela tela.
+   * Aqui fica só o que é de tela: mensagem, estado e prévia.
+   */
+  function lerColados() {
+    setErro(null);
+    setFeito(null);
+    const achados = extrairCnpjs(texto);
+
+    if (achados.length === 0) {
+      setErro(
+        "Não achei nenhum CNPJ completo aí. Cole os documentos com os 14 dígitos — um por linha, ou separados por vírgula."
+      );
+      setParse(null);
+      return;
+    }
+    setNomeArquivo(`${achados.length} CNPJs colados`);
+    setParse(parsearCarteira(csvDeCnpjs(achados)));
   }
 
   async function gravar() {
     if (!parse) return;
     setEnviando(true);
+    setEtapa("gravando");
     setErro(null);
     try {
       const resp = await fetch("/api/importar", {
@@ -132,13 +177,50 @@ export function Importador() {
       });
       const json = await resp.json();
       if (!resp.ok) throw new Error(json.erro ?? "falha ao gravar");
-      setFeito(json);
+
+      /**
+       * A PRIMEIRA PASSADA, ENCADEADA — o conserto de maior impacto do funil.
+       *
+       * Antes, a importação terminava com a carteira triada e ZERO análises: o
+       * contador via a fila e precisava abrir empresa por empresa respondendo
+       * sete perguntas. Para 46 empresas da faixa A, isso é meia tarde antes
+       * do primeiro laudo — e é onde ele fechava a aba.
+       *
+       * A rota do lote já existia como ação em massa no cockpit. O que faltava
+       * era ela rodar SOZINHA aqui, para que a carteira nunca apareça vazia:
+       * ele chega com recomendação em cada linha e o trabalho vira REVISAR, e
+       * não PREENCHER. A honestidade continua inteira — tudo marcado como
+       * estimada (origem lote_cnae), e o laudo não sai sem ele confirmar.
+       *
+       * Falhar aqui NÃO desfaz a importação: as empresas já estão gravadas, e
+       * o contador roda o lote pelo cockpit quando quiser. Por isso o catch é
+       * silencioso — um erro na cereja não pode parecer erro no bolo.
+       */
+      let analisadas: number | undefined;
+      const ids: string[] = json.empresas_para_analisar ?? [];
+      if (ids.length > 0) {
+        setEtapa("analisando");
+        try {
+          const rl = await fetch("/api/analise/lote", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ empresa_ids: ids }),
+          });
+          if (rl.ok) analisadas = (await rl.json()).gravadas ?? 0;
+        } catch {
+          /* a carteira está salva; o lote pode ser refeito no cockpit */
+        }
+      }
+
+      setFeito({ ...json, analisadas });
       setParse(null);
+      setTexto("");
       router.refresh();
     } catch (e) {
       setErro(e instanceof Error ? e.message : "erro inesperado");
     } finally {
       setEnviando(false);
+      setEtapa(null);
     }
   }
 
@@ -151,11 +233,38 @@ export function Importador() {
             {feito.gravadas} empresas na carteira
           </span>
         </div>
+        {/*
+          TRÊS ESTADOS, TRÊS DIAGNÓSTICOS DIFERENTES.
+          Antes havia dois, e o segundo mentia: quando a integração estava
+          configurada mas quebrada, a tela dizia "0 enriquecidas" — que soa
+          como "a base não achou a sua carteira", quando na verdade a base não
+          foi consultada. São problemas opostos e exigem ações opostas.
+        */}
         <p className="mt-2 text-[13.5px] text-slate2">
           {feito.receita_ativa
             ? `${feito.enriquecidas} enriquecidas contra a base da Receita.`
+            : feito.receita_configurada
+            ? "A base da Receita não respondeu agora — a triagem usou os dados do arquivo. Os dados que faltarem entram na próxima importação."
             : "Enriquecimento da Receita não configurado — a triagem usou os dados do arquivo."}
         </p>
+
+        {feito.analisadas != null && feito.analisadas > 0 && (
+          <p className="mt-1.5 text-[13.5px] text-slate2">
+            <b>{feito.analisadas} já vieram com uma primeira recomendação</b>, calculada
+            pelo perfil típico do CNAE. As premissas estão marcadas como{" "}
+            <b>estimadas</b> — confirme antes de emitir qualquer laudo.
+          </p>
+        )}
+
+        {feito.triagem_cega && (
+          <p className="mt-3 rounded-sm bg-amarelowash px-3 py-2 text-[12.5px] leading-relaxed text-amarelo">
+            <b>Atenção:</b> o arquivo não trouxe CNAE e a base da Receita não respondeu, então
+            a triagem não teve com que separar a carteira — quase tudo caiu em &quot;baixo
+            risco&quot;. Isso não é diagnóstico, é falta de dado. Suba o CSV com a coluna de
+            CNAE, ou repita a importação quando a base voltar.
+          </p>
+        )}
+
         <div className="mt-4 flex gap-2">
           <a
             href="/painel"
@@ -176,35 +285,98 @@ export function Importador() {
 
   return (
     <div>
+      {/*
+        COLAR CNPJ É O CAMINHO PRIMÁRIO, e o upload é o segundo.
+        Não é preferência estética: o export do sistema é o maior ponto de
+        abandono do produto. Quem tem o CSV na mão continua a um clique de
+        distância; quem não tem agora consegue começar mesmo assim.
+      */}
       <div className="rounded border border-dashed border-line bg-surface p-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="cursor-pointer rounded-sm bg-ink px-4 py-2.5 text-sm font-semibold text-white">
-            Escolher arquivo CSV
-            <input type="file" accept=".csv,text/csv" onChange={aoSelecionar} className="hidden" />
-          </label>
-          <button
-            onClick={usarExemplo}
-            className="rounded-sm border border-line px-4 py-2.5 text-sm font-semibold text-slate2"
-          >
-            Ver com carteira de exemplo
-          </button>
-          <button
-            onClick={baixarModelo}
-            className="rounded-sm border border-line px-4 py-2.5 text-sm font-semibold text-accentdeep"
-          >
-            Baixar modelo CSV
-          </button>
-          {nomeArquivo && (
-            <span className="font-mono text-[12px] text-muted">{nomeArquivo}</span>
-          )}
-        </div>
-
-        <p className="mt-4 max-w-[70ch] text-[12.5px] leading-relaxed text-muted">
-          Exporte a carteira do seu sistema como CSV e suba do jeito que veio: as colunas são
-          reconhecidas por sinônimo, sem formato rígido. <b className="text-slate2">Só CNPJ e razão
-          social são obrigatórios</b> — o resto, quando falta, vem do enriquecimento contra a
-          Receita. CNPJs inválidos e repetidos são descartados antes de gravar.
+        <div className="text-[15px] font-bold">Comece pelos CNPJs</div>
+        <p className="mt-1 max-w-[68ch] text-[12.5px] leading-relaxed text-muted">
+          Não precisa exportar nada. Cole a lista de CNPJs dos seus clientes — um por linha,
+          ou separados por vírgula — e o resto (razão social, CNAE, porte, situação) vem da
+          base da Receita.
         </p>
+
+        {!colando ? (
+          <button
+            onClick={() => {
+              setColando(true);
+              setErro(null);
+              setFeito(null);
+            }}
+            className="mt-3 rounded-sm bg-ink px-4 py-2.5 text-sm font-semibold text-white"
+          >
+            Colar lista de CNPJs
+          </button>
+        ) : (
+          <div className="mt-3">
+            <textarea
+              value={texto}
+              onChange={(e) => setTexto(e.target.value)}
+              rows={6}
+              placeholder={"11.222.333/0001-81\n07.526.557/0001-00\n22.333.444/0001-55"}
+              className="w-full rounded-sm border border-line bg-white p-3 font-mono text-[16px] leading-relaxed md:text-[13px]"
+            />
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                onClick={lerColados}
+                disabled={!texto.trim()}
+                className="rounded-sm bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                Ler CNPJs
+              </button>
+              <button
+                onClick={() => {
+                  setColando(false);
+                  setTexto("");
+                }}
+                className="rounded-sm border border-line px-4 py-2.5 text-sm font-semibold text-slate2"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-5 border-t border-linesoft pt-4">
+          <div className="text-[12.5px] font-semibold text-slate2">
+            Já tem a carteira exportada?
+          </div>
+          <div className="mt-2.5 flex flex-wrap items-center gap-3">
+            <label className="cursor-pointer rounded-sm border border-line px-4 py-2.5 text-sm font-semibold text-slate2">
+              Escolher arquivo CSV
+              <input type="file" accept=".csv,text/csv" onChange={aoSelecionar} className="hidden" />
+            </label>
+            <button
+              onClick={usarExemplo}
+              className="rounded-sm border border-line px-4 py-2.5 text-sm font-semibold text-slate2"
+            >
+              Ver com carteira de exemplo
+            </button>
+            <button
+              onClick={baixarModelo}
+              className="rounded-sm border border-line px-4 py-2.5 text-sm font-semibold text-accentdeep"
+            >
+              Baixar modelo CSV
+            </button>
+            {nomeArquivo && (
+              <span className="font-mono text-[12px] text-muted">{nomeArquivo}</span>
+            )}
+          </div>
+
+          <p className="mt-3 max-w-[70ch] text-[12.5px] leading-relaxed text-muted">
+            Suba do jeito que veio: as colunas são reconhecidas por sinônimo, sem formato
+            rígido. <b className="text-slate2">Só o CNPJ é obrigatório</b> — o resto, quando
+            falta, vem do enriquecimento contra a Receita. Com a coluna de{" "}
+            <b className="text-slate2">RBT12</b> a alíquota do laudo sai efetiva em vez de
+            estimada, e com <b className="text-slate2">porte</b> ou{" "}
+            <b className="text-slate2">regime</b> a triagem separa MEI e quem já saiu do
+            Simples — dois dados que a base pública não tem. CNPJs inválidos e repetidos são
+            descartados antes de gravar.
+          </p>
+        </div>
 
         <details className="mt-3">
           <summary className="cursor-pointer text-[12.5px] font-semibold text-accentdeep">
@@ -254,7 +426,11 @@ export function Importador() {
               disabled={enviando}
               className="rounded-sm bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
             >
-              {enviando ? "Gravando..." : `Gravar ${parse.linhas.length} empresas`}
+              {etapa === "gravando"
+                ? "Gravando..."
+                : etapa === "analisando"
+                ? "Rodando a primeira análise..."
+                : `Gravar e analisar ${parse.linhas.length} empresas`}
             </button>
           </div>
 

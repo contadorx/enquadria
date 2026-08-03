@@ -148,6 +148,44 @@ if (!fs.existsSync(CSV)) {
                      faturamento_faixa: "acima de 3,6mi" }).prioridade_maxima === true);
 }
 
+/* ===================================== 2b. CNPJs COLADOS (importação) ==== */
+secao("CNPJs colados — o caminho sem export do sistema");
+{
+  // A primeira versão desta extração buscava o padrão do CNPJ no texto inteiro
+  // com uma expressão que aceitava espaço no meio. Como quebra de linha é
+  // espaço, ela emendava linhas seguidas num número de 42 dígitos e devolvia
+  // ZERO — no caso mais comum de todos. Estes casos existem para isso não
+  // voltar: cada um é uma forma real de o contador colar a carteira dele.
+  const casos = [
+    ["um por linha, formatado", "11.222.333/0001-81\n07.526.557/0001-00\n22.333.444/0001-55", 3],
+    ["um por linha, só dígitos", "11222333000181\n07526557000100", 2],
+    ["separados por vírgula", "11.222.333/0001-81, 07.526.557/0001-00", 2],
+    ["separados por ponto e vírgula", "11222333000181;07526557000100", 2],
+    ["colado de planilha, com o nome junto",
+      "Distribuidora Aurora\t11.222.333/0001-81\nRestaurante X\t07.526.557/0001-00", 2],
+    ["CPF no meio não vira CNPJ", "CPF 123.456.789-00\n11.222.333/0001-81", 1],
+    ["telefone não vira CNPJ", "(11) 98765-4321 e 11.222.333/0001-81", 1],
+    ["data e valor em reais não viram CNPJ", "01/01/2027 R$ 1.234.567,89 11.222.333/0001-81", 1],
+    ["texto sem documento nenhum", "nenhum documento aqui", 0],
+    ["vazio", "", 0],
+  ];
+  for (const [nome, entrada, esperado] of casos) {
+    const achados = csvlib.extrairCnpjs(entrada);
+    ok(nome, achados.length === esperado, `${achados.length} ≠ ${esperado}`);
+  }
+
+  // o CSV montado precisa passar pelo MESMO parser do upload, senão o caminho
+  // colado seria um segundo jeito de ler carteira para manter em dia
+  const colado = csvlib.parsearCarteira(
+    csvlib.csvDeCnpjs(csvlib.extrairCnpjs("11.222.333/0001-81\n07.526.557/0001-00"))
+  );
+  ok("o texto colado atravessa o parser do upload", colado.linhas.length === 2, colado.linhas.length);
+  ok("sem razão social, entra com o rótulo (a Receita completa depois)",
+     colado.linhas[0].razao_social === "(sem razão social)", colado.linhas[0].razao_social);
+  ok("CNPJ com dígito verificador errado é descartado pelo parser",
+     csvlib.parsearCarteira(csvlib.csvDeCnpjs(["11222333000199"])).descartadas === 1);
+}
+
 /* ================================================ 3. OS 15 CENÁRIOS ===== */
 secao("Cenários da decisão");
 const CEN = [

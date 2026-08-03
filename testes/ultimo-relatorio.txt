@@ -24,6 +24,21 @@ ok    triagem: faixa MEI = 2
 ok    triagem: faixa FORA = 4
 ok    prioridade máxima na de faixa textual
 
+── CNPJs colados — o caminho sem export do sistema ─────────────
+ok    um por linha, formatado
+ok    um por linha, só dígitos
+ok    separados por vírgula
+ok    separados por ponto e vírgula
+ok    colado de planilha, com o nome junto
+ok    CPF no meio não vira CNPJ
+ok    telefone não vira CNPJ
+ok    data e valor em reais não viram CNPJ
+ok    texto sem documento nenhum
+ok    vazio
+ok    o texto colado atravessa o parser do upload
+ok    sem razão social, entra com o rótulo (a Receita completa depois)
+ok    CNPJ com dígito verificador errado é descartado pelo parser
+
 ── Cenários da decisão ─────────────────────────────────────────
 ok    C01 → S4
 ok    C02 → S2
@@ -92,4 +107,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 77 verificações automáticas
+TUDO PASSOU — 90 verificações automáticas
