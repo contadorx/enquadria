@@ -69,11 +69,27 @@ if (fs.existsSync(MIGRATIONS)) {
       }
     }
 
-    // alter table [public.]X add column [if not exists] Y
+    /**
+     * alter table [public.]X add column [if not exists] Y — inclusive a forma
+     * com VÁRIAS colunas separadas por vírgula num comando só:
+     *
+     *   alter table public.tenants
+     *     add column if not exists status text not null default 'ativa',
+     *     add column if not exists cortesia_ate date;
+     *
+     * A primeira versão lia só a primeira coluna e acusava as outras como
+     * inventadas. O falso positivo é pior que a ausência da regra: ensina a
+     * ignorar o relatório.
+     */
     for (const m of sql.matchAll(
-      /alter\s+table\s+(?:public\.)?([a-z_]+)\s+add\s+column\s+(?:if\s+not\s+exists\s+)?([a-z_][a-z0-9_]*)/gi
+      /alter\s+table\s+(?:public\.)?([a-z_]+)([\s\S]*?);/gi
     )) {
-      anota(m[1], m[2]);
+      const tabela = m[1];
+      for (const c of m[2].matchAll(
+        /add\s+column\s+(?:if\s+not\s+exists\s+)?([a-z_][a-z0-9_]*)/gi
+      )) {
+        anota(tabela, c[1]);
+      }
     }
 
     // as migrations que descobrem o schema fazem alter por format(); pego o par

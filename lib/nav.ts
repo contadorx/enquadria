@@ -31,12 +31,14 @@ export const NAV: GrupoNav[] = [
          procurar — que é justamente o que ela não sabe que precisa fazer. */
       { href: "/painel/reforma", label: "Reforma", curto: "Reforma" },
       { href: "/painel/ajuda", label: "Ajuda", curto: "Ajuda" },
+      { href: "/painel/chamados", label: "Meus chamados", curto: "Chamados" },
       { href: "/painel/config", label: "Configurações", curto: "Config" },
       /* Planos saiu de dentro de Escritório e virou item próprio.
          Contratar é a ação que o produto mais precisa que aconteça, e ela
          estava dois cliques abaixo de "Configurações" — atrás de um nome que
          ninguém associa a comprar. */
       { href: "/painel/planos", label: "Planos", curto: "Planos" },
+      { href: "/painel/indique", label: "Indique", curto: "Indique" },
     ],
   },
 ];
@@ -50,10 +52,12 @@ export const NAV_PLATAFORMA: GrupoNav = {
   grupo: "Plataforma",
   itens: [
     { href: "/painel/negocio", label: "Negócio", curto: "Negócio" },
+    { href: "/painel/negocio/contas", label: "Contas" },
     { href: "/painel/negocio/cobrancas", label: "Cobranças" },
     { href: "/painel/negocio/emails", label: "E-mails proativos" },
     { href: "/painel/negocio/planos", label: "Planos & Asaas" },
     { href: "/painel/negocio/ajuda", label: "Central de ajuda" },
+    { href: "/painel/negocio/assistente", label: "Assistente e NPS" },
   ],
 };
 

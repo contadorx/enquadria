@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
 import { CATEGORIAS, temNovidade, ordenarAjuda, type Artigo } from "@/lib/ajuda";
+import { AssistenteAjuda } from "@/components/AssistenteAjuda";
 
 /**
  * A CENTRAL DE AJUDA vista pelo contador.
@@ -96,6 +97,8 @@ export default async function AjudaPage() {
           );
         })}
       </div>
+
+      <AssistenteAjuda />
     </div>
   );
 }

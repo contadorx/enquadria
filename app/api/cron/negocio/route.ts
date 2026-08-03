@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { executarRegua } from "@/lib/cobranca-executar";
 import { createAdminClient } from "@/lib/supabase-admin";
 
 /**
@@ -81,9 +82,29 @@ export async function GET(req: Request) {
     }
   }
 
+  /**
+   * A RÉGUA DE COBRANÇA ENTRA NO MESMO CRON.
+   *
+   * Um job diário, um lugar para olhar quando algo não saiu. Um segundo cron
+   * teria o próprio horário, o próprio log e a própria chance de estar
+   * desligado sem ninguém perceber.
+   *
+   * Roda depois da marcação de vencidas de propósito: a régua lê o status que
+   * o passo anterior acabou de atualizar.
+   */
+  let cobranca = null;
+  try {
+    const hoje = new Date().toISOString().slice(0, 10);
+    cobranca = await executarRegua(hoje, simular);
+    if (cobranca.erro) erros.push(`cobranca: ${cobranca.erro}`);
+  } catch (e) {
+    erros.push(`cobranca: ${e instanceof Error ? e.message : "erro"}`);
+  }
+
   return NextResponse.json({
     ok: true,
     modo: simular ? "teste (nada foi enviado)" : "envio",
+    cobranca,
     vencidas_encontradas: vencidas.ids.length,
     vencidas_marcadas: vencidas.marcadas,
     reguas,

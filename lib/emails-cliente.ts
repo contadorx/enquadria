@@ -306,3 +306,36 @@ export function htmlPedidoColeta(params: {
     devolvo o comparativo. Qualquer dúvida, é só responder a este e-mail.</p>`,
   });
 }
+
+/**
+ * CONVITE DE INDICAÇÃO — mandado por nós, em nome de quem indicou.
+ *
+ * A pessoa que indicou escreveu o nome de um colega num formulário. O que ela
+ * NÃO fez foi autorizar o seu escritório a virar remetente de propaganda. Por
+ * isso o e-mail sai do Enquadria, diz de quem veio, e o texto trata o indicado
+ * como colega de quem indicou — não como lead.
+ *
+ * Sem promessa de desconto para quem indicou: transformar contador em afiliado
+ * sem combinar antes estraga a relação que produziu a indicação.
+ */
+export function htmlConviteIndicacao(params: {
+  indicado: string;
+  quemIndicou: string;
+  escritorio: string;
+  link: string;
+}): string {
+  return moldura({
+    escritorio: { nome: "Enquadria" },
+    paraCliente: false,
+    corpo: `
+    <p>Olá, ${escapar(params.indicado)}.</p>
+    <p><strong>${escapar(params.quemIndicou)}</strong>, do ${escapar(params.escritorio)}, indicou
+    você para conhecer o Enquadria.</p>
+    <p>É um sistema para contadores decidirem, com laudo e memória de cálculo, quais clientes do
+    Simples Nacional devem recolher IBS/CBS por fora do DAS a partir de 2027. A escolha precisa
+    ser feita até <strong>30 de setembro</strong> e vale o ano inteiro.</p>
+    ${botao(params.link, "Ver como funciona")}
+    <p style="font-size:13px;color:#64748B">Se não fizer sentido para você, é só ignorar — não
+    insistimos e este é o único e-mail que você recebe por esta indicação.</p>`,
+  });
+}

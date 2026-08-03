@@ -34,6 +34,7 @@ import {
   htmlColetaRespondida,
   htmlTermoAssinadoContador,
   htmlTermoAssinadoCliente,
+  htmlConviteIndicacao,
 } from "./emails-cliente.js";
 
 import fsE from "node:fs";
@@ -299,6 +300,25 @@ for (const rel of CONVIDAM) {
 // e o texto que faz a promessa continua fazendo — se sumir, o reply-to vira órfão
 ok(/responder a este e-mail/i.test(LAUDO), "laudo convida a responder");
 ok(/responder a este e-mail/i.test(COMP), "comparativo convida a responder");
+
+/* ── o convite de indicação: de quem ele é ──────────────────────────── */
+/**
+ * Quem indicou escreveu o nome de um colega num formulário. O que ela NÃO fez
+ * foi autorizar o próprio escritório a virar remetente de propaganda. O
+ * convite sai do Enquadria, dizendo de quem veio.
+ */
+const CONVITE = htmlConviteIndicacao({
+  indicado: "Marina",
+  quemIndicou: "leandro@contadorx.com.br",
+  escritorio: "Oliveira Contabilidade",
+  link: "https://enquadria.com.br/?ref=indicacao",
+});
+ok(/Enquadria/.test(CONVITE), "o remetente no cabeçalho é o Enquadria");
+ok(/Oliveira Contabilidade/.test(CONVITE), "e o texto diz de quem veio a indicação");
+ok(/Marina/.test(CONVITE), "trata o indicado pelo nome");
+ok(/30 de setembro/.test(CONVITE), "dá o motivo com data — sem prazo não há urgência honesta");
+ok(/único e-mail/i.test(CONVITE), "promete não insistir, e a rota cumpre com a trava de e-mail repetido");
+ok(!/desconto|comiss/i.test(CONVITE), "não transforma o contador em afiliado sem combinar");
 
 console.log(f === 0 ? "TODOS OS TESTES PASSARAM" : `${f} FALHAS`);
 process.exit(f ? 1 : 0);

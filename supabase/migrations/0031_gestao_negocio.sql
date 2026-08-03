@@ -37,7 +37,12 @@ alter table public.tenants
   add column if not exists obs_admin text,
   add column if not exists asaas_customer_id text,
   add column if not exists asaas_subscription_id text,
-  add column if not exists emails_optout boolean not null default false;
+  add column if not exists emails_optout boolean not null default false,
+  -- logo_url nasceu numa migration anterior à 0020, que não está neste
+  -- repositório. Declarada aqui com `if not exists` para o repo bastar-se:
+  -- coluna usada em produção e ausente das migrations é dívida que só aparece
+  -- no dia em que alguém monta o banco do zero.
+  add column if not exists logo_url text;
 
 do $$
 begin
