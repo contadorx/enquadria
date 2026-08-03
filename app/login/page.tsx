@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
+import { traduzirErroAuth } from "@/lib/erros-auth";
 
 export default function Login() {
   const router = useRouter();
@@ -10,7 +11,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [escritorio, setEscritorio] = useState("");
-  const [erro, setErro] = useState<string | null>(null);
+  const [erro, setErro] = useState<{ texto: string; culpaDoServidor: boolean } | null>(null);
   const [ocupado, setOcupado] = useState(false);
 
   async function enviar() {
@@ -27,7 +28,9 @@ export default function Login() {
           });
     setOcupado(false);
     if (error) {
-      setErro(error.message);
+      // nunca mostrar o erro cru: quando o servidor responde sem corpo,
+      // `error.message` chega como o texto "{}" e não ajuda ninguém
+      setErro(traduzirErroAuth(error, modo));
       return;
     }
     router.push("/painel");
@@ -100,9 +103,14 @@ export default function Login() {
           </label>
 
           {erro && (
-            <p className="mb-3 rounded-sm bg-vermelhowash px-3 py-2 text-[12.5px] text-vermelho">
-              {erro}
-            </p>
+            <div className="mb-3 rounded-sm bg-vermelhowash px-3 py-2 text-[12.5px] text-vermelho">
+              <p>{erro.texto}</p>
+              {erro.culpaDoServidor && (
+                <p className="mt-1 text-[11px] opacity-80">
+                  Nada do que você digitou causou isso.
+                </p>
+              )}
+            </div>
           )}
 
           <button

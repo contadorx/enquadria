@@ -140,6 +140,22 @@ export function PainelEmpresa({
    * carteira. Quem decide o canal é quem conhece o cliente.
    */
   const [linkCopiado, setLinkCopiado] = useState<string | null>(null);
+  /**
+   * A CONFIRMAÇÃO DO DESTINATÁRIO, aberta pelo botão de enviar.
+   *
+   * Mandar direto para o `contato_email` seria mais rápido e pior. Esse endereço
+   * veio de um CSV exportado sabe-se lá quando, e com frequência é a caixa do
+   * escritório e não a de quem decide — e o documento leva RBT12, alíquota e a
+   * decisão da empresa. Um passo de conferência antes de um envio irreversível
+   * é barato; o e-mail que foi para o endereço errado não volta.
+   *
+   * E resolve o caso que antes não tinha saída: empresa SEM contato cadastrado
+   * só recebia uma reclamação do botão. Agora digita-se ali, envia, e o endereço
+   * fica gravado na empresa.
+   */
+  const [confirmar, setConfirmar] = useState<
+    { tipo: "laudo" | "comparativo"; id: string; numero: number; email: string; nome: string } | null
+  >(null);
 
   async function copiarLinkPublico(tipo: "laudo" | "comparativo", id: string) {
     setAvisoEnvio(null);
@@ -287,7 +303,7 @@ export function PainelEmpresa({
    * ENVIAR O LAUDO AO CLIENTE. Não emite: se o laudo não existe, o botão nem
    * aparece. Emitir por tabela furaria o gate de plano que vive em /api/laudo.
    */
-  async function enviarLaudo() {
+  async function enviarLaudo(para: string, nome: string) {
     if (!d?.laudo) return;
     setOcupado("enviar-laudo");
     setAvisoEnvio(null);
@@ -295,11 +311,12 @@ export function PainelEmpresa({
       const resp = await fetch("/api/laudo/enviar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ laudo_ids: [d.laudo.id] }),
+        body: JSON.stringify({ laudo_ids: [d.laudo.id], para, nome }),
       });
       const json = await resp.json();
       if (resp.ok && json.enviados > 0) {
-        setAvisoEnvio({ ok: true, texto: `Laudo enviado para ${e.contato_email}.` });
+        setConfirmar(null);
+        setAvisoEnvio({ ok: true, texto: `Laudo enviado para ${para}.` });
         mudou();
       } else if (json.sem_contato > 0) {
         setAvisoEnvio({ ok: false, texto: "Esta empresa não tem e-mail de contato cadastrado — preencha no bloco Contato, aqui embaixo." });
@@ -317,20 +334,21 @@ export function PainelEmpresa({
     }
   }
 
-  async function enviarComparativo(id: string, numero: number) {
+  async function enviarComparativo(id: string, numero: number, para: string, nome: string) {
     setOcupado(`enviar-comp-${id}`);
     setAvisoEnvio(null);
     try {
       const resp = await fetch("/api/comparativo/enviar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ comparativo_ids: [id] }),
+        body: JSON.stringify({ comparativo_ids: [id], para, nome }),
       });
       const json = await resp.json();
       if (resp.ok && json.enviados > 0) {
+        setConfirmar(null);
         setAvisoEnvio({
           ok: true,
-          texto: `Comparativo nº ${String(numero).padStart(4, "0")} enviado para ${e.contato_email}.`,
+          texto: `Comparativo nº ${String(numero).padStart(4, "0")} enviado para ${para}.`,
         });
         mudou();
       } else if (json.sem_contato > 0) {
@@ -710,6 +728,61 @@ export function PainelEmpresa({
                 </div>
               )}
 
+              {confirmar && (
+                <div className="rounded-sm border border-accent bg-accentwash p-3">
+                  <div className="text-[12px] font-semibold text-accentdeep">
+                    Enviar {confirmar.tipo === "laudo" ? "o laudo" : "o comparativo"} nº{" "}
+                    {String(confirmar.numero).padStart(4, "0")} para:
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <input
+                      type="email"
+                      value={confirmar.email}
+                      onChange={(ev) => setConfirmar({ ...confirmar, email: ev.target.value })}
+                      placeholder="email@empresa.com.br"
+                      autoFocus
+                      className="min-w-0 flex-1 rounded-sm border border-line bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-accentdeep"
+                    />
+                    <button
+                      onClick={() =>
+                        confirmar.tipo === "laudo"
+                          ? void enviarLaudo(confirmar.email.trim(), confirmar.nome)
+                          : void enviarComparativo(
+                              confirmar.id,
+                              confirmar.numero,
+                              confirmar.email.trim(),
+                              confirmar.nome
+                            )
+                      }
+                      disabled={!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(confirmar.email.trim())}
+                      className="rounded-sm bg-accentdeep px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40"
+                    >
+                      Enviar
+                    </button>
+                    <button
+                      onClick={() => setConfirmar(null)}
+                      className="rounded-sm border border-line px-3 py-1.5 text-[12px] font-semibold text-slate2"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                  {/* O botão nasce desabilitado quando o e-mail ainda não é
+                      válido — e botão cinza sem explicação é o mesmo defeito de
+                      percepção dos dois "botões que não funcionam". A linha
+                      abaixo diz o que destrava, e só depois disso passa a
+                      explicar o efeito do envio. */}
+                  <p className="mt-1.5 text-[11px] text-muted">
+                    {!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(confirmar.email.trim())
+                      ? confirmar.email.trim()
+                        ? "Endereço incompleto — o botão libera quando o e-mail estiver válido."
+                        : "Digite o e-mail de quem vai receber para liberar o envio."
+                      : e.contato_email
+                      ? "Se corrigir aqui, o endereço passa a valer para os próximos envios desta empresa."
+                      : "Esta empresa ainda não tem contato — o endereço que você digitar fica salvo nela."}
+                  </p>
+                </div>
+              )}
+
               <div className="flex items-center justify-between gap-2 rounded-sm border border-line p-3">
                 <div>
                   <div className="text-[13px] font-semibold">Laudo de enquadramento</div>
@@ -732,13 +805,16 @@ export function PainelEmpresa({
                       {linkCopiado === d.laudo.id ? "Copiado ✓" : "Copiar link"}
                     </button>
                     <button
-                      onClick={() => void enviarLaudo()}
-                      disabled={ocupado === "enviar-laudo"}
-                      title={
-                        e.contato_email
-                          ? `Enviar para ${e.contato_email}`
-                          : "Cadastre o e-mail de contato no bloco Contato"
+                      onClick={() =>
+                        setConfirmar({
+                          tipo: "laudo",
+                          id: d.laudo!.id,
+                          numero: d.laudo!.numero,
+                          email: e.contato_email ?? "",
+                          nome: e.contato_nome ?? "",
+                        })
                       }
+                      disabled={ocupado === "enviar-laudo"}
                       className="rounded-sm bg-accentdeep px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
                     >
                       {ocupado === "enviar-laudo" ? "Enviando…" : "Enviar ao cliente"}
@@ -813,13 +889,16 @@ export function PainelEmpresa({
                           {linkCopiado === c.id ? "Copiado ✓" : "Copiar link"}
                         </button>
                         <button
-                          onClick={() => void enviarComparativo(c.id, c.numero)}
-                          disabled={ocupado === `enviar-comp-${c.id}`}
-                          title={
-                            e.contato_email
-                              ? `Enviar para ${e.contato_email}`
-                              : "Cadastre o e-mail de contato no bloco Contato"
+                          onClick={() =>
+                            setConfirmar({
+                              tipo: "comparativo",
+                              id: c.id,
+                              numero: c.numero,
+                              email: e.contato_email ?? "",
+                              nome: e.contato_nome ?? "",
+                            })
                           }
+                          disabled={ocupado === `enviar-comp-${c.id}`}
                           className="shrink-0 rounded-sm bg-accentdeep px-2.5 py-1 text-[11.5px] font-semibold text-white disabled:opacity-50"
                         >
                           {ocupado === `enviar-comp-${c.id}` ? "Enviando…" : "Enviar ao cliente"}

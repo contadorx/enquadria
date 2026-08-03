@@ -38,20 +38,46 @@ function escapar(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+export interface Escritorio {
+  nome: string;
+  crc?: string | null;
+  logo_url?: string | null;
+}
+
 /**
- * A moldura comum. O cabeçalho leva o nome do escritório porque é dele que o
- * cliente está esperando notícia — e o rodapé diz de quem é a mensagem, para
- * que ninguém a confunda com disparo de marca desconhecida.
+ * A MOLDURA — o cabeçalho do e-mail é o mesmo do documento.
+ *
+ * Leva LOGOTIPO, NOME e CRC porque o cliente vai comparar as duas coisas lado a
+ * lado: primeiro chega o e-mail, depois abre o laudo. Cabeçalhos diferentes
+ * fazem a mensagem parecer de terceiro — e a tese do produto é o contador
+ * parecer especialista, não a ferramenta aparecer.
+ *
+ * O CRC não é enfeite: é a credencial que faz o documento ser de um
+ * profissional habilitado, e é o que separa este e-mail de qualquer disparo.
+ *
+ * O logotipo entra como <img> de URL pública — a mesma que já é usada no
+ * cabeçalho do laudo. Cliente de e-mail que bloqueia imagem simplesmente não
+ * mostra; nada do que importa depende dela.
  */
-function moldura(params: { escritorio: string; corpo: string }): string {
+function moldura(params: { escritorio: string | Escritorio; corpo: string }): string {
+  const esc: Escritorio =
+    typeof params.escritorio === "string" ? { nome: params.escritorio } : params.escritorio;
+
+  const logo = esc.logo_url
+    ? `<img src="${escapar(esc.logo_url)}" alt="" style="max-height:38px;max-width:150px;display:block;margin-bottom:8px">`
+    : "";
+  const crc = esc.crc
+    ? `<div style="font-size:11px;color:#64748B;text-transform:uppercase;letter-spacing:.06em;margin-top:3px">${escapar(esc.crc)}</div>`
+    : "";
+
   return `
   <div style="font-family:Arial,Helvetica,sans-serif;max-width:540px;margin:0 auto;color:#334155;font-size:15px;line-height:1.6">
     <div style="border-bottom:2px solid #0B1220;padding-bottom:12px;margin-bottom:22px">
-      <strong style="font-size:18px;color:#0B1220">${escapar(params.escritorio)}</strong>
+      ${logo}<strong style="font-size:18px;color:#0B1220">${escapar(esc.nome)}</strong>${crc}
     </div>
     ${params.corpo}
     <p style="font-size:11px;color:#94A3B8;margin-top:26px;border-top:1px solid #EEF2F7;padding-top:12px">
-      Mensagem enviada por ${escapar(params.escritorio)}. Se você não reconhece este envio, ignore este e-mail.
+      Mensagem enviada por ${escapar(esc.nome)}. Se você não reconhece este envio, ignore este e-mail.
     </p>
   </div>`;
 }
@@ -72,7 +98,7 @@ function botao(link: string, texto: string): string {
  */
 export function htmlLaudoCliente(params: {
   empresa: string;
-  escritorio: string;
+  escritorio: string | Escritorio;
   link: string;
   numero: number;
   /** o que o motor concluiu — muda a frase, nunca a promessa */
@@ -113,7 +139,7 @@ export function htmlLaudoCliente(params: {
  */
 export function htmlComparativoCliente(params: {
   empresa: string;
-  escritorio: string;
+  escritorio: string | Escritorio;
   link: string;
   numero: number;
   /** nome do regime de menor carga no cenário — não é recomendação */
@@ -160,7 +186,7 @@ export function htmlComparativoCliente(params: {
  */
 export function htmlColetaRespondida(params: {
   empresa: string;
-  escritorio: string;
+  escritorio: string | Escritorio;
   link: string;
   respondente?: string | null;
 }): string {
@@ -186,7 +212,7 @@ export function htmlColetaRespondida(params: {
  */
 export function htmlTermoAssinadoContador(params: {
   empresa: string;
-  escritorio: string;
+  escritorio: string | Escritorio;
   link: string;
   assinante: string;
   decisao: "optar" | "permanecer";
@@ -216,7 +242,7 @@ export function htmlTermoAssinadoContador(params: {
  */
 export function htmlTermoAssinadoCliente(params: {
   empresa: string;
-  escritorio: string;
+  escritorio: string | Escritorio;
   link: string;
   decisao: "optar" | "permanecer";
 }): string {

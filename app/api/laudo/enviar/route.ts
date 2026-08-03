@@ -32,6 +32,21 @@ interface Corpo {
   analise_ids?: string[];
   /** ids de laudo (o caminho da gaveta, que já sabe o laudo) */
   laudo_ids?: string[];
+  /**
+   * DESTINATÁRIO CORRIGIDO NA HORA — só faz sentido no envio de UM documento.
+   *
+   * O `contato_email` da carteira veio de um CSV exportado sabe-se lá quando, e
+   * com frequência é a caixa do escritório, não a de quem decide. Sem poder
+   * corrigir aqui, o contador tinha de sair da tela, achar o bloco Contato,
+   * salvar, voltar e enviar — e empresa SEM contato nenhum simplesmente não
+   * recebia, porque o botão só sabia reclamar.
+   *
+   * A correção é GRAVADA na empresa. Corrigir e não persistir é o vazamento que
+   * já existia no termo: o próximo lote usaria o endereço velho e o contador
+   * corrigiria de novo, e de novo.
+   */
+  para?: string;
+  nome?: string;
 }
 
 export async function POST(req: Request) {
@@ -57,13 +72,14 @@ export async function POST(req: Request) {
     .eq("id", user.id)
     .maybeSingle();
   const t = perfil?.tenants as { nome?: string; crc?: string; logo_url?: string } | null;
-  const escritorio = t?.nome || "Seu contador";
+  // o cabeçalho do e-mail é o mesmo do documento: logo, nome e CRC
+  const escritorio = { nome: t?.nome || "Seu contador", crc: t?.crc, logo_url: t?.logo_url };
   /**
    * A RESPOSTA DO CLIENTE VAI PARA O CONTADOR, não para o nada. O e-mail
    * termina com "é só responder", e o remetente do Postal é `nao-responda@`:
    * sem isto, o convite a responder seria uma promessa falsa.
    */
-  const responderPara = user.email ? { email: user.email, nome: t?.nome } : undefined;
+  const responderPara = user.email ? { email: user.email, nome: escritorio.nome } : undefined;
 
   // A leitura dos laudos passa pelo cliente do USUÁRIO: é a RLS da carteira que
   // decide o que este contador enxerga. Nada aqui pode enviar documento alheio.
@@ -107,6 +123,12 @@ export async function POST(req: Request) {
   const admin = createAdminClient();
   const base = new URL(req.url).origin;
 
+  // a correção só vale quando é um documento só — em lote não há como saber a
+  // qual empresa o endereço digitado pertence
+  const umSo = laudos.length === 1;
+  const paraManual = umSo && corpo.para?.trim() ? corpo.para.trim() : null;
+  const nomeManual = umSo && corpo.nome?.trim() ? corpo.nome.trim() : null;
+
   let enviados = 0;
   let semContato = 0;
   const falhas: { empresa: string; erro: string }[] = [];
@@ -114,9 +136,22 @@ export async function POST(req: Request) {
   for (const l of laudos) {
     const a = mapaAnalise.get(l.analise_id);
     const e = a ? mapaEmpresa.get(a.empresa_id) : null;
-    if (!e?.contato_email) {
+    if (!e) {
       semContato++;
       continue;
+    }
+    const destino = paraManual ?? e.contato_email;
+    const destinoNome = nomeManual ?? e.contato_nome;
+    if (!destino) {
+      semContato++;
+      continue;
+    }
+
+    // o endereço corrigido vira o contato da empresa, para o próximo lote achar
+    if (paraManual && paraManual !== e.contato_email) {
+      const patch: { contato_email: string; contato_nome?: string } = { contato_email: paraManual };
+      if (nomeManual && nomeManual !== e.contato_nome) patch.contato_nome = nomeManual;
+      await supabase.from("empresas").update(patch).eq("id", e.id);
     }
     if (!l.token) {
       falhas.push({ empresa: e.razao_social, erro: "laudo sem endereço público (rode a migration 0028)" });
@@ -136,8 +171,8 @@ export async function POST(req: Request) {
       : ("permanecer" as const);
 
     const envio = await enviarEmail({
-      para: e.contato_email,
-      nome: e.contato_nome ?? undefined,
+      para: destino,
+      nome: destinoNome ?? undefined,
       assunto: `${e.razao_social} — laudo de enquadramento nº ${String(l.numero).padStart(4, "0")}`,
       html: htmlLaudoCliente({
         empresa: e.razao_social,
@@ -167,8 +202,8 @@ export async function POST(req: Request) {
         empresa_id: e.id,
         tipo: "laudo",
         documento_id: l.id,
-        para: e.contato_email,
-        nome: e.contato_nome ?? null,
+        para: destino,
+        nome: destinoNome ?? null,
         assunto: `laudo nº ${String(l.numero).padStart(4, "0")}`,
         status: envio.enviado ? "enviado" : "erro",
         erro: envio.enviado ? null : (envio.motivo ?? "envio recusado").slice(0, 300),

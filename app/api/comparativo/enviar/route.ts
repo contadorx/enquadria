@@ -20,7 +20,12 @@ import type { ResultadoComparativo } from "@/lib/comparativo";
 
 interface Corpo {
   comparativo_ids: string[];
-  /** para o comparativo avulso, que não tem empresa vinculada */
+  /**
+   * Serve a dois casos: o comparativo AVULSO (sem empresa vinculada, usado para
+   * prospectar) e a CORREÇÃO do destinatário na hora do envio. No segundo caso
+   * o endereço é gravado na empresa — corrigir sem persistir é o vazamento que
+   * já existia no termo, com o contador corrigindo o mesmo e-mail toda vez.
+   */
   para?: string;
   nome?: string;
 }
@@ -48,9 +53,9 @@ export async function POST(req: Request) {
     .eq("id", user.id)
     .maybeSingle();
   const t = perfil?.tenants as { nome?: string; crc?: string; logo_url?: string } | null;
-  const escritorio = t?.nome || "Seu contador";
+  const escritorio = { nome: t?.nome || "Seu contador", crc: t?.crc, logo_url: t?.logo_url };
   // o cliente responde ao comparativo pedindo reunião — tem de cair no contador
-  const responderPara = user.email ? { email: user.email, nome: t?.nome } : undefined;
+  const responderPara = user.email ? { email: user.email, nome: escritorio.nome } : undefined;
 
   const { data: docs, error } = await supabase
     .from("comparativos")
@@ -79,11 +84,23 @@ export async function POST(req: Request) {
   let semContato = 0;
   const falhas: { empresa: string; erro: string }[] = [];
 
+  // como no laudo: a correção só é confiável quando é um documento só
+  const umSo = docs.length === 1;
+  const paraManual = umSo && corpo.para?.trim() ? corpo.para.trim() : null;
+  const nomeManual = umSo && corpo.nome?.trim() ? corpo.nome.trim() : null;
+
   for (const d of docs) {
     const e = d.empresa_id ? mapaEmpresa.get(d.empresa_id) : null;
-    const para = e?.contato_email || corpo.para || null;
-    const nome = e?.contato_nome || corpo.nome || null;
+    // o digitado tem precedência: quem está na tela sabe mais que o CSV
+    const para = paraManual || e?.contato_email || corpo.para || null;
+    const nome = nomeManual || e?.contato_nome || corpo.nome || null;
     const rotulo = e?.razao_social || "Cenário avulso";
+
+    if (e && paraManual && paraManual !== e.contato_email) {
+      const patch: { contato_email: string; contato_nome?: string } = { contato_email: paraManual };
+      if (nomeManual && nomeManual !== e.contato_nome) patch.contato_nome = nomeManual;
+      await supabase.from("empresas").update(patch).eq("id", e.id);
+    }
 
     if (!para) {
       semContato++;
