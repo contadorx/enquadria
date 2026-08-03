@@ -36,6 +36,27 @@ import {
   htmlTermoAssinadoCliente,
 } from "./emails-cliente.js";
 
+import fsE from "node:fs";
+import pathE from "node:path";
+
+/**
+ * A raiz é DESCOBERTA, não calculada por "../..".
+ *
+ * O executor copia cada suíte para `.tmp-rodar/` e roda de lá — um caminho
+ * relativo ao arquivo apontaria para dentro da pasta temporária, e o teste
+ * falharia dizendo que as rotas não existem. Sobe até achar o package.json.
+ */
+function acharRaiz(dir) {
+  for (let i = 0; i < 6; i++) {
+    if (fsE.existsSync(pathE.join(dir, "package.json")) && fsE.existsSync(pathE.join(dir, "app"))) {
+      return dir;
+    }
+    dir = pathE.dirname(dir);
+  }
+  return null;
+}
+const RAIZ_E = acharRaiz(process.cwd());
+
 let f = 0;
 const ok = (c, m, e) => {
   if (!c) { f++; console.log("FALHOU:", m, e === undefined ? "" : JSON.stringify(e)); }
@@ -164,6 +185,38 @@ for (const [re, oque] of PROIBIDO) {
   ok(!re.test(soTexto(ASSIN_CLI)), `termo/cliente não contém ${oque}`);
 }
 
+/* ── o cabeçalho é o mesmo do documento: logo, nome, CRC ───────────── */
+/**
+ * O cliente compara as duas coisas lado a lado: primeiro chega o e-mail,
+ * depois abre o laudo. Cabeçalho diferente faz a mensagem parecer de terceiro,
+ * e a tese do produto é o contador parecer especialista. O CRC não é enfeite:
+ * é a credencial que separa isto de um disparo qualquer.
+ */
+const COM_MARCA = htmlLaudoCliente({
+  empresa: "Aurora",
+  escritorio: { nome: "Oliveira Contabilidade", crc: "CRC 1SP123456/O-4", logo_url: "https://x/logo.png" },
+  link: "https://e/laudo/tok", numero: 1, decisao: "optar",
+});
+ok(COM_MARCA.includes("CRC 1SP123456/O-4"), "cabeçalho leva o CRC");
+ok(/<img src="https:\/\/x\/logo\.png"/.test(COM_MARCA), "cabeçalho leva o logotipo");
+ok(COM_MARCA.includes("Oliveira Contabilidade"), "cabeçalho leva o nome");
+
+const SEM_MARCA = htmlLaudoCliente({
+  empresa: "Aurora", escritorio: { nome: "Só o Nome" },
+  link: "https://e/laudo/tok", numero: 1, decisao: null,
+});
+ok(!/<img/.test(SEM_MARCA), "sem logo cadastrado, não sai <img> quebrada");
+ok(!/CRC/i.test(SEM_MARCA), "sem CRC cadastrado, não inventa credencial");
+ok(SEM_MARCA.includes("Só o Nome"), "e o nome continua lá");
+
+// as rotas passam a identidade inteira, não só o nome
+for (const rel of ["app/api/laudo/enviar/route.ts", "app/api/comparativo/enviar/route.ts"]) {
+  if (!RAIZ_E) break;
+  const src = fsE.readFileSync(pathE.join(RAIZ_E, rel), "utf8");
+  ok(/escritorio\s*=\s*\{[^}]*crc[^}]*logo_url/.test(src),
+     `${rel} manda nome, CRC e logo ao template`);
+}
+
 /* ── a promessa de "é só responder" precisa de reply-to ────────────── */
 /**
  * Estes e-mails convidam o cliente a responder, e o remetente do Postal é
@@ -174,26 +227,7 @@ for (const [re, oque] of PROIBIDO) {
  * Este teste é ESTÁTICO de propósito: o que precisa ser garantido não é o
  * texto, é que todo lugar que convida a responder passe o reply-to.
  */
-import fsE from "node:fs";
-import pathE from "node:path";
 
-/**
- * A raiz é DESCOBERTA, não calculada por "../..".
- *
- * O executor copia cada suíte para `.tmp-rodar/` e roda de lá — um caminho
- * relativo ao arquivo apontaria para dentro da pasta temporária, e o teste
- * falharia dizendo que as rotas não existem. Sobe até achar o package.json.
- */
-function acharRaiz(dir) {
-  for (let i = 0; i < 6; i++) {
-    if (fsE.existsSync(pathE.join(dir, "package.json")) && fsE.existsSync(pathE.join(dir, "app"))) {
-      return dir;
-    }
-    dir = pathE.dirname(dir);
-  }
-  return null;
-}
-const RAIZ_E = acharRaiz(process.cwd());
 
 const CONVIDAM = [
   "app/api/laudo/enviar/route.ts",

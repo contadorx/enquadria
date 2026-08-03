@@ -223,8 +223,20 @@ for (const arq of arquivos) {
       const bloco = linhas.slice(i, Math.min(linhas.length, i + 12)).join("\n");
       const rotuloMuda = /\{[^}]*\?[^}]*:[^}]*\}/.test(bloco);
 
+      /**
+       * O VOCABULÁRIO É UM PROXY, e proxy incompleto acusa código correto.
+       *
+       * "Digite o e-mail para liberar o envio" explica tanto quanto "Informe o
+       * e-mail" — e a primeira versão desta lista não tinha "digite", então a
+       * auditoria reprovou uma explicação perfeitamente clara. Sempre que isso
+       * acontecer, o certo é ampliar a lista, não reescrever o texto do produto
+       * para agradar ao verificador: quem existe para o usuário é o texto.
+       */
       const trecho = linhas.slice(Math.max(0, i - 10), Math.min(linhas.length, i + 16)).join("\n");
-      const explica = /title=|aria-label=|não dá para|precisa|falta|indisponível|preencha|informe|escolha|selecione|aguarde|\.\.\.|…/i.test(trecho);
+      const explica =
+        /title=|aria-label=|não dá para|precisa|falta|indisponível|preencha|informe|digite|escolha|selecione|aguarde|libera|destrava|complet[ea]|inválid|\.\.\.|…/i.test(
+          trecho
+        );
 
       if (!soPlumbing && !rotuloMuda && !explica) {
         achado(arq, nLinha, "desabilitado-sem-motivo",
