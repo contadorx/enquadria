@@ -9,6 +9,8 @@ import {
   CSV_EXEMPLO,
   decodificarCsv,
   pareceMojibake,
+  planilhaParaCsv,
+  ehPlanilha,
   type ResultadoParse,
   type LinhaCarteira,
 } from "@/lib/csv";
@@ -136,7 +138,29 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
      * Excel brasileiro exporta em Windows-1252 — o acento chega corrompido e
      * vai assim para o banco, para o laudo e para o termo assinado.
      */
-    const { texto, codificacao } = decodificarCsv(await arquivo.arrayBuffer());
+    const bytes = await arquivo.arrayBuffer();
+
+    /**
+     * Planilha do Excel entra pelo mesmo parser do CSV — só muda a porta.
+     * Um caminho de leitura só significa um conjunto de regras só.
+     */
+    let texto: string;
+    let codificacao: string;
+    if (ehPlanilha(arquivo.name)) {
+      try {
+        texto = await planilhaParaCsv(bytes);
+        codificacao = "planilha do Excel";
+      } catch {
+        setErro(
+          "Não consegui abrir esta planilha. Se ela tiver senha ou for muito antiga, salve como CSV UTF-8 e tente de novo."
+        );
+        return;
+      }
+    } else {
+      const lido = decodificarCsv(bytes);
+      texto = lido.texto;
+      codificacao = lido.codificacao;
+    }
     setCodificacao(codificacao);
     const resultado = parsearCarteira(texto);
     if (!resultado.colunas_reconhecidas.cnpj) {
@@ -449,14 +473,14 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
           </div>
           <div className="mt-1 text-[15px] font-bold">Importe a carteira de um CSV</div>
           <p className="mt-1 max-w-[68ch] text-[12px] leading-relaxed text-muted">
-            Arquivo <b className="text-slate2">.csv</b>. Se a sua carteira está em Excel,
-            use <i>Salvar como → CSV UTF-8</i> — o formato .xlsx não é lido aqui, e o
-            &ldquo;CSV UTF-8&rdquo; é o que preserva os acentos da razão social.
+            Aceita <b className="text-slate2">.xlsx</b>, <b className="text-slate2">.xls</b> e{" "}
+            <b className="text-slate2">.csv</b> — do jeito que sair do seu sistema. Planilha do
+            Excel entra direto, sem converter nada.
           </p>
           <div className="mt-2.5 flex flex-wrap items-center gap-3">
             <label className="cursor-pointer rounded-sm border border-line px-4 py-2.5 text-sm font-semibold text-slate2">
-              Escolher arquivo CSV
-              <input type="file" accept=".csv,.txt,text/csv,text/plain" onChange={aoSelecionar} className="hidden" />
+              Escolher arquivo
+              <input type="file" accept=".csv,.txt,.xlsx,.xlsm,.xls,text/csv,text/plain" onChange={aoSelecionar} className="hidden" />
             </label>
             <button
               onClick={usarExemplo}

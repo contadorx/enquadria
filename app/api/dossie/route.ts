@@ -29,6 +29,7 @@ export async function GET(req: Request) {
     .select(
       "id, cnpj, razao_social, cnae_principal, porte, situacao, regime, anexo, rbt12, faixa, motivo_triagem, prioridade_maxima, fonte_dados, contato_nome, contato_email, contato_telefone"
     )
+    .is("arquivada_em", null)
     .eq("id", id)
     .maybeSingle();
   if (!empresa) return NextResponse.json({ erro: "empresa não encontrada" }, { status: 404 });

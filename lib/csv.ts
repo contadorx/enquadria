@@ -268,3 +268,60 @@ export function decodificarCsv(bytes: ArrayBuffer): { texto: string; codificacao
 export function pareceMojibake(texto: string): boolean {
   return /\u00C3[\u00A0-\u00BF]|\u00C2[\u00A0-\u00BF]|\uFFFD/.test(texto);
 }
+
+
+/**
+ * PLANILHA DO EXCEL -> o mesmo texto CSV que o parser ja sabe ler.
+ *
+ * O contador vive no Excel. Exigir "Salvar como CSV UTF-8" antes de subir a
+ * carteira e transferir para ele um problema de codificacao que e nosso — e
+ * cada passo a mais na importacao e uma empresa que fica sem ser analisada.
+ *
+ * A conversao passa pelo CSV de proposito, em vez de produzir linhas direto:
+ * assim existe UM parser, com UM conjunto de regras de sinonimo de coluna e de
+ * validacao de CNPJ. Dois caminhos de leitura divergem na primeira correcao.
+ *
+ * `raw: false` faz o SheetJS entregar o valor JA formatado como a celula
+ * aparece na tela. Sem isso, CNPJ armazenado como numero volta em notacao
+ * cientifica e RBT12 volta com 14 casas decimais.
+ */
+export async function planilhaParaCsv(bytes: ArrayBuffer): Promise<string> {
+  const XLSX = await import("xlsx");
+  const livro = XLSX.read(bytes, { type: "array", cellDates: false });
+
+  const primeira = livro.SheetNames[0];
+  if (!primeira) throw new Error("A planilha não tem nenhuma aba.");
+
+  /**
+   * `raw: true` e a conversao feita AQUI, nao pelo SheetJS.
+   *
+   * O caminho obvio (`sheet_to_csv`) respeita o FORMATO da celula, e o Excel
+   * guarda CNPJ como numero: 07526557000100 volta como "7.52656E+12". O parser
+   * entao descarta a linha como CNPJ invalido, e o contador ve "1 descartada"
+   * sem entender por que.
+   *
+   * Lendo o valor bruto, `String(7526557000100)` devolve os digitos. Um CNPJ
+   * tem 14 digitos (~1e13) e o inteiro seguro do JavaScript vai ate 9e15 — nao
+   * ha perda de precisao nesta faixa.
+   */
+  const linhas = XLSX.utils.sheet_to_json<unknown[]>(livro.Sheets[primeira], {
+    header: 1,
+    raw: true,
+    blankrows: false,
+  });
+
+  const celula = (v: unknown): string => {
+    if (v === null || v === undefined) return "";
+    // inteiro vira digito puro; decimal mantem o ponto (RBT12 com centavos)
+    const texto = typeof v === "number" ? (Number.isInteger(v) ? String(v) : String(v)) : String(v);
+    // aspas duplas ao redor so quando necessario, no padrao CSV
+    return /[",\n]/.test(texto) ? `"${texto.replace(/"/g, '""')}"` : texto;
+  };
+
+  return linhas.map((l) => (l ?? []).map(celula).join(",")).join("\n");
+}
+
+/** Reconhece pela extensão — é o que o contador enxerga. */
+export function ehPlanilha(nome: string): boolean {
+  return /\.(xlsx|xlsm|xls)$/i.test((nome ?? "").trim());
+}

@@ -73,6 +73,7 @@ export default async function Painel() {
     .select(
       "id, cnpj, razao_social, cnae_principal, faixa, motivo_triagem, prioridade_maxima, rbt12, anexo, contato_nome, contato_email"
     )
+    .is("arquivada_em", null)
     .limit(2000);
 
   const { data: analises } = await supabase

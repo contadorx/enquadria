@@ -52,6 +52,7 @@ export async function POST(req: Request) {
   let query = supabase
     .from("empresas")
     .select("id, cnae_principal, anexo, rbt12")
+    .is("arquivada_em", null)
     .eq("tenant_id", tenantId);
   query = corpo.empresa_ids?.length
     ? query.in("id", corpo.empresa_ids)

@@ -99,6 +99,17 @@ export const ABAS_ESCRITORIO: ItemNav[] = [
  */
 export const ABAS_AJUDA: ItemNav[] = [
   { href: "/painel/ajuda", label: "Central de ajuda" },
+  /**
+   * O CURSO ENTRA AQUI — e continua público lá fora.
+   *
+   * `/curso` já existe, fora da área logada, e precisa continuar assim: ele é
+   * o ativo de aquisição do tráfego frio, e exigir cadastro para assistir
+   * mataria justamente o público que ele serve.
+   *
+   * O que faltava era o caminho de VOLTA: quem já é usuário não tem como achar
+   * as aulas por dentro do produto. Mesma rota, duas portas.
+   */
+  { href: "/curso", label: "Curso" },
   { href: "/painel/chamados", label: "Meus chamados" },
 ];
 
