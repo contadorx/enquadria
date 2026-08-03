@@ -62,6 +62,13 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
   const [texto, setTexto] = useState("");
   const [etapa, setEtapa] = useState<"gravando" | "analisando" | null>(null);
   const previaRef = useRef<HTMLDivElement>(null);
+
+  /** leva o olho até a prévia — todo caminho que monta carteira passa por aqui */
+  function rolarAtePrevia() {
+    requestAnimationFrame(() =>
+      previaRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    );
+  }
   const [feito, setFeito] = useState<{
     gravadas: number;
     enriquecidas: number;
@@ -141,6 +148,7 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
       return;
     }
     setParse(resultado);
+    rolarAtePrevia();
   }
 
   function usarExemplo() {
@@ -149,6 +157,7 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
     setColando(false);
     setNomeArquivo("exemplo.csv");
     setParse(parsearCarteira(CSV_EXEMPLO));
+    rolarAtePrevia();
   }
 
   /**
@@ -189,9 +198,7 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
      * rolo até a prévia.
      */
     setColando(false);
-    requestAnimationFrame(() =>
-      previaRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-    );
+    rolarAtePrevia();
   }
 
   async function gravar() {
@@ -393,6 +400,7 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
             <div className="mt-2 flex flex-wrap gap-2">
               <button
                 onClick={lerColados}
+                title="Cole ao menos um CNPJ acima para liberar"
                 disabled={!texto.trim()}
                 className="rounded-sm bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
               >
@@ -493,6 +501,8 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
               </div>
             </div>
             <button
+              // ux-ok: ao terminar, `feito` substitui o componente inteiro pela
+              // tela de sucesso — a mudança ocupa a tela toda, não passa despercebida
               onClick={gravar}
               disabled={enviando}
               className="rounded-sm bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"

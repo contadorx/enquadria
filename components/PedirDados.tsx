@@ -149,6 +149,8 @@ export function PedirDados({
             Usar estas respostas na análise
           </button>
           <button
+            // ux-ok: `bloqueio` esconde o bloco inteiro que contém este botão
+            // ({!bloqueio && ...}) e põe a mensagem no lugar — o botão some junto
             onClick={abrir}
             disabled={ocupado}
             className="rounded-sm border border-line bg-surface px-3.5 py-2 text-[13px] font-semibold text-slate2"

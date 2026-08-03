@@ -153,6 +153,11 @@ export function EditarEmpresa({
         >
           {salvando ? "Salvando…" : "Salvar"}
         </button>
+        {/* o "salvo ✓" do cabeçalho fica 77 linhas acima e o formulário não
+            fecha ao salvar — quem está aqui embaixo não via confirmação nenhuma */}
+        {salvo && (
+          <span className="self-center font-mono text-[12px] text-verde">salvo ✓</span>
+        )}
         <button
           onClick={() => setAberto(false)}
           className="rounded-sm border border-line px-3.5 py-2 text-[12.5px] font-semibold text-slate2"

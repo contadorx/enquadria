@@ -124,6 +124,20 @@ for (const suite of ["cockpit", "motor", "coleta", "muro", "reguas", "janela"]) 
      r.status === 0 ? undefined : saida.split("\n").filter((l) => l.startsWith("FALHOU")).slice(0, 5));
 }
 
+/* ================================================ 1b. AUDITORIA DE UX ==== */
+secao("Auditoria de UX (percepção, não estética)");
+{
+  // Dois botões seguidos foram reportados como "não funciona" e nenhum estava
+  // quebrado: o efeito nascia fora da tela. Nada aqui pegava isso, porque o
+  // código estava certo. Esta auditoria procura essa família — causa e efeito,
+  // não beleza.
+  const r = spawnSync("node", [path.join(RAIZ, "testes", "auditar-ux.mjs")], { encoding: "utf8" });
+  const saida = (r.stdout || "") + (r.stderr || "");
+  const regras = (saida.match(/^ok: /gm) || []).length;
+  ok(`auditoria de UX (${regras} regras limpas)`, r.status === 0,
+     r.status === 0 ? undefined : saida.split("\n").filter((l) => l.trim().startsWith("components/") || l.trim().startsWith("app/")).slice(0, 8));
+}
+
 /* ============================================== 2. A MASSA NO PARSER ==== */
 secao("Massa de empresas no parser do app");
 const GOLDEN_IMPORT = { lidas: 47, importadas: 45, duplicadas: 1, descartadas: 1 };

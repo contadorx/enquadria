@@ -169,6 +169,8 @@ export function Assinatura({ token, empresa, cnpj, decisao, clausulas, hash }: P
             <input type="checkbox" checked={aceite} onChange={(e) => setAceite(e.target.checked)} className="mt-0.5" />
             <span>Declaro que li o termo acima, compreendi os cenários e as premissas, e <b>dou ciência</b> da decisão, assinando este documento eletronicamente.</span>
           </label>
+          {/* ux-ok: ao assinar, `resultado` troca o cartão inteiro pelo recibo com
+              o código de verificação — a página muda de conteúdo, não um trecho */}
           <button onClick={assinar} disabled={carregando}
             className="w-full rounded-sm bg-accent px-4 py-3 text-sm font-bold text-[#04212B] disabled:opacity-40">
             {carregando ? "Assinando..." : "Assinar o termo"}

@@ -10,6 +10,9 @@ ok    suíte muro (11 asserções)
 ok    suíte reguas (14 asserções)
 ok    suíte janela (20 asserções)
 
+── Auditoria de UX (percepção, não estética) ───────────────────
+ok    auditoria de UX (4 regras limpas)
+
 ── Massa de empresas no parser do app ──────────────────────────
 ok    lê 47 linhas
 ok    importa 45
@@ -114,4 +117,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 95 verificações automáticas
+TUDO PASSOU — 96 verificações automáticas

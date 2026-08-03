@@ -76,11 +76,22 @@ export function NovaRodada({ totalAnalises }: { totalAnalises: number }) {
         </p>
         <button
           onClick={() => setAberto(true)}
+          title={
+            totalAnalises === 0
+              ? "Ainda não há análise nenhuma para recalcular — analise ao menos uma empresa"
+              : undefined
+          }
           disabled={totalAnalises === 0}
           className="whitespace-nowrap rounded-sm border border-accentdeep px-3.5 py-2 text-[13px] font-semibold text-accentdeep disabled:opacity-40"
         >
           Abrir nova rodada
         </button>
+        {totalAnalises === 0 && (
+          <p className="mt-1.5 text-[11.5px] leading-relaxed text-muted">
+            Nada a recalcular ainda: uma nova rodada parte das análises já feitas, e não há
+            nenhuma nesta carteira.
+          </p>
+        )}
       </div>
     );
   }
@@ -147,6 +158,8 @@ export function NovaRodada({ totalAnalises }: { totalAnalises: number }) {
       </p>
       <div className="mt-3 flex gap-2">
         <button
+          // ux-ok: ao concluir, `feito` substitui o componente inteiro pelo
+          // cartão verde de sucesso — a tela toda muda, não um trecho distante
           onClick={criar}
           disabled={ocupado}
           className="rounded-sm bg-ink px-3.5 py-2 text-[12.5px] font-semibold text-white disabled:opacity-40"

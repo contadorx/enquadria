@@ -227,6 +227,7 @@ export function ReguaCartao({ r, variaveis }: { r: RegraUI; variaveis: { k: stri
               />
               <button
                 className={btnClaro}
+                title="Informe um e-mail válido ao lado para enviar o teste"
                 disabled={pend || !teste.includes("@")}
                 onClick={() =>
                   start(async () => {
@@ -451,6 +452,7 @@ export function LinhaEscritorio({ e, planos, temAsaas }: { e: EscritorioUI; plan
                 </select>
                 <button
                   className={btnClaro}
+                  title="Escolha um plano na lista ao lado"
                   disabled={pend || !novoPlano}
                   onClick={() =>
                     start(async () => {
