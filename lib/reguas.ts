@@ -613,3 +613,30 @@ export async function vencidasPendentes(
     .in("id", ids);
   return { ids, marcadas: error ? 0 : ids.length };
 }
+
+/**
+ * ESTAMOS EM HORÁRIO DE ENVIO?
+ *
+ * O cron passa a rodar de hora em hora para diluir os disparos — um lote
+ * concentrado prejudica reputação de domínio e chega todo de uma vez na caixa
+ * de quem já não estava esperando.
+ *
+ * Diluir só faz sentido dentro do horário em que a pessoa lê. E-mail de
+ * cobrança que chega 3h da manhã é lido às 9h junto com todos os outros: o
+ * efeito da diluição some, e sobra o incômodo.
+ *
+ * A hora entra como argumento (não `new Date()` por dentro) para poder ser
+ * testada sem esperar a hora chegar — mesma regra do resto do projeto.
+ *
+ * FUSO: o Vercel roda o cron em UTC. O Brasil está em UTC-3, então 9h-18h no
+ * horário de Brasília é 12h-21h UTC. Fazer essa conta aqui, num lugar só, é
+ * melhor que espalhá-la pelo cron e pela expectativa de quem lê o log.
+ */
+export function emHorarioDeEnvio(agoraUTC: Date, inicioBR = 9, fimBR = 18): boolean {
+  const horaBR = (agoraUTC.getUTCHours() + 24 - 3) % 24;
+  const diaBR = new Date(agoraUTC.getTime() - 3 * 3600_000).getUTCDay();
+  // 0 = domingo, 6 = sábado. E-mail de cobrança no fim de semana é ruído: a
+  // pessoa não vai resolver boleto no sábado, e a mensagem perde o efeito.
+  if (diaBR === 0 || diaBR === 6) return false;
+  return horaBR >= inicioBR && horaBR < fimBR;
+}

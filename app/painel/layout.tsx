@@ -5,6 +5,7 @@ import { BotaoSair } from "@/components/BotaoSair";
 import { NavMobile } from "@/components/NavMobile";
 import { navDe } from "@/lib/nav";
 import { CamadaGlobal } from "@/components/CamadaGlobal";
+import { contarNovidades } from "@/lib/ajuda";
 import { JANELA, estadoDaJanela, faseDaJanela } from "@/lib/janela";
 
 export default async function PainelLayout({ children }: { children: React.ReactNode }) {
@@ -57,6 +58,14 @@ export default async function PainelLayout({ children }: { children: React.React
   let assistenteAtivo = false;
   let laudosDoEscritorio = 0;
   let npsRespondidoEm: string | null = null;
+  /**
+   * Quantas notícias da Reforma esta pessoa ainda não leu.
+   *
+   * Vira a bolinha ao lado do menu. Conteúdo empurrado sem aviso é conteúdo não
+   * lido: a pessoa só descobre que saiu regulamentação nova se algo na tela
+   * disser que saiu.
+   */
+  let reformaNaoLidas = 0;
   try {
     const [cfg, laudos, nps] = await Promise.all([
       supabase.from("assistente_config").select("ativo").eq("id", 1).maybeSingle(),
@@ -67,6 +76,22 @@ export default async function PainelLayout({ children }: { children: React.React
     laudosDoEscritorio = laudos.count ?? 0;
     const ultima = (nps.data ?? [])[0] as { criado_em?: string } | undefined;
     npsRespondidoEm = ultima?.criado_em ? ultima.criado_em.slice(0, 10) : null;
+
+    const [noticias, lidos] = await Promise.all([
+      supabase
+        .from("ajuda_artigos")
+        .select("id, atualizado_em")
+        .eq("tipo", "noticia")
+        .eq("publicado", true),
+      supabase.from("ajuda_leituras").select("artigo_id, lido_em"),
+    ]);
+    const leituras = Object.fromEntries(
+      (lidos.data ?? []).map((l) => [l.artigo_id as string, l.lido_em as string])
+    );
+    reformaNaoLidas = contarNovidades(
+      (noticias.data ?? []) as { id: string; atualizado_em: string }[],
+      leituras
+    );
   } catch {
     /* migrations não rodadas: painel funciona, os acessórios não aparecem */
   }
@@ -110,9 +135,17 @@ export default async function PainelLayout({ children }: { children: React.React
                 <Link
                   key={i.href}
                   href={i.href}
-                  className="block px-[18px] py-2 text-[13.5px] text-slate2 hover:bg-accentwash hover:text-accentdeep"
+                  className="flex items-center justify-between gap-2 px-[18px] py-2 text-[13.5px] text-slate2 hover:bg-accentwash hover:text-accentdeep"
                 >
-                  {i.label}
+                  <span>{i.label}</span>
+                  {i.marcador === "reforma" && reformaNaoLidas > 0 && (
+                    <span
+                      title={`${reformaNaoLidas} novidade(s) na Reforma`}
+                      className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1 font-mono text-[10px] font-bold text-white"
+                    >
+                      {reformaNaoLidas}
+                    </span>
+                  )}
                 </Link>
               ))}
             </div>

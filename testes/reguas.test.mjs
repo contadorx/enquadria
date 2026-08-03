@@ -10,7 +10,7 @@
  * Rodado pelo testes/rodar-tudo.mjs junto das demais suítes puras.
  */
 
-import { planejar } from "./reguas.js";
+import { planejar, emHorarioDeEnvio } from "./reguas.js";
 
 let f = 0;
 const ok = (c, m, e) => {
@@ -241,6 +241,34 @@ ok(!chavesAtiv(novaConta({ empresas: 143, faixa_a: 40 })).includes("ativacao_sem
    "SUBIU 143 EMPRESAS: nunca mais recebe 'vi que a carteira não subiu'");
 ok(!chavesAtiv(novaConta({ empresas: 143, faixa_a: 40, analises: 5, laudos: 1 })).includes("ativacao_sem_laudo"),
    "emitiu laudo: para de cobrar o laudo");
+
+/* ── a trava de horário do cron de hora em hora ─────────────────────── */
+/**
+ * O cron passou a rodar toda hora para diluir os disparos. Sem trava, "toda
+ * hora" inclui a madrugada — e e-mail que chega às 3h é lido às 9h junto com
+ * todos os outros: some o efeito da diluição e sobra o incômodo.
+ *
+ * O fuso é o detalhe que engana: o Vercel roda em UTC e o Brasil é UTC-3.
+ */
+const utc = (dia, hora) => new Date(Date.UTC(2026, 7, dia, hora, 0, 0)); // agosto/2026
+
+// 3 de agosto de 2026 é uma SEGUNDA-feira
+ok(emHorarioDeEnvio(utc(3, 12)), "12h UTC = 9h no Brasil: envia");
+ok(emHorarioDeEnvio(utc(3, 20)), "20h UTC = 17h no Brasil: envia");
+ok(!emHorarioDeEnvio(utc(3, 21)), "21h UTC = 18h no Brasil: já parou");
+ok(!emHorarioDeEnvio(utc(3, 11)), "11h UTC = 8h no Brasil: ainda não");
+ok(!emHorarioDeEnvio(utc(3, 6)), "6h UTC = 3h da manhã no Brasil: nunca");
+
+// a virada de dia pelo fuso: 2h UTC de terça é 23h de segunda no Brasil
+ok(!emHorarioDeEnvio(utc(4, 2)), "2h UTC de terça = 23h de segunda no Brasil: não envia");
+
+// fim de semana: ninguém resolve boleto no sábado
+ok(!emHorarioDeEnvio(utc(8, 15)), "sábado ao meio-dia: não envia");
+ok(!emHorarioDeEnvio(utc(9, 15)), "domingo ao meio-dia: não envia");
+ok(emHorarioDeEnvio(utc(7, 15)), "sexta ao meio-dia: envia");
+
+// janela configurável
+ok(emHorarioDeEnvio(utc(3, 11), 8, 18), "com início às 8h, 11h UTC passa a valer");
 
 console.log(f === 0 ? "TODOS OS TESTES PASSARAM" : `${f} FALHAS`);
 process.exit(f ? 1 : 0);

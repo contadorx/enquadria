@@ -53,13 +53,30 @@ export async function GET(req: Request) {
     erros.push(`vencidas: ${e instanceof Error ? e.message : "erro"}`);
   }
 
+  /**
+   * A TRAVA DE HORÁRIO — nova em 03/08, junto com o cron de hora em hora.
+   *
+   * O cron passou de uma vez ao dia para toda hora, para diluir os disparos.
+   * Sem esta trava, "toda hora" incluiria a madrugada — e e-mail que chega às
+   * 3h é lido às 9h junto com todos os outros: perde-se o efeito da diluição e
+   * fica só o incômodo.
+   *
+   * `forcar=1` permite testar fora do horário sem esperar amanhã.
+   */
+  const { emHorarioDeEnvio } = await import("@/lib/reguas");
+  const forcar = new URL(req.url).searchParams.get("forcar") === "1";
+  const dentroDoHorario = emHorarioDeEnvio(new Date());
+  const podeEnviar = simular || forcar || dentroDoHorario;
+
   let reguas: { planejados: number; enviados: number; semEmail: number } = {
     planejados: 0, enviados: 0, semEmail: 0,
   };
   let lista: unknown[] = [];
   try {
     const { executarReguas } = await import("@/lib/reguas");
-    const r = await executarReguas(supabase, { simular });
+    // fora do horário, roda em modo simulação: o log mostra o que sairia,
+    // sem mandar nada — assim o cron das 4h da manhã continua sendo útil
+    const r = await executarReguas(supabase, { simular: simular || !podeEnviar });
     reguas = { planejados: r.planejados, enviados: r.enviados, semEmail: r.semEmail };
     if (r.erros.length) erros.push(...r.erros.slice(0, 10));
     if (simular) {
@@ -97,7 +114,12 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     ok: true,
-    modo: simular ? "teste (nada foi enviado)" : "envio",
+    modo: simular
+      ? "teste (nada foi enviado)"
+      : podeEnviar
+        ? "envio"
+        : "fora do horário comercial (nada foi enviado)",
+    horario_br: `${(new Date().getUTCHours() + 21) % 24}h`,
     vencidas_encontradas: vencidas.ids.length,
     vencidas_marcadas: vencidas.marcadas,
     reguas,

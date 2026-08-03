@@ -14,6 +14,8 @@ export interface ItemNav {
   label: string;
   /** rótulo curto para a barra inferior do celular */
   curto?: string;
+  /** chave do contador de novidades exibido ao lado do item */
+  marcador?: "reforma";
 }
 
 export interface GrupoNav {
@@ -44,20 +46,34 @@ export const NAV: GrupoNav[] = [
     grupo: "Trabalho",
     itens: [
       { href: "/painel", label: "Cockpit", curto: "Cockpit" },
+      /**
+       * REFORMA FORA DA AJUDA — correção de 03/08.
+       *
+       * Eu tinha juntado as duas sob "Ajuda" argumentando que quem tem dúvida
+       * não sabe classificá-la. O argumento vale para a ajuda e é FALSO para a
+       * Reforma: ela não é procurada, é EMPURRADA. Quem não sabe que saiu uma
+       * regulamentação nova não vai clicar em "Ajuda" para descobrir.
+       *
+       * Escondê-la dentro de outro item contradizia o desenho que eu mesmo
+       * tinha escrito duas rodadas antes — e mata o único motivo recorrente que
+       * o contador tem para voltar ao app fora da janela.
+       *
+       * O marcador de não lidos existe pela mesma razão: conteúdo empurrado sem
+       * aviso é conteúdo não lido.
+       */
+      { href: "/painel/reforma", label: "Reforma", curto: "Reforma", marcador: "reforma" },
       { href: "/painel/ajuda", label: "Ajuda", curto: "Ajuda" },
-      { href: "/painel/config", label: "Escritório", curto: "Escritório" },
+      /* Planos volta a ser item próprio. Eu tinha feito isso a seu pedido e
+         desfiz sem querer na reorganização: contratar é a ação que o produto
+         mais precisa que aconteça e não pode ficar dentro de "Configurações". */
+      { href: "/painel/planos", label: "Planos", curto: "Planos" },
+      /* "Configurações" e não "Escritório": nome de administração deve ser
+         discreto. O destaque é do Cockpit e da Reforma. */
+      { href: "/painel/config", label: "Configurações", curto: "Config" },
     ],
   },
 ];
 
-/**
- * Grupo do DONO da plataforma. Fora do NAV principal de propósito: só aparece
- * para quem tem is_superadmin, e o painel do contador não pode sequer saber
- * que ele existe.
- *
- * Reagrupado pelo mesmo critério: cinco destinos em vez de oito, cada um
- * respondendo a uma pergunta de gestão diferente.
- */
 export const NAV_PLATAFORMA: GrupoNav = {
   grupo: "Plataforma",
   itens: [
@@ -73,14 +89,16 @@ export const NAV_PLATAFORMA: GrupoNav = {
 export const ABAS_ESCRITORIO: ItemNav[] = [
   { href: "/painel/config", label: "Configurações" },
   { href: "/painel/equipe", label: "Equipe" },
-  { href: "/painel/planos", label: "Planos" },
   { href: "/painel/indique", label: "Indique um colega" },
 ];
 
-/** Ajuda, Reforma e chamados: um assunto só, três telas. */
+/**
+ * Ajuda e chamados: um assunto só. A Reforma saiu daqui — ela é empurrada, e
+ * conteúdo empurrado escondido atrás de um menu de dúvidas não chega em
+ * ninguém.
+ */
 export const ABAS_AJUDA: ItemNav[] = [
   { href: "/painel/ajuda", label: "Central de ajuda" },
-  { href: "/painel/reforma", label: "Reforma" },
   { href: "/painel/chamados", label: "Meus chamados" },
 ];
 
@@ -105,8 +123,8 @@ export function navDe(ehSuperadmin: boolean): GrupoNav[] {
 export function atalhosDe(ehSuperadmin: boolean): ItemNav[] {
   const base: ItemNav[] = [
     { href: "/painel", label: "Cockpit", curto: "Cockpit" },
-    { href: "/painel/ajuda", label: "Ajuda", curto: "Ajuda" },
-    { href: "/painel/config", label: "Escritório", curto: "Escritório" },
+    { href: "/painel/reforma", label: "Reforma", curto: "Reforma" },
+    { href: "/painel/planos", label: "Planos", curto: "Planos" },
   ];
   return ehSuperadmin ? [...base, { href: "/painel/negocio", label: "Negócio", curto: "Negócio" }] : base;
 }

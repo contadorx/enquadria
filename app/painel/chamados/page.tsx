@@ -1,5 +1,6 @@
 import { ABAS_AJUDA } from "@/lib/nav";
 import { Abas } from "@/components/Abas";
+import { AbrirChamado } from "@/components/AbrirChamado";
 import { createClient } from "@/lib/supabase-server";
 
 /**
@@ -56,12 +57,18 @@ export default async function ChamadosPage() {
       <Abas itens={ABAS_AJUDA} />
       <h1 className="text-[19px] font-bold tracking-tight">Meus chamados</h1>
       <p className="mt-0.5 text-[13px] text-muted">
-        O que o assistente não soube responder vira chamado aqui — e é respondido por gente.
+        O que o assistente não soube responder vira chamado aqui — e você também pode abrir
+        um do zero. Tudo é respondido por gente.
       </p>
+
+      <div className="mt-4">
+        <AbrirChamado />
+      </div>
 
       {lista.length === 0 && (
         <p className="mt-6 rounded border border-line bg-surface p-5 text-[13px] text-muted">
-          Nenhum chamado. Quando o assistente não souber algo, ele abre um e você acompanha por aqui.
+          Nenhum chamado ainda. Abra um acima, ou pergunte ao assistente — o que ele não
+          souber responder vira chamado automaticamente.
         </p>
       )}
 
