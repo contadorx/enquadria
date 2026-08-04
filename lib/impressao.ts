@@ -13,16 +13,44 @@
  * lugares diferentes — e é exatamente o que o white-label promete que não
  * acontece.
  *
- * A folha (`.sheet`) perde borda, sombra e canto arredondado na impressão: na
- * tela ela imita papel; no papel, ELA é o papel.
+ * ───────────────────────────────────────────────────────────────────────────
+ * A MARGEM VEM DE DOIS LUGARES, DE PROPÓSITO.
+ *
+ * Bug real: PDF saindo com o texto encostado na borda do papel. A causa não
+ * estava no `@page` — estava em quem manda nele. A opção "Margens" da janela
+ * de impressão é do USUÁRIO e SOBRESCREVE o `@page`: quem deixou em "Nenhuma"
+ * uma vez (para tirar o cabeçalho do navegador, normalmente) imprime tudo
+ * assim para sempre, em qualquer site. E como a folha zerava o próprio
+ * `padding` na impressão, não sobrava nada entre o texto e o corte.
+ *
+ * Então a margem é dividida:
+ *
+ *   · `@page { margin }` — a margem do PAPEL, quando o navegador a respeita;
+ *   · `.sheet { padding }` — a margem do DOCUMENTO, que ninguém tira.
+ *
+ * Com as duas, o resultado é ~20mm (o normal de um documento). Com o usuário
+ * em "margens: nenhuma", ainda sobram 10mm — apertado, mas legível, e nunca
+ * cortado. É a diferença entre um PDF feio e um PDF que o cliente do contador
+ * recebe com o CNPJ cortado no canto.
+ *
+ * A folha perde borda, sombra e canto arredondado: na tela ela imita papel;
+ * no papel, ELA é o papel.
+ * ───────────────────────────────────────────────────────────────────────────
  */
 export const CSS_IMPRESSAO = `
 @media print {
   /* o cinza do app não é papel: sem isto o fundo sai impresso nas sobras */
-  html, body { background: #fff !important; }
+  html, body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
   .no-print { display: none !important; }
-  .doc { padding: 0 !important; max-width: none !important; }
-  .sheet { border: none !important; border-radius: 0 !important; padding: 0 !important; box-shadow: none !important; }
+  .doc { padding: 0 !important; max-width: none !important; margin: 0 !important; }
+
+  /* a margem que o usuário não consegue desligar — ver nota acima */
+  .sheet {
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 10mm 12mm !important;
+  }
 
   /* a LINHA não parte no meio; a TABELA pode continuar na página seguinte —
      travar a tabela inteira deixava meia página em branco */
@@ -32,6 +60,8 @@ export const CSS_IMPRESSAO = `
   .sec, h1, h2 { page-break-after: avoid; }
   .quebra { page-break-before: always; }
 
-  @page { margin: 18mm; }
+  /* a margem do papel: some quando o usuário escolhe "margens: nenhuma", e é
+     por isso que ela sozinha não bastava */
+  @page { margin: 10mm; }
 }
 `;

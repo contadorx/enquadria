@@ -19,6 +19,7 @@ ok    suíte escritorio (12 asserções)
 ok    suíte roteiro (24 asserções)
 ok    suíte abertura (34 asserções)
 ok    suíte curso (9 asserções)
+ok    suíte faturas (35 asserções)
 
 ── Auditoria de UX (percepção, não estética) ───────────────────
 ok    auditoria de UX (6 regras limpas)
@@ -48,8 +49,11 @@ ok    components/ComparativoFolha.tsx usa o CSS de impressão comum
 ok    components/FolhaTermo.tsx usa o CSS de impressão comum
 ok    app/doc/relatorio/page.tsx usa o CSS de impressão comum
 ok    o CSS comum apaga o fundo cinza do app no papel
+ok    a folha guarda a própria margem na impressão (o usuário pode zerar a do papel)
+ok    e o @page também declara margem, para quando o navegador respeitar
 ok    e impede a linha de tabela partida entre páginas
 ok    o botão de PDF ensina a desmarcar cabeçalhos e rodapés
+ok    e a avisar sobre a opção de margens, que é a que corta o texto
 
 ── Arquivar — a saída e o caminho de volta ─────────────────────
 ok    o dossiê abre empresa arquivada (senão arquivar não tem volta)
@@ -171,4 +175,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 140 verificações automáticas
+TUDO PASSOU — 144 verificações automáticas

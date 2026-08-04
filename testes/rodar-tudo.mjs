@@ -76,7 +76,7 @@ try {
     "lib/plano.ts", "lib/potencial.ts", "lib/reguas.ts", "lib/janela.ts",
     "lib/emails-cliente.ts", "lib/erros-auth.ts", "lib/ajuda.ts", "lib/cobranca.ts", "lib/nps.ts",
     "lib/escritorio.ts", "lib/roteiro.ts", "lib/abertura.ts", "lib/comparativo.ts",
-    "lib/curso.ts",
+    "lib/curso.ts", "lib/faturas.ts",
   ];
   const cfg = path.join(RAIZ, "tsconfig.testes.json");
   fs.writeFileSync(cfg, JSON.stringify({
@@ -113,7 +113,7 @@ const coleta = await import(path.join(TMP, "coleta.js"));
 
 /* ============================================ 1. SUÍTES DE FUNÇÃO PURA == */
 secao("Suítes de função pura");
-for (const suite of ["cockpit", "motor", "coleta", "muro", "reguas", "janela", "cnpj", "envio", "erros-auth", "ajuda", "cobranca", "nps", "escritorio", "roteiro", "abertura", "curso"]) {
+for (const suite of ["cockpit", "motor", "coleta", "muro", "reguas", "janela", "cnpj", "envio", "erros-auth", "ajuda", "cobranca", "nps", "escritorio", "roteiro", "abertura", "curso", "faturas"]) {
   const arq = path.join(RAIZ, "testes", `${suite}.test.mjs`);
   if (!fs.existsSync(arq)) {
     ok(`suíte ${suite}`, false, "arquivo não encontrado");

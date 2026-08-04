@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { LIMITE_GRATIS } from "@/lib/plano";
+import { CentralFaturas } from "@/components/CentralFaturas";
+import type { Fatura } from "@/lib/faturas";
 
 interface Plano {
   id: string;
@@ -21,10 +23,18 @@ export default function Planos() {
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [laudos, setLaudos] = useState(0);
   const [ilimitado, setIlimitado] = useState(false);
+  /** o histórico de cobranças deste escritório — ver components/CentralFaturas */
+  const [faturas, setFaturas] = useState<Fatura[]>([]);
 
   useEffect(() => {
     const supabase = createClient();
     (async () => {
+      /* a RLS de `faturas` já limita ao próprio escritório */
+      supabase
+        .from("faturas")
+        .select("id, asaas_id, descricao, valor_centavos, status, vencimento, pago_em, link_pagamento, link_boleto, criado_em")
+        .then(({ data: fs }) => setFaturas((fs ?? []) as unknown as Fatura[]));
+
       const { data } = await supabase
         .from("planos")
         .select("id, nome, descricao, preco_centavos, recorrente")
@@ -159,6 +169,19 @@ export default function Planos() {
             </div>
           );
         })}
+      </div>
+
+      {/* ------------------------------------------------- CENTRAL DE FATURAS
+          Fica NESTA tela, e não num item de menu novo: quem procura a segunda
+          via de um boleto vai a "Planos" — é lá que a assinatura mora na
+          cabeça de quem paga. */}
+      <div className="mt-8">
+        <h2 className="text-[15px] font-bold">Minhas faturas</h2>
+        <p className="mb-3 mt-0.5 max-w-[70ch] text-[12.5px] text-muted">
+          Todo o histórico de cobrança, com segunda via de quem está em aberto. Não precisa
+          procurar e-mail antigo nem me chamar.
+        </p>
+        <CentralFaturas faturas={faturas} />
       </div>
 
       <p className="mt-6 max-w-[70ch] text-[12px] leading-relaxed text-muted">

@@ -53,6 +53,33 @@ export async function POST(req: Request) {
       .from("assinaturas")
       .update({ asaas_id: cobranca.asaas_id ?? null, checkout_url: cobranca.checkout_url ?? null })
       .eq("id", assinatura.id);
+
+    /**
+     * A FATURA NASCE AQUI, não no webhook.
+     *
+     * O `PAYMENT_CREATED` chega em segundos — mas "em segundos" é depois de a
+     * pessoa voltar para a tela. Sem esta linha, quem acabou de gerar a
+     * cobrança abre a central de faturas e não vê nada, o que parece falha.
+     *
+     * O `upsert` por `asaas_id` (índice único na 0039) faz esta escrita e a do
+     * webhook convergirem para a MESMA linha, não importa qual chegue antes.
+     */
+    await supabase.from("faturas").upsert(
+      {
+        tenant_id: tenantId,
+        assinatura_id: assinatura.id,
+        plano_nome: plano.nome,
+        asaas_id: cobranca.asaas_id ?? null,
+        valor_centavos: plano.preco_centavos,
+        status: "pendente",
+        vencimento: cobranca.vencimento ?? null,
+        link_pagamento: cobranca.checkout_url ?? null,
+        link_boleto: cobranca.boleto_url ?? null,
+        descricao: `Enquadria — ${plano.nome}`,
+        atualizado_em: new Date().toISOString(),
+      },
+      { onConflict: "asaas_id" }
+    );
   }
 
   return NextResponse.json({

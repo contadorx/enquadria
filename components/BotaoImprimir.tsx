@@ -32,9 +32,11 @@ export function BotaoImprimir({
         {rotulo}
       </button>
       {dica && (
-        <p className="max-w-[38ch] text-right text-[10.5px] leading-snug text-muted">
+        <p className="max-w-[40ch] text-right text-[10.5px] leading-snug text-muted">
           Na janela que abrir, escolha <b>Salvar como PDF</b> e desmarque{" "}
-          <b>Cabeçalhos e rodapés</b> — senão o PDF sai com a data e o endereço do sistema.
+          <b>Cabeçalhos e rodapés</b> — senão o PDF sai com a data e o endereço do sistema. Em{" "}
+          <b>Margens</b>, deixe <b>Padrão</b>: o documento já tem a margem dele, e “Nenhuma”
+          aperta o texto contra a borda.
         </p>
       )}
     </div>

@@ -1,10 +1,35 @@
 import { carregarNegocio, brl } from "@/lib/negocio";
 import { LinhaEscritorio, RodarReguas } from "@/components/NegocioUI";
+import { createClient } from "@/lib/supabase-server";
+import {
+  ROTULO_STATUS,
+  dataBR,
+  moedaCentavos,
+  ordenarFaturas,
+  statusEfetivo,
+  type Fatura,
+} from "@/lib/faturas";
 
 export const dynamic = "force-dynamic";
 
 export default async function Cobrancas() {
   const n = await carregarNegocio();
+
+  /**
+   * AS ÚLTIMAS FATURAS, do lado de quem recebe.
+   *
+   * A tela de cobranças mostra o ESTADO de cada escritório (ativo, pendente,
+   * vencendo). O que faltava era o EXTRATO: o que o Asaas confirmou, quando e
+   * de quem. É o que responde "esse pagamento entrou?" sem abrir o Asaas.
+   */
+  const supabase = createClient();
+  const { data: faturas } = await supabase
+    .from("faturas")
+    .select("id, tenant_id, plano_nome, descricao, valor_centavos, status, vencimento, pago_em, link_pagamento")
+    .order("vencimento", { ascending: false })
+    .limit(30);
+  const ultimas = (faturas ?? []) as unknown as Fatura[];
+  const hoje2 = new Date();
   const temAsaas = !!process.env.ASAAS_API_KEY;
   const temServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -138,6 +163,44 @@ export default async function Cobrancas() {
         de R$ 47. &ldquo;Sincronizar&rdquo; existe para o dia em que o webhook falhar: pergunta ao Asaas o que
         aconteceu com aquela cobrança e alinha o banco, sem apagar nada.
       </p>
-    </div>
+    
+      {/* ------------------------------------------------ EXTRATO DE FATURAS */}
+      <section>
+        <h2 className="text-[15px] font-bold">Últimas faturas</h2>
+        <p className="mb-2 mt-0.5 text-[12.5px] text-muted">
+          O que o Asaas confirmou, direto da tabela alimentada pelo webhook. Fatura que não aparece
+          aqui é fatura que o webhook não entregou.
+        </p>
+        {ultimas.length === 0 ? (
+          <p className="rounded border border-line bg-surface p-4 text-[13px] text-muted">
+            Nenhuma fatura registrada ainda.
+          </p>
+        ) : (
+          <div className="overflow-hidden rounded border border-line bg-surface">
+            <table className="w-full border-collapse text-[13px]">
+              <tbody>
+                {ordenarFaturas(ultimas, hoje2).map((f) => (
+                  <tr key={f.id}>
+                    <td className="border-b border-linesoft px-3 py-2">
+                      {f.descricao ?? f.plano_nome ?? "Assinatura"}
+                    </td>
+                    <td className="border-b border-linesoft px-3 py-2 font-mono text-[12px] text-muted">
+                      {dataBR(f.vencimento)}
+                    </td>
+                    <td className="border-b border-linesoft px-3 py-2 text-right font-mono text-[12px]">
+                      {moedaCentavos(f.valor_centavos)}
+                    </td>
+                    <td className="border-b border-linesoft px-3 py-2 text-right text-[12px] font-semibold">
+                      {ROTULO_STATUS[statusEfetivo(f, hoje2)]}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+</div>
   );
 }

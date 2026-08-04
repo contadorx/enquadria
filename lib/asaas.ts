@@ -17,6 +17,10 @@ export interface Cobranca {
   ativo: boolean;
   asaas_id?: string;
   checkout_url?: string;
+  /** AAAA-MM-DD — vai para a central de faturas */
+  vencimento?: string;
+  /** link do boleto, quando o Asaas gera um */
+  boleto_url?: string;
 }
 
 async function acharOuCriarCliente(
@@ -80,8 +84,19 @@ export async function criarCobranca(params: {
       cache: "no-store",
     });
     if (!resp.ok) return { ativo: true };
-    const json = (await resp.json()) as { id?: string; invoiceUrl?: string };
-    return { ativo: true, asaas_id: json.id, checkout_url: json.invoiceUrl };
+    const json = (await resp.json()) as {
+      id?: string;
+      invoiceUrl?: string;
+      bankSlipUrl?: string;
+      dueDate?: string;
+    };
+    return {
+      ativo: true,
+      asaas_id: json.id,
+      checkout_url: json.invoiceUrl,
+      boleto_url: json.bankSlipUrl,
+      vencimento: json.dueDate,
+    };
   } catch {
     return { ativo: true };
   }

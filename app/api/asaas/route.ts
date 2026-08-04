@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase-admin";
+import { statusDoAsaas } from "@/lib/faturas";
 
 /**
  * Webhook do Asaas — chega SEM sessão de usuário, então usa service role
@@ -60,6 +61,74 @@ async function registrarBatida(
   }
 }
 
+/**
+ * Grava (ou atualiza) a fatura correspondente ao evento.
+ *
+ * O tenant vem da assinatura apontada por `externalReference` — é o único
+ * vínculo confiável entre o pagamento no Asaas e o escritório aqui. Sem ele,
+ * a fatura não é gravada: melhor não ter a linha do que pendurá-la no
+ * escritório errado.
+ */
+async function registrarFatura(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  evento: string,
+  p: {
+    id?: string;
+    value?: number;
+    description?: string;
+    dueDate?: string;
+    invoiceUrl?: string;
+    bankSlipUrl?: string;
+    externalReference?: string;
+    confirmedDate?: string;
+    paymentDate?: string;
+    status?: string;
+  }
+) {
+  try {
+    if (!p.externalReference) return;
+    const { data: assin } = await supabase
+      .from("assinaturas")
+      .select("id, tenant_id, plano_id")
+      .eq("id", p.externalReference)
+      .maybeSingle();
+    const a = assin as { id?: string; tenant_id?: string; plano_id?: string } | null;
+    if (!a?.tenant_id) return;
+
+    let planoNome: string | null = null;
+    if (a.plano_id) {
+      const { data: plano } = await supabase.from("planos").select("nome").eq("id", a.plano_id).maybeSingle();
+      planoNome = (plano as { nome?: string } | null)?.nome ?? null;
+    }
+
+    // o status do evento manda; o do pagamento é a segunda opinião
+    const status = statusDoAsaas(evento || p.status);
+    const pagoEm = status === "pago" ? p.confirmedDate || p.paymentDate || null : null;
+
+    await supabase.from("faturas").upsert(
+      {
+        tenant_id: a.tenant_id,
+        assinatura_id: a.id ?? null,
+        plano_nome: planoNome,
+        asaas_id: p.id,
+        valor_centavos: Math.round(Number(p.value || 0) * 100),
+        status,
+        vencimento: p.dueDate ?? null,
+        pago_em: pagoEm ? new Date(pagoEm).toISOString() : null,
+        link_pagamento: p.invoiceUrl ?? null,
+        link_boleto: p.bankSlipUrl ?? null,
+        descricao: p.description ?? null,
+        atualizado_em: new Date().toISOString(),
+      },
+      { onConflict: "asaas_id" }
+    );
+  } catch (e) {
+    // a fatura é histórico: nunca pode impedir a ativação do acesso
+    console.error("[asaas] fatura não gravada:", e instanceof Error ? e.message : e);
+  }
+}
+
 export async function POST(req: Request) {
   const esperado = process.env.ASAAS_WEBHOOK_TOKEN;
   const recebido = req.headers.get("asaas-access-token");
@@ -75,7 +144,18 @@ export async function POST(req: Request) {
 
   let evento: {
     event?: string;
-    payment?: { externalReference?: string; confirmedDate?: string; paymentDate?: string; dueDate?: string };
+    payment?: {
+      id?: string;
+      value?: number;
+      description?: string;
+      status?: string;
+      invoiceUrl?: string;
+      bankSlipUrl?: string;
+      externalReference?: string;
+      confirmedDate?: string;
+      paymentDate?: string;
+      dueDate?: string;
+    };
   };
   try {
     evento = await req.json();
@@ -85,6 +165,22 @@ export async function POST(req: Request) {
 
   const confirmado = PAGO.has(evento.event ?? "");
   const assinaturaId = evento.payment?.externalReference;
+
+  /**
+   * A FATURA, antes de qualquer decisão sobre acesso.
+   *
+   * Todo evento de pagamento vira linha na central de faturas — inclusive os
+   * que NÃO liberam acesso (criada, vencida, estornada). É justamente o
+   * histórico do que não deu certo que o cliente procura quando escreve
+   * "paguei e não entrou" ou "meu boleto venceu, me manda a segunda via".
+   *
+   * `upsert` por `asaas_id` com índice único: a criação da cobrança e este
+   * webhook gravam a mesma fatura, e sem a trava as duas escritas produzem
+   * duas linhas para o mesmo pagamento.
+   */
+  if (admin && evento.payment?.id) {
+    await registrarFatura(admin, evento.event ?? "", evento.payment);
+  }
 
   if (admin) {
     await registrarBatida(admin, {
