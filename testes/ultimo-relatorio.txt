@@ -22,7 +22,7 @@ ok    suíte motor (79 asserções)
 ok    suíte muro (11 asserções)
 ok    suíte negocio (20 asserções)
 ok    suíte nps (40 asserções)
-ok    suíte reguas (41 asserções)
+ok    suíte reguas (50 asserções)
 ok    suíte roteiro (24 asserções)
 
 ── Auditoria de UX (percepção, não estética) ───────────────────
@@ -119,6 +119,17 @@ ok    existe a migration que deixa a plataforma ver todos os escritórios
 ok    a política nova é sobre tenants e usa a guarda de plataforma
 ok    ...e NÃO concede delete (as FK descem em cascade)
 ok    a tela de contas confirma a gravação pedindo a linha de volta
+ok    o contexto das réguas copia `termos` da RPC
+ok    ...e também is_teste / emails_optout, que decidem quem NÃO recebe
+ok    erro ao ler a config PARA o motor (senão as réguas religam sozinhas)
+ok    o checkout grava o vencimento NA ASSINATURA (sem ele a escada não cobra)
+ok    e reserva a chave da régua ao mandar o link (senão vai duas vezes)
+ok    evento inócuo não derruba fatura já liquidada
+ok    o pago_em não perde um dia no fuso
+ok    sincronizar também marca a FATURA como paga
+ok    a configuração é mesclada no servidor, não substituída
+ok    gerar_cobranca valida o documento ANTES de criar a assinatura
+ok    e o motivo do Asaas sobe em vez de virar ok:true
 ok    o contexto das réguas LÊ o erro da RPC em vez de descartá-lo
 ok    e fonte quebrada não vira fila vazia silenciosa
 ok    o cron não relata 0 planejados sem dizer nada
@@ -229,4 +240,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 194 verificações automáticas
+TUDO PASSOU — 205 verificações automáticas

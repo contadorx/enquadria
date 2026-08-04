@@ -9,6 +9,7 @@
  */
 
 import { statusDoAsaas } from "./faturas";
+import { validadeFinal } from "./assinatura";
 
 const BASE = {
   sandbox: "https://sandbox.asaas.com/api/v3",
@@ -336,9 +337,12 @@ export async function reconciliarAssinatura(
   const diasAcesso = Number((plano as { dias_acesso?: number } | null)?.dias_acesso ?? 365);
 
   const base_ = pagamento.confirmedDate || pagamento.paymentDate || pagamento.dueDate;
-  const inicio = base_ ? new Date(base_) : new Date();
-  inicio.setDate(inicio.getDate() + diasAcesso);
-  const validoAte = inicio.toISOString().slice(0, 10);
+  /* a string CRUA do Asaas, não `new Date(string)`: "2026-08-04" é meia-noite
+     UTC, ou seja 21h do dia 3 no Brasil — um dia de acesso a menos */
+  const validoAte = validadeFinal(base_ ?? new Date(), diasAcesso, 0);
+  const pagoEmISO = base_ && /^\d{4}-\d{2}-\d{2}$/.test(base_)
+    ? `${base_}T12:00:00-03:00`
+    : new Date(base_ || Date.now()).toISOString();
 
   await db
     .from("assinaturas")
@@ -346,9 +350,34 @@ export async function reconciliarAssinatura(
       status: "ativa",
       valido_ate: validoAte,
       vencimento: validoAte,
-      pago_em: new Date(base_ || Date.now()).toISOString(),
+      pago_em: pagoEmISO,
     })
     .eq("id", assinaturaId);
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * A FATURA TAMBÉM — e esta é a correção do bug relatado pelo dono:
+   * "a cobrança foi paga e a fatura não veio marcada como paga; tive que
+   *  colocar manual."
+   *
+   * "Sincronizar" é a ferramenta de recuperação para quando o webhook falha —
+   * e foi usada justamente no dia em que o webhook estava com o endereço
+   * errado devolvendo 404. Ela ativava a ASSINATURA e não tocava em `faturas`.
+   *
+   * Do lado do cliente, a cobrança que ele acabou de pagar continuava
+   * aparecendo como "Em aberto", com botão "Pagar" ativo — e o dinheiro não
+   * entrava no caixa do painel. A tela dizia, por escrito, que sincronizar
+   * "alinha o banco": alinhava metade dele. Quem alinhava a outra metade era
+   * outro botão, em outra seção, que ninguém tinha por que saber que precisava
+   * clicar também.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const { error: eFat } = await db
+    .from("faturas")
+    .update({ status: "pago", pago_em: pagoEmISO, atualizado_em: new Date().toISOString() })
+    .eq("asaas_id", a.asaas_id)
+    .neq("status", "estornado");
+  if (eFat) return { status: pagamento.status, pago: true, valido_ate: validoAte, erro: `acesso liberado, mas a fatura não foi marcada como paga: ${eFat.message}` };
 
   return { status: pagamento.status, pago: true, valido_ate: validoAte };
 }
@@ -442,6 +471,13 @@ export async function importarFaturas(
 
     const status = statusDoAsaas(p.status);
     const pagoEm = status === "pago" ? p.confirmedDate || p.paymentDate || null : null;
+    /* data-calendário do Asaas não pode virar `new Date(...)`: seria meia-noite
+       UTC, 21h do dia anterior no Brasil */
+    const pagoEmISO = pagoEm
+      ? /^\d{4}-\d{2}-\d{2}$/.test(pagoEm)
+        ? `${pagoEm}T12:00:00-03:00`
+        : new Date(pagoEm).toISOString()
+      : null;
 
     const { error } = await db.from("faturas").upsert(
       {
@@ -451,7 +487,7 @@ export async function importarFaturas(
         valor_centavos: Math.round(Number(p.value || 0) * 100),
         status,
         vencimento: p.dueDate ?? null,
-        pago_em: pagoEm ? new Date(pagoEm).toISOString() : null,
+        pago_em: pagoEmISO,
         link_pagamento: p.invoiceUrl ?? null,
         link_boleto: p.bankSlipUrl ?? null,
         descricao: p.description ?? null,

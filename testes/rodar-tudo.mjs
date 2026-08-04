@@ -687,6 +687,81 @@ secao("Contratação — o clique que não fazia nada");
      /\.update\(campos\)[\s\S]{0,80}\.select\("id"\)/.test(telaContas) &&
      /!alterado\?\.length/.test(telaContas));
 
+  /**
+   * ═════════════════════════════════════════════════════════════════════════
+   * A VARREDURA DE 04/08 — quatro defeitos que mandavam e-mail errado ou
+   * perdiam dinheiro, cada um com sua guarda.
+   * ═════════════════════════════════════════════════════════════════════════
+   */
+  {
+    const rgc = fs.readFileSync(path.join(RAIZ, "lib/reguas.ts"), "utf8");
+
+    /* o map de carregarContexto esquecia `termos`, e a régua "laudo sem termo"
+       ia para quem tinha TODOS os termos — de novo a cada laudo novo */
+    const iMap = rgc.indexOf("})) as EscritorioRegua[]");
+    const mapa = iMap < 0 ? "" : rgc.slice(Math.max(0, iMap - 1600), iMap);
+    ok("o contexto das réguas copia `termos` da RPC",
+       /termos:\s*Number\(/.test(mapa), "o map não copia termos");
+    ok("...e também is_teste / emails_optout, que decidem quem NÃO recebe",
+       /is_teste:/.test(mapa) && /emails_optout:/.test(mapa));
+
+    /* a chave-mestra não pode falhar aberta */
+    ok("erro ao ler a config PARA o motor (senão as réguas religam sozinhas)",
+       /cfgErro/.test(rgc) && /não consegui ler a configuração/.test(rgc));
+
+    /* a escada de cobrança dependia de um vencimento que ninguém gravava */
+    const ckv = fs.readFileSync(path.join(RAIZ, "app/api/checkout/route.ts"), "utf8");
+    /* `vencimento: cobranca.vencimento` aparece DUAS vezes no arquivo (o
+       update da assinatura e o upsert da fatura). Procurar no arquivo inteiro
+       passava com o campo removido do update da assinatura — que é o único que
+       a escada de cobrança lê. A checagem é no bloco certo. */
+    const iUpd = ckv.indexOf('.from("assinaturas")\n      .update(');
+    const upd = iUpd < 0 ? "" : ckv.slice(iUpd, iUpd + 320);
+    ok("o checkout grava o vencimento NA ASSINATURA (sem ele a escada não cobra)",
+       /vencimento: cobranca\.vencimento/.test(upd),
+       upd.replace(/\s+/g, " ").slice(0, 150) || "não achei o update da assinatura");
+    ok("e reserva a chave da régua ao mandar o link (senão vai duas vezes)",
+       /chave_unica: `cobranca_gerada:\$\{assinatura\.id\}`/.test(ckv));
+  }
+
+  {
+    const wh2 = fs.readFileSync(path.join(RAIZ, "app/api/asaas/route.ts"), "utf8");
+    /* PAYMENT_CHECKOUT_VIEWED e afins caíam no default "pendente" e eram
+       gravados por cima de uma fatura PAGA, apagando o pago_em */
+    /* olhar só por "jaLiquidada" casava com a DECLARAÇÃO e passava com a
+       condição trocada por `if (false)` — a checagem é no if */
+    ok("evento inócuo não derruba fatura já liquidada",
+       /if \(jaLiquidada && status === "pendente"\)/.test(wh2) && /doPagamento/.test(wh2),
+       (wh2.match(/if \([^)]*jaLiquidada[^)]*\)/) || ["não achei a guarda"])[0]);
+    /* data-calendário do Asaas não pode virar new Date(): seria o dia anterior */
+    ok("o pago_em não perde um dia no fuso",
+       /T12:00:00-03:00/.test(wh2) && !/pago_em: pagoEm \? new Date\(pagoEm\)/.test(wh2));
+
+    const as2 = fs.readFileSync(path.join(RAIZ, "lib/asaas.ts"), "utf8");
+    /* "sincronizar" ativava a assinatura e deixava a fatura "em aberto" — foi
+       o bug que o dono teve que consertar na mão */
+    const iRec = as2.indexOf("export async function reconciliarAssinatura");
+    const rec = iRec < 0 ? "" : as2.slice(iRec, as2.indexOf("export async function importarFaturas"));
+    ok("sincronizar também marca a FATURA como paga",
+       /\.from\("faturas"\)/.test(rec) && /status: "pago"/.test(rec),
+       "reconciliarAssinatura não toca em faturas");
+  }
+
+  {
+    const ng = fs.readFileSync(path.join(RAIZ, "app/api/negocio/route.ts"), "utf8");
+    /* a tela manda o objeto de config inteiro com um `base` congelado: sem
+       merge no servidor, ajustar um campo religava as réguas desligadas */
+    ok("a configuração é mesclada no servidor, não substituída",
+       /\.\.\.anterior, \.\.\.\(valor as Record<string, unknown>\)/.test(ng));
+    /* a assinatura era inserida ANTES de validar o documento, e o 400 não
+       desfazia: cada clique deixava uma pendente fantasma que silenciava as
+       réguas de conversão daquele escritório */
+    ok("gerar_cobranca valida o documento ANTES de criar a assinatura",
+       ng.indexOf("ainda não tem CPF/CNPJ cadastrado") < ng.indexOf('origem: "painel"'));
+    ok("e o motivo do Asaas sobe em vez de virar ok:true",
+       /cob\.ativo && !cob\.checkout_url/.test(ng));
+  }
+
   const rg = fs.readFileSync(path.join(RAIZ, "lib/reguas.ts"), "utf8");
   /* olhar por "error" no arquivo inteiro casaria com qualquer coisa: a
      checagem é na desestruturação da RPC, que era exatamente o que faltava */

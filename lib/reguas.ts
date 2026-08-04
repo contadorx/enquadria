@@ -63,6 +63,12 @@ export interface EscritorioRegua {
   termos?: number;
   assinados?: number;
   ultima_analise: string | null;
+  /** marcado como conta de teste no painel (0044) */
+  is_teste?: boolean;
+  /** pediu para não receber e-mail comercial (0044) */
+  emails_optout?: boolean;
+  /** status do ESCRITÓRIO (cancelada/suspensa), não o da assinatura (0044) */
+  status_conta?: string | null;
 }
 
 export interface Envio {
@@ -226,6 +232,13 @@ export function planejar(ctx: Contexto): Envio[] {
    * "Bem-vindo ao Enquadria" — inclusive quem se cadastrou há seis meses.
    * E-mail de ativação só vale para quem chegou há pouco.
    */
+  /* a data de HOJE no calendário brasileiro: o app roda em UTC na Vercel e o
+     contador está em São Paulo — depois das 21h o UTC já é amanhã */
+  const hojeISO = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
+
   const janelaAtivacao = ctx.config.janela_dias ?? 30;
   const fechaJanela = ctx.config.janela?.fecha || "2026-09-30";
   const diasParaFechar = -dias(fechaJanela);
@@ -270,8 +283,34 @@ export function planejar(ctx: Contexto): Envio[] {
   };
 
   for (const e of ctx.escritorios) {
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * QUEM NÃO RECEBE NADA, e por que cada um.
+     *
+     * Estas três portas não existiam. `tenants.is_teste` tem botão na tela de
+     * Contas desde a 0030 e era respeitado no MRR — mas não aqui: marcar
+     * "teste" não mudava nada, e as contas criadas testando o cadastro
+     * recebiam boas-vindas e pitch de conversão como clientes de verdade.
+     * Endereço de teste inexistente vira bounce, e bounce queima o domínio
+     * para o dia em que houver algo importante a dizer.
+     *
+     * `emails_optout` era pior: a coluna existe desde a 0031 e ninguém lia.
+     * Oferecer a saída e continuar mandando é pior do que nunca ter oferecido.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    if (e.is_teste) continue;
+    if (e.emails_optout) continue;
+    if (e.status_conta === "cancelada" || e.status_conta === "suspensa") continue;
+
     const idade = e.criado_em ? dias(e.criado_em) : 999;
-    const assinante = e.status === "ativa" && (!e.vencimento || new Date(e.vencimento) >= new Date());
+    /**
+     * `new Date("2026-08-10")` é meia-noite UTC — 09/08 às 21h em São Paulo.
+     * Com a comparação antiga, o assinante em dia virava "gratuito" às 21h da
+     * véspera do vencimento e, no dia da renovação, recebia o pitch de
+     * degustação ("seus 2 laudos gratuitos acabaram") em vez do lembrete de
+     * renovar. Comparar data com data resolve, sem fuso no meio.
+     */
+    const assinante = e.status === "ativa" && (!e.vencimento || e.vencimento >= hojeISO);
     const gratuito = !assinante;
 
     // ---------------------------------------------------------- ativação
@@ -405,8 +444,46 @@ export function planejar(ctx: Contexto): Envio[] {
         link_pagamento: e.checkout_url,
       };
 
+      /**
+       * ═════════════════════════════════════════════════════════════════════
+       * `cobranca_gerada` SÓ PARA COBRANÇA QUE NÃO FOI AVISADA.
+       *
+       * A tela de Planos já manda o link na hora da contratação
+       * (`htmlCobrancaGerada`, em app/api/checkout/route.ts), e esse envio NÃO
+       * passa por `plataforma_envios` — a trava não o enxerga. Resultado: quem
+       * assinava às 10h recebia o link às 10h e, na execução seguinte,
+       * recebia de novo com outro assunto. Dois e-mails de cobrança para uma
+       * cobrança só.
+       *
+       * O checkout agora reserva a chave `cobranca_gerada:<assinatura>` ao
+       * enviar, então esta linha vira redundante quando o e-mail já saiu por
+       * lá — e continua valendo para a cobrança criada pelo painel, que é o
+       * caso em que nada foi avisado.
+       * ═════════════════════════════════════════════════════════════════════
+       */
       monta("cobranca_gerada", e, `cobranca_gerada:${e.assinatura_id}`, "cobrança emitida", vars);
 
+      /**
+       * ═════════════════════════════════════════════════════════════════════
+       * A ESCADA DE COBRANÇA NUNCA RODAVA PARA QUEM ASSINA SOZINHO.
+       *
+       * O bloco inteiro estava atrás de `if (e.vencimento)`, e
+       * `assinaturas.vencimento` só era gravado JUNTO com `status: "ativa"` —
+       * ou seja, na confirmação do pagamento. Enquanto a assinatura estava
+       * `pendente` (exatamente quem precisa ser cobrado), o vencimento era
+       * nulo e nada saía; quando o vencimento existia, o status já não era
+       * pendente e a condição de fora barrava.
+       *
+       * Nenhum aviso pré-vencimento, nenhum D+1, D+5, D+10. A escada só
+       * funcionava para cobrança criada no painel, que grava o vencimento à
+       * mão. Verificado no banco: toda assinatura pendente tem vencimento
+       * nulo.
+       *
+       * A correção é o checkout gravar o vencimento da cobrança (é dado que o
+       * Asaas devolve na hora); esta linha passa a ser o que sempre deveria
+       * ter sido: "se eu sei quando vence, eu cobro".
+       * ═════════════════════════════════════════════════════════════════════
+       */
       if (e.vencimento) {
         const atraso = dias(e.vencimento);
         if (atraso < 0) {
@@ -499,7 +576,7 @@ export function planejar(ctx: Contexto): Envio[] {
 // CONTEXTO
 // ---------------------------------------------------------------------------
 export async function carregarContexto(db: any): Promise<Contexto> {
-  const [{ data: escRaw, error: escErro }, { data: regrasRaw }, { data: cfgRaw }, { data: enviados }, { data: planoGratis }] =
+  const [{ data: escRaw, error: escErro }, { data: regrasRaw }, { data: cfgRaw, error: cfgErro }, { data: enviados }, { data: planoGratis }] =
     await Promise.all([
       db.rpc("negocio_escritorios"),
       db.from("plataforma_reguas").select("*").order("ordem", { ascending: true }),
@@ -526,7 +603,18 @@ export async function carregarContexto(db: any): Promise<Contexto> {
    */
   const erro = escErro
     ? `não consegui ler os escritórios: ${escErro.message ?? escErro}`
-    : undefined;
+    : cfgErro
+      ? /**
+         * A CHAVE-MESTRA NÃO PODE FALHAR ABERTA.
+         *
+         * `ativas` vinha de `cfg.reguas?.ativas !== false`. Com a leitura da
+         * config falhando, `cfg` fica vazio e a expressão devolve TRUE: o
+         * interruptor que o dono usou para desligar os e-mails depois de um
+         * envio errado voltaria a ligar sozinho, junto com todos os outros
+         * defaults do código. Erro na configuração tem que PARAR o motor.
+         */
+        `não consegui ler a configuração das réguas: ${cfgErro.message ?? cfgErro}`
+      : undefined;
 
   const escritorios = (((escRaw as any[]) || []) as any[]).map((e) => ({
     id: e.id,
@@ -545,6 +633,24 @@ export async function carregarContexto(db: any): Promise<Contexto> {
     faixa_a: Number(e.faixa_a || 0),
     analises: Number(e.analises || 0),
     laudos: Number(e.laudos || 0),
+    /**
+     * `termos` ERA ESQUECIDO AQUI — e este esquecimento tinha nome e vítima.
+     *
+     * A RPC devolvia a contagem; este map montava o objeto campo a campo e não
+     * copiava. `e.termos` ficava `undefined`, a régua "laudo emitido sem termo"
+     * lia 0 e disparava para quem tinha TODOS os termos assinados. Como a
+     * chave de dedupe inclui a contagem de laudos, ele recebia de novo a cada
+     * laudo novo: o cliente mais engajado da base levando, repetidamente, uma
+     * cobrança para fazer o que já fazia.
+     *
+     * O teste da suíte passava porque monta o contexto na mão e nunca exercita
+     * este map — a lição é que copiar campo a campo é uma lista que envelhece.
+     */
+    termos: Number(e.termos || 0),
+    assinados: Number(e.assinados || 0),
+    is_teste: e.is_teste === true,
+    emails_optout: e.emails_optout === true,
+    status_conta: e.status_conta ?? null,
     ultima_analise: e.ultima_analise,
   })) as EscritorioRegua[];
 

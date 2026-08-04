@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { decidirContratacao, type AssinaturaResumo } from "@/lib/assinatura";
+import { encerrarAssinaturas } from "@/lib/assinatura-server";
 import { createClient } from "@/lib/supabase-server";
 import { createAdminClient } from "@/lib/supabase-admin";
 
@@ -52,9 +54,31 @@ export async function POST(req: Request) {
       const chave = String(corpo.chave || "");
       const valor = corpo.valor;
       if (!chave || valor === undefined) return NextResponse.json({ erro: "chave e valor" }, { status: 400 });
+      /**
+       * MERGE, NÃO SUBSTITUIÇÃO — e isto religava e-mail sozinho.
+       *
+       * A tela manda `{...base, campo}`, com `base` congelado no render. Quem
+       * desligava "Réguas ligadas" e em seguida ajustava "Limite por execução"
+       * mandava o `base` ANTIGO junto — com `ativas: true` — e o upsert
+       * gravava o objeto inteiro. As réguas voltavam a ligar, o checkbox na
+       * tela continuava desmarcado (estado local), aparecia o ✓ verde, e o
+       * cron voltava a disparar para a base. Bastava dar foco e sair de um
+       * campo para reverter a decisão anterior.
+       *
+       * Mesclando com o que está no banco, cada campo só muda quando é ele que
+       * está sendo salvo.
+       */
+      const { data: atual } = await supabase
+        .from("plataforma_config").select("valor").eq("chave", chave).maybeSingle();
+      const anterior = ((atual as { valor?: Record<string, unknown> } | null)?.valor ?? {}) as Record<string, unknown>;
+      const mesclado =
+        valor && typeof valor === "object" && !Array.isArray(valor)
+          ? { ...anterior, ...(valor as Record<string, unknown>) }
+          : valor;
+
       const { error } = await supabase
         .from("plataforma_config")
-        .upsert({ chave, valor, atualizado_em: new Date().toISOString() }, { onConflict: "chave" });
+        .upsert({ chave, valor: mesclado, atualizado_em: new Date().toISOString() }, { onConflict: "chave" });
       if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
       return NextResponse.json({ ok: true });
     }
@@ -261,6 +285,58 @@ export async function POST(req: Request) {
       if (!esc) return NextResponse.json({ erro: "escritório não encontrado" }, { status: 404 });
 
       const p = plano as { id: string; nome: string; preco_centavos: number };
+
+      /**
+       * VALIDA ANTES DE GRAVAR — a ordem estava invertida e deixava lixo.
+       *
+       * A assinatura era inserida ANTES da checagem do CPF/CNPJ, e o `return`
+       * de erro não desfazia nada. Cada clique em "Gerar cobrança" num
+       * escritório sem documento (o caso normal de quem nunca contratou pela
+       * tela de Planos) deixava uma assinatura `pendente` fantasma.
+       *
+       * E o estrago não parava na tabela: `negocio_escritorios()` passava a
+       * devolver aquele escritório como "pendente", e isso liga o `comprando`
+       * em lib/reguas.ts, que SILENCIA as réguas de conversão — justamente
+       * para o escritório gratuito que elas existem para converter.
+       */
+      const { data: tenantDoc } = await supabase
+        .from("tenants").select("cpf_cnpj").eq("id", tenantId).maybeSingle();
+      const doc = (tenantDoc as { cpf_cnpj?: string } | null)?.cpf_cnpj ?? "";
+      if (!doc) {
+        return NextResponse.json(
+          { erro: "Este escritório ainda não tem CPF/CNPJ cadastrado, e o Asaas exige o documento do pagador. Peça a ele para contratar pela tela de Planos uma vez, ou cadastre o documento antes." },
+          { status: 400 }
+        );
+      }
+
+      /**
+       * A REGRA "UMA CONTA, UM PLANO" TAMBÉM VALE AQUI.
+       *
+       * A rota do cliente cancela as pendentes superadas e derruba o boleto
+       * antigo no Asaas; esta inseria e saía. Resultado: o contador que gerou
+       * um boleto pela tela de Planos e não pagou ficava com DOIS boletos
+       * pagáveis quando eu gerava outro pelo painel — e se ele pagasse o
+       * antigo, o webhook ativaria o plano abandonado por cima do novo.
+       */
+      const { data: minhas } = await db
+        .from("assinaturas")
+        .select("id, plano_id, status, valido_ate, asaas_id, checkout_url")
+        .eq("tenant_id", tenantId);
+      const acao = decidirContratacao(p.id, (minhas ?? []) as AssinaturaResumo[], new Date());
+      if (acao.cancelar.length) {
+        const r = await encerrarAssinaturas(db, acao.cancelar);
+        if (r.avisos.length) console.error("[negocio] gerar_cobranca:", r.avisos.join(" · "));
+      }
+      if (acao.acao === "reaproveitar" && acao.reaproveitar?.checkout_url) {
+        return NextResponse.json({
+          ok: true,
+          asaas_ativo: true,
+          checkout_url: acao.reaproveitar.checkout_url,
+          reaproveitada: true,
+          valor: brl(p.preco_centavos),
+        });
+      }
+
       const { data: nova, error: erroIns } = await db
         .from("assinaturas")
         .insert({
@@ -274,18 +350,6 @@ export async function POST(req: Request) {
         .single();
       if (erroIns) return NextResponse.json({ erro: erroIns.message }, { status: 500 });
 
-      /* o Asaas não cria cliente sem CPF/CNPJ — aqui ele vem do cadastro do
-         escritório, preenchido na primeira contratação (ver migration 0040) */
-      const { data: tenantDoc } = await supabase
-        .from("tenants").select("cpf_cnpj").eq("id", tenantId).maybeSingle();
-      const doc = (tenantDoc as { cpf_cnpj?: string } | null)?.cpf_cnpj ?? "";
-      if (!doc) {
-        return NextResponse.json(
-          { erro: "Este escritório ainda não tem CPF/CNPJ cadastrado, e o Asaas exige o documento do pagador. Peça a ele para contratar pela tela de Planos uma vez, ou cadastre o documento antes." },
-          { status: 400 }
-        );
-      }
-
       const { criarCobranca } = await import("@/lib/asaas");
       const cob = await criarCobranca({
         nome: esc.nome || "Escritório",
@@ -296,8 +360,10 @@ export async function POST(req: Request) {
         externo: (nova as { id: string }).id,
       });
 
-      const vencimento = new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
-      await db
+      /* o vencimento REAL da cobrança, não um palpite de hoje+3: quando o
+         Asaas devolve a data, é ela que a escada de cobrança tem que usar */
+      const vencimento = cob.vencimento ?? new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
+      const { error: eUpd } = await db
         .from("assinaturas")
         .update({
           asaas_id: cob.asaas_id ?? null,
@@ -305,6 +371,29 @@ export async function POST(req: Request) {
           vencimento,
         })
         .eq("id", (nova as { id: string }).id);
+      if (eUpd) console.error(`[negocio] assinatura ${(nova as { id: string }).id} sem link gravado: ${eUpd.message}`);
+
+      /**
+       * O MOTIVO DO ASAAS SOBE — antes a resposta era `ok: true` mesmo quando
+       * ele tinha RECUSADO a cobrança.
+       *
+       * `criarCobranca` devolve `{ ativo: true, erro }` sem link quando a chave
+       * está errada, o documento é inválido ou a cobrança é rejeitada. A rota
+       * lia só `asaas_id`/`checkout_url`/`ativo` e descartava o `erro`, então a
+       * tela dizia "o Asaas não devolveu link (chave configurada?)" — apontando
+       * para a chave quando o problema era o CPF do pagador. A rota do cliente
+       * já faz o certo; esta ficou para trás.
+       */
+      if (cob.ativo && !cob.checkout_url) {
+        return NextResponse.json(
+          {
+            erro: cob.erro ?? "A cobrança não foi gerada pelo Asaas e a assinatura ficou pendente.",
+            assinatura_id: (nova as { id: string }).id,
+            asaas_ativo: true,
+          },
+          { status: 502 }
+        );
+      }
 
       return NextResponse.json({
         ok: true,

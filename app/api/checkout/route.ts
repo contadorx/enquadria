@@ -148,10 +148,28 @@ export async function POST(req: Request) {
   let faturaErro: string | null = null;
 
   if (cobranca.asaas_id || cobranca.checkout_url) {
-    await supabase
+    /**
+     * O VENCIMENTO PRECISA SER GRAVADO AQUI — sem ele a cobrança nunca é cobrada.
+     *
+     * A escada de cobrança (pré-vencimento, D+1, D+5, D+10, em lib/reguas.ts)
+     * é toda condicionada a `assinaturas.vencimento`. Este campo só era
+     * gravado junto com `status: "ativa"`, na confirmação do pagamento — ou
+     * seja, nunca existia enquanto a assinatura estava PENDENTE, que é
+     * exatamente quem a escada existe para cobrar.
+     *
+     * Resultado: quem gerava o boleto pela tela de Planos e não pagava não
+     * recebia nenhum lembrete. Nenhum. O Asaas devolve a data na criação da
+     * cobrança; era só guardar.
+     */
+    const { error: eA } = await supabase
       .from("assinaturas")
-      .update({ asaas_id: cobranca.asaas_id ?? null, checkout_url: cobranca.checkout_url ?? null })
+      .update({
+        asaas_id: cobranca.asaas_id ?? null,
+        checkout_url: cobranca.checkout_url ?? null,
+        vencimento: cobranca.vencimento ?? null,
+      })
       .eq("id", assinatura.id);
+    if (eA) console.error(`[checkout] assinatura ${assinatura.id} sem asaas_id/vencimento: ${eA.message}`);
 
     /**
      * A FATURA NASCE AQUI, não no webhook.
@@ -229,7 +247,28 @@ export async function POST(req: Request) {
           }),
           tag: "cobranca-gerada",
         });
-        if (!r.enviado) console.error(`[checkout] e-mail da cobrança não saiu: ${r.motivo}`);
+        if (!r.enviado) {
+          console.error(`[checkout] e-mail da cobrança não saiu: ${r.motivo}`);
+        } else if (admin) {
+          /**
+           * RESERVA A CHAVE DA RÉGUA — senão o mesmo link vai duas vezes.
+           *
+           * A régua `cobranca_gerada` planeja e-mail para toda assinatura
+           * pendente com link. Este envio aqui não passava por
+           * `plataforma_envios`, então a trava não o enxergava: o contador
+           * recebia o link na contratação e de novo na execução seguinte do
+           * cron, com outro assunto. Gravando a mesma chave que a régua usa,
+           * ela reconhece que já foi.
+           */
+          await admin.from("plataforma_envios").insert({
+            tenant_id: tenantId,
+            regra: "cobranca_gerada",
+            chave_unica: `cobranca_gerada:${assinatura.id}`,
+            para: paraEmail,
+            assunto: `Sua cobrança do ${plano.nome} — Enquadria`,
+            status: "enviado",
+          });
+        }
       } catch (e) {
         console.error("[checkout] e-mail da cobrança falhou:", e instanceof Error ? e.message : e);
       }

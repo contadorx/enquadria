@@ -104,9 +104,65 @@ async function registrarFatura(
       planoNome = (plano as { nome?: string } | null)?.nome ?? null;
     }
 
-    // o status do evento manda; o do pagamento é a segunda opinião
-    const status = statusDoAsaas(evento || p.status);
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * O EVENTO MANDA, MAS O `status` DO PAGAMENTO DESEMPATA — e isto conserta
+     * um bug destrutivo.
+     *
+     * `statusDoAsaas` devolve "pendente" para tudo que não conhece, e o Asaas
+     * manda MUITO evento inócuo sobre a mesma cobrança: BANK_SLIP_VIEWED,
+     * CHECKOUT_VIEWED, UPDATED, ANTICIPATED. Cada um deles caía no default e
+     * era gravado POR CIMA da linha (o upsert converge por `asaas_id`),
+     * derrubando uma fatura PAGA de volta para "pendente" e apagando o
+     * `pago_em`.
+     *
+     * O caminho mais fácil de reproduzir era o próprio produto: o cliente
+     * abre "Ver recibo" na central de faturas, o Asaas dispara
+     * PAYMENT_CHECKOUT_VIEWED, e a fatura que ele acabou de pagar volta a
+     * mostrar o botão "Pagar". O acesso continua (a assinatura não é tocada),
+     * então nada denuncia a divergência — e some do caixa.
+     *
+     * Duas defesas, nesta ordem:
+     *   1. o `status` do próprio pagamento é lido quando o evento não é
+     *      conclusivo (ele vem RECEIVED no mesmo payload);
+     *   2. status já LIQUIDADO (pago/estornado/cancelado) nunca regride para
+     *      pendente. Dinheiro que entrou não volta a ser promessa por causa de
+     *      um evento de visualização.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    const doEvento = statusDoAsaas(evento);
+    const doPagamento = statusDoAsaas(p.status);
+    const status = doEvento !== "pendente" ? doEvento : doPagamento;
+
+    const { data: atual } = await supabase
+      .from("faturas")
+      .select("status, pago_em")
+      .eq("asaas_id", p.id)
+      .maybeSingle();
+    const anterior = (atual as { status?: string; pago_em?: string | null } | null) ?? null;
+    const jaLiquidada = ["pago", "estornado", "cancelado"].includes(anterior?.status ?? "");
+
+    if (jaLiquidada && status === "pendente") {
+      // evento inócuo sobre cobrança resolvida: não toca em nada
+      return null;
+    }
+
+    /**
+     * `pago_em` SEM PASSAR POR FUSO.
+     *
+     * `confirmedDate` vem como data-calendário ("2026-08-04"), e
+     * `new Date("2026-08-04")` é meia-noite UTC — 21h do dia 3 em São Paulo.
+     * A tela do cliente mostrava "pago em 03/08" para um pagamento de 04/08,
+     * data que não bate com o comprovante do Asaas nem com o extrato. O
+     * comentário três linhas abaixo, no cálculo da validade, avisa contra
+     * exatamente isso: a correção tinha sido feita lá e esquecida aqui.
+     */
     const pagoEm = status === "pago" ? p.confirmedDate || p.paymentDate || null : null;
+    const pagoEmISO = pagoEm
+      ? /^\d{4}-\d{2}-\d{2}$/.test(pagoEm)
+        ? `${pagoEm}T12:00:00-03:00`
+        : new Date(pagoEm).toISOString()
+      : null;
 
     const { error } = await supabase.from("faturas").upsert(
       {
@@ -117,7 +173,9 @@ async function registrarFatura(
         valor_centavos: Math.round(Number(p.value || 0) * 100),
         status,
         vencimento: p.dueDate ?? null,
-        pago_em: pagoEm ? new Date(pagoEm).toISOString() : null,
+        /* estorno não apaga a data em que o dinheiro entrou: o histórico
+           precisa mostrar que entrou e voltou */
+        pago_em: pagoEmISO ?? anterior?.pago_em ?? null,
         link_pagamento: p.invoiceUrl ?? null,
         link_boleto: p.bankSlipUrl ?? null,
         descricao: p.description ?? null,

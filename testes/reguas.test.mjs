@@ -297,5 +297,66 @@ ok(emHorarioDeEnvio(utc(3, 11), 8, 18), "com início às 8h, 11h UTC passa a val
   ok(vazio.sairao.length === 0 && vazio.travados.length === 0, "separarFila: fila vazia não quebra");
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+ * QUEM NÃO PODE RECEBER — as três portas que não existiam.
+ *
+ * `tenants.is_teste` tinha botão na tela de Contas desde a 0030 e era
+ * respeitado no MRR, mas não aqui: marcar "teste" não mudava nada e a conta
+ * criada testando o cadastro recebia boas-vindas como cliente. `emails_optout`
+ * existe desde a 0031 e ninguém lia — oferecer a saída e continuar mandando é
+ * pior do que nunca ter oferecido.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+{
+  const REGRAS_ATIV = [REGRA("ativacao_boas_vindas", 0)];
+  const base = {
+    id: "t1", nome: "Escritorio", email: "a@b.c", criado_em: diasAtras(0),
+    status: "gratis", plano_id: null, plano_nome: null, plano_ciclo: null,
+    valor_centavos: null, vencimento: null, assinatura_id: null, checkout_url: null,
+    empresas: 0, faixa_a: 0, analises: 0, laudos: 0, termos: 0, ultima_analise: null,
+  };
+  const ctx = (e) => ({
+    escritorios: [e], regras: REGRAS_ATIV, jaEnviados: new Set(), limiteGratis: 2,
+    config: { ativas: true, limite_por_execucao: 200, janela_dias: 30,
+              aviso_pre_vencimento_dias: 3, dias_renovacao: 10,
+              janela: { abre: "2026-09-01", fecha: "2026-09-30" } },
+  });
+
+  ok(planejar(ctx(base)).length === 1, "conta normal recebe boas-vindas");
+  ok(planejar(ctx({ ...base, is_teste: true })).length === 0, "conta de TESTE não recebe nada");
+  ok(planejar(ctx({ ...base, emails_optout: true })).length === 0, "quem pediu descadastro não recebe nada");
+  ok(planejar(ctx({ ...base, status_conta: "cancelada" })).length === 0, "escritório cancelado sai do funil");
+  ok(planejar(ctx({ ...base, status_conta: "suspensa" })).length === 0, "escritório suspenso sai do funil");
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * LAUDO SEM TERMO — a régua que ia para quem JÁ TINHA todos os termos.
+ *
+ * `carregarContexto` montava o objeto campo a campo e esquecia de copiar
+ * `termos`. O campo ficava `undefined`, a condição `termos === 0` era sempre
+ * verdadeira, e o cliente mais engajado da base recebia "você não gerou nenhum
+ * termo" — de novo a cada laudo novo, porque a chave inclui a contagem.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+{
+  const R = [REGRA("uso_laudo_sem_termo", 2)];
+  const e = {
+    id: "t2", nome: "X", email: "a@b.c", criado_em: diasAtras(90),
+    status: "gratis", plano_id: null, plano_nome: null, plano_ciclo: null,
+    valor_centavos: null, vencimento: null, assinatura_id: null, checkout_url: null,
+    empresas: 10, faixa_a: 5, analises: 10, laudos: 12, ultima_analise: diasAtras(1),
+  };
+  const ctx = (x) => ({
+    escritorios: [x], regras: R, jaEnviados: new Set(), limiteGratis: 2,
+    config: { ativas: true, limite_por_execucao: 200, janela_dias: 30,
+              aviso_pre_vencimento_dias: 3, dias_renovacao: 10,
+              janela: { abre: "2026-09-01", fecha: "2026-09-30" } },
+  });
+  ok(planejar(ctx({ ...e, termos: 0 })).length === 1, "12 laudos e NENHUM termo: recebe");
+  ok(planejar(ctx({ ...e, termos: 12 })).length === 0, "12 laudos e 12 termos: NÃO recebe");
+  ok(planejar(ctx({ ...e, termos: 1 })).length === 0, "já gerou 1 termo: NÃO recebe");
+  /* o campo ausente era o bug: undefined não pode significar zero */
+  ok(planejar(ctx({ ...e, termos: undefined })).length === 1,
+     "sem o campo, cai no caminho antigo (por isso o map precisa copiar)");
+}
+
 console.log(f === 0 ? "TODOS OS TESTES PASSARAM" : `${f} FALHAS`);
 process.exit(f ? 1 : 0);
