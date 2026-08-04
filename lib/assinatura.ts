@@ -52,15 +52,14 @@ const DIA = 86_400_000;
 /**
  * O DIA É O DO BRASIL, não o do servidor.
  *
- * Este teste falhou e o achado é real: o app roda em UTC na Vercel, e o
+ * Um teste banal ("clicar às 23h59 conta os mesmos dias que clicar ao
+ * meio-dia") falhou, e o achado é real: o app roda em UTC na Vercel e o
  * contador está em São Paulo. Contando dias pelo relógio do servidor, quem
- * clica às 23h59 de segunda perde um dia de crédito — para ele ainda é
- * segunda, para o servidor já é terça. Um dia de assinatura não é dinheiro
- * demais, mas é o tipo de diferença que a pessoa confere e não consegue
- * explicar.
+ * clica no fim da noite perde um dia de crédito — para ele ainda é hoje, para
+ * o servidor já é amanhã.
  *
  * Fixar o fuso também é o que torna o resultado igual aqui, na Vercel e na
- * máquina de quem for testar depois.
+ * máquina de quem for conferir depois.
  */
 const FUSO = "America/Sao_Paulo";
 const emSaoPaulo = new Intl.DateTimeFormat("en-CA", {

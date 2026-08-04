@@ -37,6 +37,7 @@ ok("vence hoje = 0", diasRestantes("2026-08-04", HOJE) === 0);
 ok("já venceu NÃO devolve negativo", diasRestantes("2026-07-01", HOJE) === 0, diasRestantes("2026-07-01", HOJE));
 ok("sem data (cortesia sem prazo) = 0", diasRestantes(null, HOJE) === 0);
 ok("data lixo não quebra", diasRestantes("nao-e-data", HOJE) === 0);
+
 /* O CLIQUE DAS 23H59 NÃO PODE VALER UM DIA A MENOS.
    O app roda em UTC na Vercel; o contador está em São Paulo. Contando pelo
    relógio do servidor, quem clica no fim da noite perde um dia de crédito —

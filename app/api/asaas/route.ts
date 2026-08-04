@@ -277,9 +277,10 @@ export async function POST(req: Request) {
 
   // conta a partir da data do pagamento, não de "agora": se o webhook chegar
   // atrasado, o cliente não perde os dias que já eram dele.
-  /* a string CRUA do Asaas, não `new Date(string)`: "2026-08-04" vira
-     meia-noite UTC, que é 21h do dia anterior aqui — um dia de acesso a menos
-     para todo mundo que paga */
+  //
+  // A string CRUA do Asaas, não `new Date(string)`: "2026-08-04" vira
+  // meia-noite UTC, que é 21h do dia anterior aqui — um dia de acesso a menos
+  // para todo mundo que paga.
   const base = evento.payment?.confirmedDate || evento.payment?.paymentDate || evento.payment?.dueDate;
   const data = validadeFinal(base ?? new Date(), diasAcesso, credito);
 

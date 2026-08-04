@@ -77,6 +77,7 @@ try {
     "lib/emails-cliente.ts", "lib/erros-auth.ts", "lib/ajuda.ts", "lib/cobranca.ts", "lib/nps.ts",
     "lib/escritorio.ts", "lib/roteiro.ts", "lib/abertura.ts", "lib/comparativo.ts",
     "lib/curso.ts", "lib/faturas.ts", "lib/documento.ts", "lib/assinatura.ts",
+    "lib/negocio-calc.ts",
   ];
   const cfg = path.join(RAIZ, "tsconfig.testes.json");
   fs.writeFileSync(cfg, JSON.stringify({
@@ -113,12 +114,30 @@ const coleta = await import(path.join(TMP, "coleta.js"));
 
 /* ============================================ 1. SUÍTES DE FUNÇÃO PURA == */
 secao("Suítes de função pura");
-for (const suite of ["cockpit", "motor", "coleta", "muro", "reguas", "janela", "cnpj", "envio", "erros-auth", "ajuda", "cobranca", "nps", "escritorio", "roteiro", "abertura", "curso", "faturas", "documento", "assinatura"]) {
+
+/**
+ * A LISTA VEM DO DISCO, e isso é a correção de um susto real.
+ *
+ * Esta linha era um array escrito à mão. Duas suítes novas (assinatura e
+ * negócio) foram criadas, o array foi editado, e uma edição posterior o
+ * restaurou — as duas sumiram da execução sem NENHUM sinal: o executor
+ * continuou verde, só com 9 asserções a menos num total de 170. Teste que
+ * some em silêncio é pior que teste que não existe, porque a confiança fica.
+ *
+ * Lendo a pasta, criar o arquivo já basta para ele rodar. E se algum dia uma
+ * suíte precisar ficar de fora, isso vira uma decisão escrita aqui — não um
+ * esquecimento.
+ */
+const SUITES = fs
+  .readdirSync(path.join(RAIZ, "testes"))
+  .filter((f) => f.endsWith(".test.mjs"))
+  .map((f) => f.replace(/\.test\.mjs$/, ""))
+  .sort();
+
+ok(`${SUITES.length} suítes encontradas na pasta`, SUITES.length > 0, SUITES);
+
+for (const suite of SUITES) {
   const arq = path.join(RAIZ, "testes", `${suite}.test.mjs`);
-  if (!fs.existsSync(arq)) {
-    ok(`suíte ${suite}`, false, "arquivo não encontrado");
-    continue;
-  }
   fs.copyFileSync(arq, path.join(TMP, `${suite}.test.mjs`));
   const r = spawnSync("node", [`${suite}.test.mjs`], { cwd: TMP, encoding: "utf8" });
   const saida = (r.stdout || "") + (r.stderr || "");
@@ -550,6 +569,61 @@ secao("Contratação — o clique que não fazia nada");
      encerrar.indexOf("cancelarCobranca(") < encerrar.indexOf('status: "cancelado"'));
   ok("e fatura PAGA nunca é reescrita",
      /\.in\("status", \["pendente", "vencido"\]\)/.test(encerrar));
+
+  /**
+   * ═════════════════════════════════════════════════════════════════════════
+   * AS MÉTRICAS DE RECEITA — o painel que mostrava R$ 0 com dinheiro na conta.
+   *
+   * `assinaturas.valor_centavos` era NULL em toda assinatura criada pelo
+   * checkout, e o MRR lia só dele. As contas estão cobertas em
+   * `testes/negocio.test.mjs`; aqui garantimos que a rota grava o valor e que a
+   * tela do negócio mostra o caixa, que é a pergunta que faltava.
+   * ═════════════════════════════════════════════════════════════════════════
+   */
+  /* procurar `valor_centavos: plano.preco_centavos` no arquivo inteiro casava
+     com a chamada do Asaas e com o upsert da fatura, e passava mesmo com o
+     campo FORA do insert da assinatura — que é onde o painel lê. A checagem
+     tem que ser dentro do insert. */
+  {
+    const i = ck.indexOf('.from("assinaturas")\n    .insert(');
+    const insert = i < 0 ? "" : ck.slice(i, i + 320);
+    ok("o checkout grava o valor NO INSERT da assinatura (senão o MRR nasce zero)",
+       /\.insert\(/.test(insert) && /valor_centavos:\s*plano\.preco_centavos/.test(insert),
+       insert.replace(/\s+/g, " ").slice(0, 170) || "não achei o insert de assinaturas");
+  }
+
+  const telaNegocio = fs.readFileSync(path.join(RAIZ, "app/painel/negocio/page.tsx"), "utf8");
+  ok("o painel separa receita recorrente (promessa) de caixa (extrato)",
+     /Receita recorrente/.test(telaNegocio) && /o que entrou de verdade/.test(telaNegocio));
+  ok("e mostra o que venceu sem pagamento", /caixa\.vencido/.test(telaNegocio));
+
+  /**
+   * ═════════════════════════════════════════════════════════════════════════
+   * A FILA DE E-MAILS QUE NÃO ANDAVA.
+   *
+   * "e-mails proativos que nunca saem de próximos disparos": escritório sem
+   * NENHUM usuário planeja e-mail em toda execução, não tem destinatário, e
+   * volta amanhã igual. Eram 6 de 16 na base real. Misturados na mesma lista,
+   * faziam o motor parecer quebrado.
+   * ═════════════════════════════════════════════════════════════════════════
+   */
+  const telaEmails = fs.readFileSync(path.join(RAIZ, "app/painel/negocio/emails/page.tsx"), "utf8");
+  /* olhar só por "separarFila" casava com a LINHA DO IMPORT e passava mesmo
+     com a chamada trocada por `const sairao = previsao` — o defeito exato que
+     a quebra proposital introduziu. A checagem é na chamada. */
+  ok("a fila separa o que vai sair do que está travado sem destinatário",
+     /=\s*separarFila\(previsao\)/.test(telaEmails) && /travados\.length/.test(telaEmails),
+     (telaEmails.match(/const .*sairao.*=.*/) || ["não achei a chamada"])[0]);
+  ok("e a contagem por grupo conta só o que REALMENTE sai",
+     /for \(const p of sairao\)/.test(telaEmails));
+  ok("o escritório órfão vira ação na fila do negócio, com conserto",
+     /Escritório sem usuário/.test(fs.readFileSync(path.join(RAIZ, "lib/negocio.ts"), "utf8")));
+
+  /* sem batimento, "o motor não rodou" e "rodou e não tinha nada" são
+     indistinguíveis — e foi assim que a fila ficou dias parecendo entupida */
+  const cron = fs.readFileSync(path.join(RAIZ, "app/api/cron/negocio/route.ts"), "utf8");
+  ok("cada execução do motor deixa um batimento", /reguas_execucao/.test(cron));
+  ok("e a tela mostra quando ele rodou pela última vez", /ultimaExec/.test(telaEmails));
 
   const tela = fs.readFileSync(path.join(RAIZ, "app/painel/planos/page.tsx"), "utf8");
   ok("a tela de planos tem onde mostrar o erro da contratação",

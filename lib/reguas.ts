@@ -171,6 +171,37 @@ export function htmlRegua(corpo: string): string {
 // ---------------------------------------------------------------------------
 const MARCOS_PROXIMA = "2027-03";
 
+/**
+ * Separa o que VAI SAIR do que está travado.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * O PROBLEMA QUE ISTO RESOLVE, nas palavras da denúncia: "e-mails proativos
+ * que nunca saem de próximos disparos".
+ *
+ * `planejar` devolve tudo o que a regra manda enviar, com ou sem destinatário.
+ * O executor topa com `!e.para`, conta em `semEmail` e segue — de propósito,
+ * para tentar de novo quando o endereço aparecer. Só que quando o escritório
+ * NÃO TEM NENHUM USUÁRIO, o endereço nunca aparece: ele volta para a fila em
+ * toda execução, para sempre.
+ *
+ * Na base de hoje eram 6 de 16 — três escritórios órfãos de cadastros que
+ * morreram no meio, cada um planejando dois e-mails eternos. A tela mostrava
+ * 16 "próximos disparos" e o motor mandava 10. A diferença não tinha nome, e
+ * por isso parecia que o motor estava quebrado.
+ *
+ * Com os dois baldes separados, a tela diz a verdade: "10 vão sair; 6 estão
+ * travados porque o escritório não tem usuário nenhum" — que é problema de
+ * dado, não de e-mail, e tem conserto próprio (ver a ação "Escritório sem
+ * usuário" em lib/negocio.ts).
+ * ───────────────────────────────────────────────────────────────────────────
+ */
+export function separarFila(plano: Envio[]): { sairao: Envio[]; travados: Envio[] } {
+  return {
+    sairao: plano.filter((e) => !!e.para),
+    travados: plano.filter((e) => !e.para),
+  };
+}
+
 export function planejar(ctx: Contexto): Envio[] {
   const regras: Record<string, Regra> = {};
   for (const r of ctx.regras) if (r.ativa) regras[r.chave] = r;

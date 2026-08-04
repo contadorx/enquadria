@@ -402,11 +402,16 @@ export function Cockpit({
                 tamanho de legenda e nome de substantivo ("+ empresas",
                 "relatório do escritório"), então não liam como coisa clicável.
                 Viraram botões com verbo: o que a pessoa procura é a AÇÃO. */}
+            {/* E AGORA COM DESTAQUE. Os dois botões eram visualmente idênticos
+                — mesma borda, mesmo fundo, mesmo peso — e um deles é a ação que
+                faz o produto andar (sem carteira não há o que analisar),
+                enquanto o outro é consulta. Dois botões iguais lado a lado não
+                têm hierarquia: a pessoa lê os dois, toda vez. */}
             <Link
               href="/painel/importar"
-              className="rounded-sm border border-line bg-surface px-3 py-1.5 text-[12px] font-semibold text-accentdeep hover:border-accent"
+              className="rounded-sm bg-accentdeep px-3 py-1.5 text-[12px] font-semibold text-white shadow-card hover:bg-accent"
             >
-              Adicionar empresas
+              + Adicionar empresas
             </Link>
             <a
               href="/doc/relatorio"

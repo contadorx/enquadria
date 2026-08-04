@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { criarCobranca } from "@/lib/asaas";
-import { criticaDocumento, limparDocumento } from "@/lib/documento";
 import { decidirContratacao, type AssinaturaResumo } from "@/lib/assinatura";
 import { encerrarAssinaturas } from "@/lib/assinatura-server";
+import { criticaDocumento, limparDocumento } from "@/lib/documento";
 import { enviarEmail } from "@/lib/email";
 import { htmlCobrancaGerada } from "@/lib/emails-cliente";
 
@@ -69,13 +69,12 @@ export async function POST(req: Request) {
    * pior momento possível para acertar contas.
    * ═══════════════════════════════════════════════════════════════════════
    */
-  const hoje = new Date();
   const { data: minhas } = await supabase
     .from("assinaturas")
     .select("id, plano_id, status, valido_ate, asaas_id, checkout_url")
     .eq("tenant_id", tenantId);
 
-  const plano_de_acao = decidirContratacao(plano.id, (minhas ?? []) as AssinaturaResumo[], hoje);
+  const plano_de_acao = decidirContratacao(plano.id, (minhas ?? []) as AssinaturaResumo[], new Date());
   const admin = createAdminClient();
 
   if (plano_de_acao.cancelar.length) {
@@ -103,9 +102,22 @@ export async function POST(req: Request) {
     });
   }
 
+  /**
+   * `valor_centavos` GRAVADO — a coluna que zerava o painel inteiro.
+   *
+   * Esta rota nunca gravou o valor. Como o painel de Negócio calcula MRR,
+   * ticket, receita por plano e MRR em risco a partir dele, um assinante PRO
+   * que acabou de pagar entrava como R$ 0 — e o painel mostrava receita zero
+   * com dinheiro na conta.
+   */
   const { data: assinatura, error: aErr } = await supabase
     .from("assinaturas")
-    .insert({ tenant_id: tenantId, plano_id: plano.id, status: "pendente" })
+    .insert({
+      tenant_id: tenantId,
+      plano_id: plano.id,
+      status: "pendente",
+      valor_centavos: plano.preco_centavos,
+    })
     .select("id")
     .single();
   if (aErr) return NextResponse.json({ erro: aErr.message }, { status: 500 });

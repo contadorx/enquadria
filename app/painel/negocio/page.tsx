@@ -62,12 +62,54 @@ export default async function NegocioVisao() {
         </p>
       </div>
 
-      {/* ─────────────────────────────────────────────────────────── receita */}
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Bloco titulo="MRR" valor={brl(n.mrr)} nota={`${n.assinantes} assinante(s) · ticket ${brl(n.ticket)}`} cor="text-verde" />
-        <Bloco titulo="ARR projetado" valor={brl(n.arr)} nota="MRR × 12, sem considerar churn" />
-        <Bloco titulo="MRR em risco" valor={brl(n.mrrEmRisco)} nota="vencendo em 10 dias + parados há 21" cor={n.mrrEmRisco ? "text-vermelho" : ""} />
-        <Bloco titulo="Novos no mês" valor={String(n.novosNoMes)} nota={`${n.gratuitos} escritório(s) no gratuito`} />
+      {/* ──────────────────────────────────────── receita RECORRENTE (projeção) */}
+      <section>
+        <h2 className="mb-2 text-[14px] font-bold">
+          Receita recorrente <span className="font-normal text-muted">— o que a base vale por mês</span>
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Bloco titulo="MRR" valor={brl(n.mrr)} nota={`${n.assinantes} assinante(s) · ticket ${brl(n.ticket)}`} cor="text-verde" />
+          <Bloco titulo="ARR projetado" valor={brl(n.arr)} nota="MRR × 12, sem considerar churn" />
+          <Bloco titulo="MRR em risco" valor={brl(n.mrrEmRisco)} nota="vencendo em 10 dias + parados há 21" cor={n.mrrEmRisco ? "text-vermelho" : ""} />
+          <Bloco titulo="Novos no mês" valor={String(n.novosNoMes)} nota={`${n.gratuitos} escritório(s) no gratuito`} />
+        </div>
+      </section>
+
+      {/* ───────────────────────────────────────────── o dinheiro que ENTROU
+          MRR é promessa: o que a base vale por mês SE todo mundo continuar. O
+          painel inteiro falava dele e não tinha uma linha sobre o que caiu na
+          conta — a pergunta que se faz olhando o extrato. Agora tem resposta,
+          porque a central de faturas existe. */}
+      <section>
+        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-[14px] font-bold">
+            Caixa <span className="font-normal text-muted">— o que entrou de verdade</span>
+          </h2>
+          <p className="text-[11.5px] text-muted">
+            {n.caixa.pagas} cobrança(s) paga(s) · fonte: central de faturas
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Bloco
+            titulo="Recebido no mês"
+            valor={brl(n.caixa.recebido_mes)}
+            nota="pagamentos confirmados neste mês"
+            cor="text-verde"
+          />
+          <Bloco titulo="Recebido total" valor={brl(n.caixa.recebido_total)} nota="desde o começo" />
+          <Bloco
+            titulo="Em aberto"
+            valor={brl(n.caixa.aberto)}
+            nota="cobrança emitida, ainda no prazo"
+            cor={n.caixa.aberto ? "text-amarelo" : ""}
+          />
+          <Bloco
+            titulo="Vencido"
+            valor={brl(n.caixa.vencido)}
+            nota={`${n.caixa.vencidas} cobrança(s) venceram sem pagamento`}
+            cor={n.caixa.vencido ? "text-vermelho" : ""}
+          />
+        </div>
       </section>
 
       {n.meta.mrr > 0 && (

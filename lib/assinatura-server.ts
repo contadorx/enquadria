@@ -52,11 +52,8 @@ export async function encerrarAssinaturas(
     else canceladas++;
   }
 
-  const { error: eUp, count } = await db
-    .from("assinaturas")
-    .update({ status: "cancelada" }, { count: "exact" })
-    .in("id", ids);
+  const { error: eUp } = await db.from("assinaturas").update({ status: "cancelada" }).in("id", ids);
   if (eUp) avisos.push(`assinaturas não encerradas: ${eUp.message}`);
 
-  return { encerradas: eUp ? 0 : (count ?? ids.length), cobrancas_canceladas: canceladas, avisos };
+  return { encerradas: eUp ? 0 : ids.length, cobrancas_canceladas: canceladas, avisos };
 }

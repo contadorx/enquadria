@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase-server";
+import { caixaDe, mrrDe, ativo, type Caixa, type Escritorio, type Plano, type Recurso, type Acao, type Negocio } from "./negocio-calc";
 
 /**
  * O NEGÓCIO — o Enquadria visto por quem vive dele.
@@ -7,130 +8,18 @@ import { createClient } from "@/lib/supabase-server";
  * leva a uma ação. Se não leva, não entra.
  *
  * Fonte: RPC negocio_escritorios() (SECURITY DEFINER, checa superadmin no
- * servidor) + planos + plataforma_mrr. Funciona SEM a SUPABASE_SERVICE_ROLE_KEY:
- * o painel não pode morrer por falta de variável de ambiente.
+ * servidor) + planos + faturas + plataforma_mrr. Funciona SEM a
+ * SUPABASE_SERVICE_ROLE_KEY: o painel não pode morrer por falta de variável.
+ *
+ * As CONTAS moram em `lib/negocio-calc.ts`, que não importa banco nenhum e
+ * por isso pode ser testado. Este arquivo reexporta tudo de lá.
  */
 
-export interface Escritorio {
-  id: string;
-  nome: string | null;
-  email: string | null;
-  criado_em: string | null;
-  plano_id: string | null;
-  plano_nome: string | null;
-  plano_ciclo: string | null;
-  status: string;
-  valor_centavos: number | null;
-  vencimento: string | null;
-  assinatura_id: string | null;
-  checkout_url: string | null;
-  asaas_id: string | null;
-  usuarios: number;
-  empresas: number;
-  faixa_a: number;
-  analises: number;
-  laudos: number;
-  termos: number;
-  assinados: number;
-  ultima_analise: string | null;
-  ultimo_laudo: string | null;
-}
-
-export interface Plano {
-  id: string;
-  nome: string;
-  descricao: string | null;
-  chamada: string | null;
-  preco_centavos: number;
-  recorrente: boolean;
-  ativo: boolean;
-  publico: boolean;
-  destaque: boolean;
-  ordem: number;
-  ciclo: string | null;
-  dias_acesso: number | null;
-  limite_analises: number | null;
-  limite_empresas: number | null;
-  limite_usuarios: number | null;
-  recursos: string[];
-}
-
-export interface Recurso {
-  chave: string;
-  nome: string;
-  descricao: string | null;
-  categoria: string;
-  ordem: number;
-}
-
-export interface Acao {
-  tipo: string;
-  urgencia: "alta" | "media" | "baixa";
-  escritorio: string;
-  detalhe: string;
-  valor?: number;
-  tenant_id: string;
-}
-
-export interface Negocio {
-  erro?: string;
-  /** receita mensal normalizada, em centavos (anual entra dividido por 12) */
-  mrr: number;
-  arr: number;
-  ticket: number;
-  mrrEmRisco: number;
-  assinantes: number;
-  gratuitos: number;
-  vencendo: number;
-  vencidos: number;
-  novosNoMes: number;
-  /** escritórios que já emitiram pelo menos 1 laudo */
-  provaram: number;
-  conversao: number;
-  funil: { etapa: string; n: number; pct: number; nota: string }[];
-  porPlano: { nome: string; assinantes: number; mrr: number; pct: number }[];
-  uso: { empresas: number; analises: number; laudos: number; termos: number; assinados: number };
-  historico: { mes: string; mrr: number; assinantes: number }[];
-  janela: { abre: string; fecha: string; dias: number; pct: number };
-  acoes: Acao[];
-  meta: { assinantes: number; mrr: number };
-  escritorios: Escritorio[];
-  planos: Plano[];
-  recursos: Recurso[];
-  config: Record<string, any>;
-}
+export * from "./negocio-calc";
 
 const DIA = 86_400_000;
 const dias = (de: string | Date, ate: string | Date = new Date()) =>
   Math.floor((new Date(ate).getTime() - new Date(de).getTime()) / DIA);
-
-export const brl = (centavos: number) =>
-  ((Number(centavos) || 0) / 100).toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    maximumFractionDigits: 0,
-  });
-
-export const brl2 = (centavos: number) =>
-  ((Number(centavos) || 0) / 100).toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-    minimumFractionDigits: 2,
-  });
-
-/** MRR normalizado de um escritório: o anual entra dividido por 12. */
-export function mrrDe(e: Escritorio): number {
-  if (e.status !== "ativa") return 0;
-  const v = Number(e.valor_centavos || 0);
-  if (e.plano_ciclo === "anual") return Math.round(v / 12);
-  if (e.plano_ciclo === "mensal") return v;
-  return 0; // avulso não é receita recorrente
-}
-
-export function ativo(e: Escritorio): boolean {
-  if (e.status !== "ativa") return false;
-  return !e.vencimento || new Date(e.vencimento) >= new Date();
-}
 
 export async function carregarNegocio(): Promise<Negocio> {
   const vazio: Negocio = {
@@ -140,6 +29,7 @@ export async function carregarNegocio(): Promise<Negocio> {
     funil: [], porPlano: [],
     uso: { empresas: 0, analises: 0, laudos: 0, termos: 0, assinados: 0 },
     historico: [],
+    caixa: { recebido_mes: 0, recebido_total: 0, aberto: 0, vencido: 0, vencidas: 0, pagas: 0 },
     janela: { abre: "2026-09-01", fecha: "2026-09-30", dias: 0, pct: 0 },
     acoes: [], meta: { assinantes: 0, mrr: 0 },
     escritorios: [], planos: [], recursos: [], config: {},
@@ -170,12 +60,15 @@ export async function carregarNegocio(): Promise<Negocio> {
     assinados: Number(e.assinados || 0),
   })) as Escritorio[];
 
-  const [{ data: planosRaw }, { data: recursosRaw }, { data: histRaw }, { data: cfgRaw }] =
+  const [{ data: planosRaw }, { data: recursosRaw }, { data: histRaw }, { data: cfgRaw }, { data: faturasRaw }] =
     await Promise.all([
       supabase.from("planos").select("*").order("ordem", { ascending: true }),
       supabase.from("plataforma_recursos").select("*").order("ordem", { ascending: true }),
       supabase.from("plataforma_mrr").select("*").order("mes", { ascending: true }).limit(24),
       supabase.from("plataforma_config").select("chave, valor"),
+      /* o extrato: o painel falava de MRR (promessa) e não tinha uma linha
+         sobre dinheiro que entrou. Ver `caixaDe`. */
+      supabase.from("faturas").select("status, valor_centavos, vencimento, pago_em"),
     ]);
 
   const planos = (((planosRaw as any[]) || []) as any[]).map((p) => ({
@@ -189,9 +82,14 @@ export async function carregarNegocio(): Promise<Negocio> {
   const config: Record<string, any> = {};
   for (const c of ((cfgRaw as any[]) || [])) config[c.chave] = c.valor;
 
+  const caixa = caixaDe(
+    ((faturasRaw as any[]) || []) as Parameters<typeof caixaDe>[0],
+    new Date()
+  );
+
   // ------------------------------------------------------------------ receita
   const ativos = escritorios.filter(ativo);
-  const mrr = ativos.reduce((s, e) => s + mrrDe(e), 0);
+  const mrr = ativos.reduce((s, e) => s + mrrDe(e, planos), 0);
   const gratuitos = escritorios.filter((e) => !ativo(e));
 
   const hoje = new Date();
@@ -208,7 +106,7 @@ export async function carregarNegocio(): Promise<Negocio> {
     const d = e.ultima_analise ? dias(e.ultima_analise) : e.criado_em ? dias(e.criado_em) : 0;
     return d >= 21;
   });
-  const mrrEmRisco = [...vencendo, ...parados].reduce((s, e) => s + mrrDe(e), 0);
+  const mrrEmRisco = [...vencendo, ...parados].reduce((s, e) => s + mrrDe(e, planos), 0);
 
   const inicioMes = new Date();
   inicioMes.setDate(1);
@@ -242,7 +140,7 @@ export async function carregarNegocio(): Promise<Negocio> {
     const nome = e.plano_nome || "Sem plano";
     mapa[nome] = mapa[nome] || { nome, assinantes: 0, mrr: 0 };
     mapa[nome].assinantes++;
-    mapa[nome].mrr += mrrDe(e);
+    mapa[nome].mrr += mrrDe(e, planos);
   }
   const porPlano = Object.values(mapa)
     .sort((a, b) => b.mrr - a.mrr)
@@ -326,7 +224,7 @@ export async function carregarNegocio(): Promise<Negocio> {
       escritorio: e.nome || "(sem nome)",
       tenant_id: e.id,
       detalhe: `${e.plano_nome} vence em ${d} dia(s) (${new Date(e.vencimento! + "T12:00:00").toLocaleDateString("pt-BR")})`,
-      valor: mrrDe(e),
+      valor: mrrDe(e, planos),
     });
   }
 
@@ -338,7 +236,7 @@ export async function carregarNegocio(): Promise<Negocio> {
       escritorio: e.nome || "(sem nome)",
       tenant_id: e.id,
       detalhe: `venceu há ${dias(e.vencimento!)} dia(s) e o status ainda é ativa`,
-      valor: mrrDe(e),
+      valor: mrrDe(e, planos),
     });
   }
 
@@ -362,7 +260,7 @@ export async function carregarNegocio(): Promise<Negocio> {
       escritorio: e.nome || "(sem nome)",
       tenant_id: e.id,
       detalhe: d === null ? "nunca analisou nada" : `sem análise nova há ${d} dias`,
-      valor: mrrDe(e),
+      valor: mrrDe(e, planos),
     });
   }
 
@@ -378,9 +276,51 @@ export async function carregarNegocio(): Promise<Negocio> {
         escritorio: e.nome || "(sem nome)",
         tenant_id: e.id,
         detalhe: `${p.nome} dá ${p.dias_acesso} dias, mas o acesso vale por mais ${concedidos}`,
-        valor: mrrDe(e),
+        valor: mrrDe(e, planos),
       });
     }
+  }
+
+  /**
+   * 8) ESCRITÓRIO SEM NENHUM USUÁRIO — o entulho que trava a fila de e-mails.
+   *
+   * Cadastro que morreu no meio deixa o `tenant` sem nenhum `profile`. Ele não
+   * incomoda ninguém na tela… mas as réguas de ativação planejam e-mail para
+   * ele em TODA execução, e como não existe endereço, o envio nunca acontece e
+   * a linha nunca sai de "próximos disparos". Eram 3 escritórios e 6 e-mails
+   * eternos numa base de 9.
+   *
+   * Aparece aqui porque tem conserto: ou o cadastro se completa, ou o registro
+   * some. Ficar é a única opção que não serve.
+   */
+  for (const e of escritorios.filter((x) => x.usuarios === 0)) {
+    acoes.push({
+      tipo: "Escritório sem usuário",
+      urgencia: "media",
+      escritorio: e.nome || "(sem nome)",
+      tenant_id: e.id,
+      detalhe:
+        "cadastro incompleto: nenhuma conta de acesso. Nenhum e-mail automático consegue sair para ele — e a régua tenta de novo toda hora.",
+    });
+  }
+
+  /**
+   * 9) ASSINATURA ATIVA SEM VALOR GRAVADO.
+   *
+   * Era a causa do painel mostrar R$ 0 com dinheiro na conta. `mrrDe` agora cai
+   * para o preço do plano, então o número volta a aparecer — mas a linha
+   * continua torta no banco, e um desconto negociado ficaria invisível. Fica na
+   * lista até alguém gravar o valor de verdade.
+   */
+  for (const e of ativos.filter((x) => !x.valor_centavos && x.plano_id && x.plano_id !== "gratis")) {
+    acoes.push({
+      tipo: "Assinatura sem valor gravado",
+      urgencia: "baixa",
+      escritorio: e.nome || "(sem nome)",
+      tenant_id: e.id,
+      detalhe: `${e.plano_nome ?? e.plano_id}: o valor está em branco na assinatura. O painel usa o preço de tabela — se houve desconto, ele não aparece em lugar nenhum.`,
+      valor: mrrDe(e, planos),
+    });
   }
 
   const ordem = { alta: 0, media: 1, baixa: 2 } as const;
@@ -402,6 +342,7 @@ export async function carregarNegocio(): Promise<Negocio> {
     porPlano,
     uso,
     historico,
+    caixa,
     janela,
     acoes,
     meta: {

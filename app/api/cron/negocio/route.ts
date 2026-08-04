@@ -72,6 +72,12 @@ export async function GET(req: Request) {
     planejados: 0, enviados: 0, semEmail: 0,
   };
   let lista: unknown[] = [];
+  const modo = simular
+    ? "teste (nada foi enviado)"
+    : podeEnviar
+      ? "envio"
+      : "fora do horário comercial (nada foi enviado)";
+
   try {
     const { executarReguas } = await import("@/lib/reguas");
     // fora do horário, roda em modo simulação: o log mostra o que sairia,
@@ -86,6 +92,37 @@ export async function GET(req: Request) {
     }
   } catch (e) {
     erros.push(`reguas: ${e instanceof Error ? e.message : "erro"}`);
+  }
+
+  /**
+   * O BATIMENTO — a resposta para "o motor está rodando?".
+   *
+   * Sem isto, a única evidência de que o cron existe é o e-mail que chega. E
+   * quando NÃO chega, não há como distinguir três causas muito diferentes: o
+   * cron nunca rodou (CRON_SECRET ausente devolve 401 em silêncio), rodou fora
+   * do horário comercial, ou rodou e não tinha nada para mandar.
+   *
+   * A tela de Negócio → E-mails lê esta chave. Falhar aqui não pode derrubar o
+   * cron: diagnóstico nunca atrapalha a função.
+   */
+  try {
+    await supabase.from("plataforma_config").upsert(
+      {
+        chave: "reguas_execucao",
+        valor: {
+          em: new Date().toISOString(),
+          modo,
+          planejados: reguas.planejados,
+          enviados: reguas.enviados,
+          travados: reguas.semEmail,
+          erros: erros.slice(0, 3),
+        },
+        descricao: "Última execução do motor de réguas — diagnóstico do painel de e-mails.",
+      },
+      { onConflict: "chave" }
+    );
+  } catch {
+    /* o batimento é diagnóstico: nunca pode impedir o envio */
   }
 
   let foto: unknown = null;
@@ -114,11 +151,7 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     ok: true,
-    modo: simular
-      ? "teste (nada foi enviado)"
-      : podeEnviar
-        ? "envio"
-        : "fora do horário comercial (nada foi enviado)",
+    modo,
     horario_br: `${(new Date().getUTCHours() + 21) % 24}h`,
     vencidas_encontradas: vencidas.ids.length,
     vencidas_marcadas: vencidas.marcadas,

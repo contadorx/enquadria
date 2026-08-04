@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase-server";
-import { carregarContexto, planejar, VARIAVEIS, type Envio } from "@/lib/reguas";
+import { carregarContexto, planejar, separarFila, VARIAVEIS, type Envio } from "@/lib/reguas";
 import { ReguaCartao, RodarReguas, LiberarReenvio, ConfigChave, ConfigNumero, type RegraUI } from "@/components/NegocioUI";
 
 export const dynamic = "force-dynamic";
@@ -75,8 +75,15 @@ export default async function Emails() {
     erroPrevisao = e instanceof Error ? e.message : "não consegui montar a prévia";
   }
 
+  /* o que VAI SAIR e o que está travado sem destinatário — ver separarFila */
+  const { sairao, travados } = separarFila(previsao);
+
+  /* a contagem por grupo passa a ser do que REALMENTE sai: "3 na fila agora"
+     com os 3 travados era uma promessa que a régua não cumpria */
   const naFila: Record<string, number> = {};
-  for (const p of previsao) naFila[p.categoria] = (naFila[p.categoria] || 0) + 1;
+  for (const p of sairao) naFila[p.categoria] = (naFila[p.categoria] || 0) + 1;
+
+  const ultimaExec = (cfg.reguas_execucao ?? null) as Record<string, unknown> | null;
 
   const nomeRegra: Record<string, string> = {};
   for (const r of regras) nomeRegra[r.chave] = r.nome;
@@ -126,9 +133,40 @@ export default async function Emails() {
         </div>
       </section>
 
+      {/* ─────────────────────────────────────────── O CRON RODOU? QUANDO?
+          A pergunta que não tinha onde ser respondida. A fila mostrava dezenas
+          de "próximos disparos" e o log tinha UM envio de teste — sem como
+          saber se o motor nunca rodou, se rodou fora do horário, ou se rodou e
+          nada saiu. Agora cada execução deixa um batimento. */}
+      <section
+        className={`rounded border p-4 ${
+          ultimaExec ? "border-line bg-surface" : "border-vermelho/40 bg-vermelhowash"
+        }`}
+      >
+        <p className="text-[13px] font-bold">
+          {ultimaExec ? "Última execução do motor" : "O motor nunca rodou"}
+        </p>
+        {ultimaExec ? (
+          <p className="mt-1 max-w-[85ch] text-[12.5px] leading-relaxed text-muted">
+            {new Date(String(ultimaExec.em)).toLocaleString("pt-BR")} · modo <b>{String(ultimaExec.modo)}</b> ·
+            planejados <b>{Number(ultimaExec.planejados ?? 0)}</b>, enviados{" "}
+            <b>{Number(ultimaExec.enviados ?? 0)}</b>, travados sem destinatário{" "}
+            <b>{Number(ultimaExec.travados ?? 0)}</b>.
+            {Number(ultimaExec.enviados ?? 0) === 0 && " Nenhum e-mail saiu nessa execução — o modo acima diz por quê."}
+          </p>
+        ) : (
+          <p className="mt-1 max-w-[85ch] text-[12.5px] leading-relaxed">
+            Nenhuma execução registrada. O cron roda de hora em hora e só envia em dia útil, das 9h
+            às 18h — mas ele <b>precisa do CRON_SECRET</b> configurado na Vercel: sem a variável, a
+            rota devolve 401 e nada acontece, sem nenhum aviso. Confira lá, ou usei o botão acima
+            para rodar à mão.
+          </p>
+        )}
+      </section>
+
       <section>
         <h2 className="mb-1 text-[15px] font-bold">Próximos disparos</h2>
-        <p className="mb-2 text-[12.5px] text-muted">
+        <p className="mb-2 max-w-[85ch] text-[12.5px] text-muted">
           O que sairia se a régua rodasse agora. Não é estimativa: é o resultado do mesmo planejamento que o cron usa.
         </p>
 
@@ -137,6 +175,11 @@ export default async function Emails() {
         ) : !previsao.length ? (
           <div className="rounded border border-line bg-surface p-6 text-center text-[13px] text-muted">
             Nada a enviar agora. Todo mundo já recebeu o que devia, ou nenhuma condição foi atingida.
+          </div>
+        ) : !sairao.length ? (
+          <div className="rounded border border-line bg-surface p-6 text-center text-[13px] text-muted">
+            Nenhum vai sair agora: os {travados.length} planejados estão travados por falta de
+            destinatário — a lista está logo abaixo.
           </div>
         ) : (
           <div className="overflow-x-auto rounded border border-line bg-surface">
@@ -150,22 +193,60 @@ export default async function Emails() {
                 </tr>
               </thead>
               <tbody>
-                {previsao.slice(0, 40).map((p, i) => (
+                {sairao.slice(0, 40).map((p, i) => (
                   <tr key={i} className="border-b border-linesoft last:border-0">
                     <td className="px-3 py-2 font-semibold">{p.escritorio}</td>
                     <td className="px-3 py-2">{p.nome_regra}</td>
                     <td className="px-3 py-2 text-[11.5px] text-muted">{p.motivo}</td>
-                    <td className="px-3 py-2 text-[11.5px]">
-                      {p.para || <span className="text-amarelo">sem e-mail cadastrado</span>}
-                    </td>
+                    <td className="px-3 py-2 text-[11.5px]">{p.para}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {previsao.length > 40 && <p className="px-3 py-2 text-[11.5px] text-muted">+{previsao.length - 40} outros.</p>}
+            {sairao.length > 40 && <p className="px-3 py-2 text-[11.5px] text-muted">+{sairao.length - 40} outros.</p>}
           </div>
         )}
       </section>
+
+      {/* ────────────────────────────────────────────── OS QUE NUNCA VÃO SAIR
+          Estavam misturados na lista de cima, e era isso que fazia a fila
+          parecer entupida: escritório sem NENHUM usuário planeja e-mail em toda
+          execução, não tem destinatário, e volta amanhã igual. Não é falha do
+          motor — é cadastro que morreu no meio, e tem conserto próprio. */}
+      {travados.length > 0 && (
+        <section>
+          <h2 className="mb-1 text-[15px] font-bold text-amarelo">
+            Travados — {travados.length} que nunca vão sair sozinhos
+          </h2>
+          <p className="mb-2 max-w-[85ch] text-[12.5px] leading-relaxed text-muted">
+            Estes escritórios não têm nenhum e-mail cadastrado. A régua planeja o envio, não encontra
+            destinatário e tenta de novo na execução seguinte — indefinidamente. Enquanto ficarem
+            aqui, a fila de cima parece maior do que é. Resolva em <b>Negócio → Contas</b>: ou a
+            conta de acesso é criada, ou o escritório sai da base.
+          </p>
+          <div className="overflow-x-auto rounded border border-amarelo/40 bg-amarelowash">
+            <table className="w-full text-[13px]">
+              <thead className="border-b border-amarelo/30 text-left text-[11px] uppercase tracking-wide text-amarelo">
+                <tr>
+                  <th className="px-3 py-2.5 font-semibold">Escritório</th>
+                  <th className="px-3 py-2.5 font-semibold">Regra travada</th>
+                  <th className="px-3 py-2.5 font-semibold">Por quê</th>
+                </tr>
+              </thead>
+              <tbody>
+                {travados.slice(0, 20).map((p, i) => (
+                  <tr key={i} className="border-b border-amarelo/20 last:border-0">
+                    <td className="px-3 py-2 font-semibold">{p.escritorio}</td>
+                    <td className="px-3 py-2">{p.nome_regra}</td>
+                    <td className="px-3 py-2 text-[11.5px]">sem nenhum usuário com e-mail</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {travados.length > 20 && <p className="px-3 py-2 text-[11.5px]">+{travados.length - 20} outros.</p>}
+          </div>
+        </section>
+      )}
 
       {GRUPOS.map((g) => {
         const doGrupo = regras.filter((r) => r.categoria === g.chave);

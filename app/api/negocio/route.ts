@@ -188,6 +188,25 @@ export async function POST(req: Request) {
       const { executarReguas } = await import("@/lib/reguas");
       const db = dbEscrita(supabase);
       const r = await executarReguas(db, { simular });
+
+      /* o MESMO batimento que o cron grava: rodar à mão pela tela também é
+         execução, e o painel precisa refletir isso na hora */
+      await db.from("plataforma_config").upsert(
+        {
+          chave: "reguas_execucao",
+          valor: {
+            em: new Date().toISOString(),
+            modo: simular ? "teste pela tela (nada foi enviado)" : "envio manual pela tela",
+            planejados: r.planejados,
+            enviados: r.enviados,
+            travados: r.semEmail,
+            erros: r.erros.slice(0, 3),
+          },
+          descricao: "Última execução do motor de réguas — diagnóstico do painel de e-mails.",
+        },
+        { onConflict: "chave" }
+      );
+
       return NextResponse.json({
         ok: true,
         planejados: r.planejados,

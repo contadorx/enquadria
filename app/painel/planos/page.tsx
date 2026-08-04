@@ -54,7 +54,7 @@ export default function Planos() {
   const [pendentes, setPendentes] = useState<Set<string>>(new Set());
   const temPendente = pendentes.size > 0;
   /** dias já pagos que sobram do plano ativo — viram crédito na troca */
-  const [diasRestantes_, setDiasRestantes] = useState(0);
+  const [diasSobrando, setDiasSobrando] = useState(0);
 
   /**
    * Uma função, não um efeito solto: o que a tela mostra depois de contratar
@@ -114,8 +114,7 @@ export default function Planos() {
 
     /* dias pagos que ainda restam: é o que a tela promete que não se perde na
        troca de plano, e o que o webhook soma quando o novo for confirmado */
-    if (a?.valido_ate) setDiasRestantes(diasRestantes(a.valido_ate, new Date()));
-    else setDiasRestantes(0);
+    setDiasSobrando(a?.valido_ate ? diasRestantes(a.valido_ate, new Date()) : 0);
 
     const { count } = await supabase
       .from("laudos")
@@ -321,18 +320,18 @@ export default function Planos() {
                 </button>
                 {ePendente && (
                   <p className="mt-2 text-[11.5px] leading-relaxed text-amarelo">
-                    Contratado, aguardando o pagamento. É a mesma cobrança de sempre — o botão
-                    abre o link dela, não emite outra. Está também em <b>Minhas faturas</b>, logo
-                    abaixo, e o acesso abre sozinho na confirmação.
+                    Contratado, aguardando o pagamento. É a mesma cobrança de sempre — o botão abre
+                    o link dela, não emite outra. Está também em <b>Minhas faturas</b>, logo abaixo,
+                    e o acesso abre sozinho na confirmação.
                   </p>
                 )}
                 {/* TROCA DE PLANO: o que acontece precisa estar escrito ANTES do
-                    clique. "Vou perder o que já paguei?" é a pergunta que
-                    trava a compra — e a resposta é não. */}
+                    clique. "Vou perder o que já paguei?" é a pergunta que trava
+                    a compra — e a resposta é não. */}
                 {!eAtivo && !ePendente && ativo && (
                   <p className="mt-2 text-[11.5px] leading-relaxed text-muted">
                     Você continua no plano atual até esta cobrança ser paga.
-                    {diasRestantes_ > 0 ? ` ${fraseCredito(diasRestantes_)}` : ""}
+                    {diasSobrando > 0 ? ` ${fraseCredito(diasSobrando)}` : ""}
                   </p>
                 )}
                 </>
