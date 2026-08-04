@@ -34,6 +34,19 @@ ok    auditoria de schema (24 tabelas com proveniência)
 ── Auditoria de upsert (o onConflict que o Postgres não consegue inferir) 
 ok    auditoria de upsert (11 conferidos)
 
+── Segurança do dado — o que a tela promete no momento da fricção 
+ok    a tela promete "separação no banco, não filtro de tela" e o documento sustenta
+ok    a tela promete "não treina modelo com o conteúdo da conta" e o documento sustenta
+ok    a tela promete "nenhuma IA processa a carteira" e o documento sustenta
+ok    a tela promete "o contador exporta quando quiser" e o documento sustenta
+ok    a tela promete "tráfego em TLS" e o documento sustenta
+ok    a versão compacta do bloco linka Segurança e Privacidade
+ok    a versão inteira do bloco linka Segurança e Privacidade
+ok    a trilha pede UMA empresa antes da carteira inteira
+ok    e mostra a segurança no passo em que a carteira é pedida
+ok    a tela de importar mostra o bloco na PRIMEIRA vez
+ok    ...e NÃO repete para quem já tem carteira
+
 ── Endereços públicos — o que chega ao cliente sem login ───────
 ok    /assinar/[token] existe e é pública
 ok    /coleta/[token] existe e é pública
@@ -240,4 +253,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 205 verificações automáticas
+TUDO PASSOU — 216 verificações automáticas

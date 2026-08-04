@@ -199,6 +199,68 @@ secao("Auditoria de upsert (o onConflict que o Postgres não consegue inferir)")
      r.status === 0 ? undefined : saida.split("\n").filter((l) => l.startsWith("QUEBRADO")).slice(0, 8));
 }
 
+/* ============== 1b4. A PROMESSA DE SEGURANÇA TEM QUE TER LASTRO ========= */
+secao("Segurança do dado — o que a tela promete no momento da fricção");
+{
+  /**
+   * O momento mais caro do produto é pedir a CARTEIRA do contador: a lista de
+   * clientes, o ativo do escritório, a alguém que conheceu o sistema há dez
+   * minutos. Quem hesita ali não escreve perguntando — fecha a aba.
+   *
+   * Por isso a resposta foi para dentro da tarefa. E por isso ela precisa de
+   * trava: promessa de segurança que descola do documento publicado é pior do
+   * que promessa nenhuma, porque vira desmentido no dia em que alguém confere.
+   * Cada afirmação do bloco tem que continuar existindo no documento.
+   */
+  const comp = fs.readFileSync(path.join(RAIZ, "components/SegurancaDoDado.tsx"), "utf8");
+  const legal = fs.readFileSync(path.join(RAIZ, "lib/legal.json"), "utf8");
+  const seg = JSON.parse(legal).documentos.find((d) => d.slug === "seguranca");
+  const textoSeg = JSON.stringify(seg).toLowerCase();
+
+  const AFIRMACOES = [
+    ["separação no banco, não filtro de tela", "row level security"],
+    ["não treina modelo com o conteúdo da conta", "treinar modelo"],
+    ["nenhuma IA processa a carteira", "inteligência artificial"],
+    ["o contador exporta quando quiser", "exporta"],
+    ["tráfego em TLS", "tls"],
+  ];
+  for (const [nome, agulha] of AFIRMACOES) {
+    ok(`a tela promete "${nome}" e o documento sustenta`, textoSeg.includes(agulha), agulha);
+  }
+
+  /**
+   * O link tem que estar nas DUAS versões do bloco — a compacta (trilha) e a
+   * inteira (tela de importar). Procurar no arquivo passava com o link
+   * removido de uma delas, porque a outra ainda casava: o mesmo erro de
+   * guarda que já apareceu três vezes nesta base.
+   */
+  const iComp = comp.indexOf("if (compacto)");
+  const variante = { compacta: comp.slice(iComp, comp.indexOf("return (", comp.indexOf("}", iComp))), inteira: comp.slice(comp.lastIndexOf("return (")) };
+  for (const [nome, trecho] of Object.entries(variante)) {
+    ok(`a versão ${nome} do bloco linka Segurança e Privacidade`,
+       /href="\/seguranca"/.test(trecho) && /href="\/privacidade"/.test(trecho),
+       trecho.replace(/\s+/g, " ").slice(0, 100));
+  }
+
+  /* o pedido encolheu: uma empresa antes da carteira inteira */
+  const trilha = fs.readFileSync(path.join(RAIZ, "components/Trilha.tsx"), "utf8");
+  ok("a trilha pede UMA empresa antes da carteira inteira",
+     /Comece por uma empresa/.test(trilha) && !/titulo: "Suba a carteira"/.test(trilha));
+  ok("e mostra a segurança no passo em que a carteira é pedida",
+     /SegurancaDoDado/.test(trilha));
+
+  const imp = fs.readFileSync(path.join(RAIZ, "app/painel/importar/page.tsx"), "utf8");
+  ok("a tela de importar mostra o bloco na PRIMEIRA vez",
+     /jaTem === 0 &&[\s\S]{0,80}<SegurancaDoDado/.test(imp));
+  /* quem já tem carteira já decidiu: repetir a conversa vira ruído, e ruído
+     gasta a credibilidade que o texto deveria construir. A checagem é simples
+     de propósito: UMA aparição, e ela dentro da guarda. */
+  const semGuarda = imp.replace(/\{jaTem === 0 && \([\s\S]*?\n      \)\}/, "");
+  ok("...e NÃO repete para quem já tem carteira",
+     (imp.match(/<SegurancaDoDado/g) || []).length === 1 && !/<SegurancaDoDado/.test(semGuarda),
+     `${(imp.match(/<SegurancaDoDado/g) || []).length} aparições · fora da guarda: ${/<SegurancaDoDado/.test(semGuarda)}`);
+}
+
 /* ======================================= 1c. O QUE O CLIENTE ALCANÇA ==== */
 secao("Endereços públicos — o que chega ao cliente sem login");
 {

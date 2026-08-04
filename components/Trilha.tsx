@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { SegurancaDoDado } from "./SegurancaDoDado";
 
 /**
  * O ASSISTENTE E A TRILHA — a mesma peça em dois momentos.
@@ -51,7 +52,14 @@ export function Trilha({
 
   /* ------------------------------------------------ assistente da 1ª vez */
   if (primeiroCiclo) {
-    const passos = [
+    const passos: {
+      n: number;
+      titulo: string;
+      texto: string;
+      feito: boolean;
+      extra?: React.ReactNode;
+      cta: React.ReactNode;
+    }[] = [
       {
         n: 1,
         titulo: "Identifique o escritório",
@@ -64,14 +72,33 @@ export function Trilha({
         ),
       },
       {
+        /**
+         * O PASSO MAIS CARO DA TRILHA — e por que ele mudou de tamanho.
+         *
+         * "Suba a carteira" pede, de uma vez, o ativo do escritório: a lista
+         * de clientes. É o ponto onde a pessoa hesita, e quem hesita aqui não
+         * escreve perguntando — fecha a aba. O abandono não vira chamado,
+         * vira silêncio.
+         *
+         * Duas mudanças, e as duas atacam a mesma fricção:
+         *
+         *   · O PEDIDO ENCOLHEU. Uma empresa basta para ver a triagem
+         *     funcionando de ponta a ponta. Compromisso pequeno primeiro,
+         *     carteira inteira depois de o valor estar na tela — não antes.
+         *
+         *   · A RESPOSTA VEIO PARA CÁ. As políticas existem e moram no
+         *     rodapé, e ninguém abre rodapé no meio de uma tarefa. A
+         *     informação precisa estar onde a dúvida acontece.
+         */
         n: 2,
-        titulo: "Suba a carteira",
+        titulo: "Comece por uma empresa",
         texto:
-          "Um CSV com a coluna de CNPJ já basta. Razão social e CNAE deixam a triagem mais precisa — e você vê o resultado na hora.",
+          "Cole UM CNPJ e veja a triagem funcionar — não precisa da carteira inteira agora. Depois, um CSV com a coluna de CNPJ sobe o resto de uma vez; razão social e CNAE deixam a triagem mais precisa.",
         feito: estado.empresas > 0,
+        extra: <SegurancaDoDado compacto />,
         cta: (
           <Link href="/painel/importar" className="btn">
-            Importar carteira
+            Adicionar a primeira
           </Link>
         ),
       },
@@ -144,7 +171,12 @@ export function Trilha({
                   <div className={`text-[13px] font-semibold ${p.feito ? "text-muted line-through" : ""}`}>
                     {p.titulo}
                   </div>
-                  {ehAtual && !p.feito && <div className="mt-0.5 text-[12.5px] text-slate2">{p.texto}</div>}
+                  {ehAtual && !p.feito && (
+                    <>
+                      <div className="mt-0.5 text-[12.5px] text-slate2">{p.texto}</div>
+                      {p.extra}
+                    </>
+                  )}
                 </div>
                 {ehAtual && !p.feito && p.cta && <div className="shrink-0">{p.cta}</div>}
               </div>

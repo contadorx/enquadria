@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
 import { Importador } from "@/components/Importador";
+import { SegurancaDoDado } from "@/components/SegurancaDoDado";
 
 /**
  * A tela muda de nome conforme a carteira já existe ou não.
@@ -37,7 +38,7 @@ export default async function ImportarPage() {
                 tem os dados atualizados e mantém a análise, o laudo e o termo.
               </>
             ) : (
-              "Cole os CNPJs ou suba um CSV. A triagem separa quem precisa decidir até 30/09."
+              "Comece com um CNPJ só, se preferir — a triagem funciona igual e você vê o resultado antes de subir a carteira inteira."
             )}
           </p>
         </div>
@@ -50,6 +51,17 @@ export default async function ImportarPage() {
           </Link>
         )}
       </div>
+      {/* ─────────────────────────────────────────────── SÓ NA PRIMEIRA VEZ
+          A hesitação é de quem ainda não subiu nada: entregar a lista de
+          clientes a um sistema conhecido há dez minutos. Quem já tem carteira
+          aqui dentro já decidiu — repetir a conversa vira ruído, e ruído gasta
+          a credibilidade que o texto deveria construir. */}
+      {jaTem === 0 && (
+        <div className="mt-5">
+          <SegurancaDoDado />
+        </div>
+      )}
+
       <div className="mt-5">
         <Importador jaTem={jaTem} />
       </div>
