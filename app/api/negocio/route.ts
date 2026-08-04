@@ -255,10 +255,23 @@ export async function POST(req: Request) {
         .single();
       if (erroIns) return NextResponse.json({ erro: erroIns.message }, { status: 500 });
 
+      /* o Asaas não cria cliente sem CPF/CNPJ — aqui ele vem do cadastro do
+         escritório, preenchido na primeira contratação (ver migration 0040) */
+      const { data: tenantDoc } = await supabase
+        .from("tenants").select("cpf_cnpj").eq("id", tenantId).maybeSingle();
+      const doc = (tenantDoc as { cpf_cnpj?: string } | null)?.cpf_cnpj ?? "";
+      if (!doc) {
+        return NextResponse.json(
+          { erro: "Este escritório ainda não tem CPF/CNPJ cadastrado, e o Asaas exige o documento do pagador. Peça a ele para contratar pela tela de Planos uma vez, ou cadastre o documento antes." },
+          { status: 400 }
+        );
+      }
+
       const { criarCobranca } = await import("@/lib/asaas");
       const cob = await criarCobranca({
         nome: esc.nome || "Escritório",
         email: esc.email || "",
+        cpf_cnpj: doc,
         valor_centavos: p.preco_centavos,
         descricao: `Enquadria — ${p.nome}`,
         externo: (nova as { id: string }).id,

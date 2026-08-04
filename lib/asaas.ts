@@ -13,6 +13,21 @@ const BASE = {
   production: "https://api.asaas.com/v3",
 };
 
+/**
+ * OS CABEÇALHOS — e por que o `User-Agent` está aqui.
+ *
+ * O Asaas RECUSA requisição sem `User-Agent` identificando a aplicação. Como
+ * o `fetch` do Node não manda um por conta própria, a chamada volta 401 —
+ * "não autorizado" — com a chave perfeitamente correta. É o pior tipo de
+ * erro: a mensagem aponta para o lugar errado, e quem recebe passa a tarde
+ * conferindo a chave e o ambiente.
+ */
+function cabecalhos(key: string, json = false): Record<string, string> {
+  const h: Record<string, string> = { access_token: key, "User-Agent": "Enquadria" };
+  if (json) h["Content-Type"] = "application/json";
+  return h;
+}
+
 export interface Cobranca {
   ativo: boolean;
   asaas_id?: string;
@@ -21,38 +36,62 @@ export interface Cobranca {
   vencimento?: string;
   /** link do boleto, quando o Asaas gera um */
   boleto_url?: string;
+  /** o que deu errado, na língua do Asaas — nunca mais engolido */
+  erro?: string;
 }
 
+/**
+ * ACHA OU CRIA O CLIENTE NO ASAAS.
+ *
+ * O `cpfCnpj` é OBRIGATÓRIO para criar cliente — era o que faltava, e a falta
+ * derrubava a contratação inteira em silêncio: o Asaas recusava, o `catch`
+ * devolvia null, a cobrança voltava sem link e a tela não mostrava nada.
+ *
+ * Agora o erro do Asaas sobe com a mensagem dele. Um "cpfCnpj inválido" na
+ * tela resolve em dez segundos o que um silêncio custa uma tarde.
+ */
 async function acharOuCriarCliente(
   base: string,
   key: string,
   nome: string,
-  email: string
-): Promise<string | null> {
+  email: string,
+  cpfCnpj: string
+): Promise<{ id?: string; erro?: string }> {
   try {
     const busca = await fetch(`${base}/customers?email=${encodeURIComponent(email)}`, {
-      headers: { access_token: key },
+      headers: cabecalhos(key),
       cache: "no-store",
     });
-    const jb = (await busca.json()) as { data?: { id: string }[] };
-    if (jb.data && jb.data.length > 0) return jb.data[0].id;
+    if (busca.status === 401) {
+      return { erro: "O Asaas recusou a chave (401). Confira ASAAS_API_KEY e se ela é do ambiente declarado em ASAAS_ENV." };
+    }
+    const jb = (await busca.json().catch(() => ({}))) as { data?: { id: string }[] };
+    if (jb.data && jb.data.length > 0) return { id: jb.data[0].id };
 
     const cria = await fetch(`${base}/customers`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", access_token: key },
-      body: JSON.stringify({ name: nome, email }),
+      headers: cabecalhos(key, true),
+      body: JSON.stringify({ name: nome, email, cpfCnpj }),
       cache: "no-store",
     });
-    const jc = (await cria.json()) as { id?: string };
-    return jc.id ?? null;
-  } catch {
-    return null;
+    const jc = (await cria.json().catch(() => ({}))) as {
+      id?: string;
+      errors?: { code?: string; description?: string }[];
+    };
+    if (jc.id) return { id: jc.id };
+
+    const desc = jc.errors?.map((e) => e.description).filter(Boolean).join(" · ");
+    return { erro: desc || `O Asaas recusou o cadastro do pagador (HTTP ${cria.status}).` };
+  } catch (e) {
+    return { erro: `Não consegui falar com o Asaas: ${e instanceof Error ? e.message : "rede"}` };
   }
 }
 
 export async function criarCobranca(params: {
   nome: string;
   email: string;
+  /** CPF ou CNPJ de quem paga — obrigatório no Asaas */
+  cpf_cnpj: string;
   valor_centavos: number;
   descricao: string;
   externo: string;
@@ -63,8 +102,8 @@ export async function criarCobranca(params: {
   const env = (process.env.ASAAS_ENV as "sandbox" | "production") ?? "sandbox";
   const base = BASE[env];
 
-  const clienteId = await acharOuCriarCliente(base, key, params.nome, params.email);
-  if (!clienteId) return { ativo: true };
+  const cliente = await acharOuCriarCliente(base, key, params.nome, params.email, params.cpf_cnpj);
+  if (!cliente.id) return { ativo: true, erro: cliente.erro };
 
   const vencimento = new Date();
   vencimento.setDate(vencimento.getDate() + 3);
@@ -72,9 +111,9 @@ export async function criarCobranca(params: {
   try {
     const resp = await fetch(`${base}/payments`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", access_token: key },
+      headers: cabecalhos(key, true),
       body: JSON.stringify({
-        customer: clienteId,
+        customer: cliente.id,
         billingType: "UNDEFINED", // deixa o pagador escolher pix/boleto/cartão
         value: params.valor_centavos / 100,
         dueDate: vencimento.toISOString().slice(0, 10),
@@ -83,7 +122,11 @@ export async function criarCobranca(params: {
       }),
       cache: "no-store",
     });
-    if (!resp.ok) return { ativo: true };
+    if (!resp.ok) {
+      const j = (await resp.json().catch(() => ({}))) as { errors?: { description?: string }[] };
+      const desc = j.errors?.map((e) => e.description).filter(Boolean).join(" · ");
+      return { ativo: true, erro: desc || `O Asaas recusou a cobrança (HTTP ${resp.status}).` };
+    }
     const json = (await resp.json()) as {
       id?: string;
       invoiceUrl?: string;
@@ -97,8 +140,8 @@ export async function criarCobranca(params: {
       boleto_url: json.bankSlipUrl,
       vencimento: json.dueDate,
     };
-  } catch {
-    return { ativo: true };
+  } catch (e) {
+    return { ativo: true, erro: `Falha ao criar a cobrança: ${e instanceof Error ? e.message : "rede"}` };
   }
 }
 
@@ -148,17 +191,23 @@ export async function statusAsaas(): Promise<StatusAsaas> {
 
   try {
     const resp = await fetch(`${baseUrl()}/myAccount`, {
-      headers: { access_token: key },
+      headers: cabecalhos(key),
       cache: "no-store",
     });
     if (!resp.ok) {
-      return { ...base_, erro: `Asaas respondeu ${resp.status}. A chave é do ambiente certo (${ambiente})?` };
+      return {
+        ...base_,
+        erro:
+          resp.status === 401
+            ? `O Asaas respondeu 401 (não autorizado). Duas causas, nesta ordem: a chave não é do ambiente declarado (${ambiente}), ou foi colada com espaço/quebra de linha. Requisição sem User-Agent também dava 401 — isso já está corrigido no código.`
+            : `Asaas respondeu ${resp.status}. A chave é do ambiente certo (${ambiente})?`,
+      };
     }
     const j = (await resp.json()) as { name?: string; email?: string; cpfCnpj?: string };
 
     let saldo: number | undefined;
     try {
-      const b = await fetch(`${baseUrl()}/finance/balance`, { headers: { access_token: key }, cache: "no-store" });
+      const b = await fetch(`${baseUrl()}/finance/balance`, { headers: cabecalhos(key), cache: "no-store" });
       if (b.ok) {
         const jb = (await b.json()) as { balance?: number };
         saldo = Math.round(Number(jb.balance || 0) * 100);
@@ -214,7 +263,7 @@ export async function reconciliarAssinatura(
   let pagamento: { status?: string; paymentDate?: string; confirmedDate?: string; dueDate?: string };
   try {
     const resp = await fetch(`${baseUrl()}/payments/${a.asaas_id}`, {
-      headers: { access_token: key },
+      headers: cabecalhos(key),
       cache: "no-store",
     });
     if (!resp.ok) return { erro: resp.status === 404 ? "cobrança não existe mais no Asaas." : `Asaas ${resp.status}` };

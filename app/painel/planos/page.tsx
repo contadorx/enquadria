@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { LIMITE_GRATIS } from "@/lib/plano";
 import { CentralFaturas } from "@/components/CentralFaturas";
 import type { Fatura } from "@/lib/faturas";
+import { criticaDocumento, documentoValido } from "@/lib/documento";
 
 interface Plano {
   id: string;
@@ -25,11 +26,32 @@ export default function Planos() {
   const [ilimitado, setIlimitado] = useState(false);
   /** o histórico de cobranças deste escritório — ver components/CentralFaturas */
   const [faturas, setFaturas] = useState<Fatura[]>([]);
+  /**
+   * O CPF/CNPJ DE QUEM PAGA.
+   *
+   * O Asaas não cria cliente sem ele. Sem este campo, "Assinar" não fazia
+   * nada — literalmente nada, sem erro na tela. Vem preenchido do cadastro do
+   * escritório a partir da segunda vez.
+   */
+  const [documento, setDocumento] = useState("");
+  const [pedindoDoc, setPedindoDoc] = useState<string | null>(null);
+  const [erroCheckout, setErroCheckout] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
     (async () => {
       /* a RLS de `faturas` já limita ao próprio escritório */
+      supabase
+        .from("profiles")
+        .select("tenants(cpf_cnpj)")
+        .eq("id", (await supabase.auth.getUser()).data.user?.id ?? "")
+        .maybeSingle()
+        .then(({ data: pf }) => {
+          const t = pf?.tenants as { cpf_cnpj?: string } | { cpf_cnpj?: string }[] | null;
+          const doc = (Array.isArray(t) ? t[0]?.cpf_cnpj : t?.cpf_cnpj) ?? "";
+          if (doc) setDocumento(doc);
+        });
+
       supabase
         .from("faturas")
         .select("id, asaas_id, descricao, valor_centavos, status, vencimento, pago_em, link_pagamento, link_boleto, criado_em")
@@ -60,21 +82,50 @@ export default function Planos() {
   const restantes = Math.max(LIMITE_GRATIS - laudos, 0);
 
   async function contratar(planoId: string) {
+    // sem documento, nem sai daqui: o Asaas recusaria e o clique morreria
+    if (!documentoValido(documento)) {
+      setPedindoDoc(planoId);
+      setErroCheckout(criticaDocumento(documento));
+      return;
+    }
+
     setOcupado(planoId);
+    setErroCheckout(null);
     try {
       const resp = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plano_id: planoId }),
+        body: JSON.stringify({ plano_id: planoId, cpf_cnpj: documento }),
       });
-      const json = await resp.json();
+      const json = (await resp.json().catch(() => ({}))) as {
+        erro?: string;
+        checkout_url?: string;
+        asaas_ativo?: boolean;
+        falta_documento?: boolean;
+      };
+
       if (resp.ok && json.checkout_url) {
-        window.open(json.checkout_url, "_blank");
-      } else if (resp.ok && !json.asaas_ativo) {
-        alert(
-          "Assinatura registrada. O pagamento pelo Asaas ainda não está configurado — combine o pagamento e ative pelo painel."
-        );
+        const janela = window.open(json.checkout_url, "_blank");
+        /* bloqueador de pop-up faz o clique parecer perdido — o link fica na
+           tela para a pessoa abrir na mão */
+        if (!janela) setErroCheckout(`Cobrança gerada. O navegador bloqueou a janela — abra em: ${json.checkout_url}`);
+        setPedindoDoc(null);
+        return;
       }
+
+      if (resp.ok && !json.asaas_ativo) {
+        setErroCheckout(
+          "Assinatura registrada. O pagamento automático ainda não está ligado — vou combinar a cobrança com você e liberar o acesso."
+        );
+        return;
+      }
+
+      /* O CASO QUE NÃO EXISTIA: Asaas ligado e sem link. Era aqui que o
+         botão não fazia nada. Agora o motivo aparece. */
+      if (json.falta_documento) setPedindoDoc(planoId);
+      setErroCheckout(json.erro ?? "Não consegui gerar a cobrança. Tente de novo em instantes.");
+    } catch (e) {
+      setErroCheckout(`Não consegui falar com o servidor: ${e instanceof Error ? e.message : "rede"}`);
     } finally {
       setOcupado(null);
     }
@@ -170,6 +221,46 @@ export default function Planos() {
           );
         })}
       </div>
+
+      {/* ------------------------------------------- QUEM PAGA (CPF/CNPJ) */}
+      {(pedindoDoc || erroCheckout) && (
+        <div className="mt-4 rounded border border-accentdeep bg-accentwash p-4">
+          <div className="text-[13.5px] font-bold text-ink">
+            {pedindoDoc ? "Falta o CPF ou CNPJ de quem vai pagar" : "Sobre a contratação"}
+          </div>
+          {pedindoDoc && (
+            <>
+              <p className="mt-1 max-w-[70ch] text-[12.5px] leading-relaxed text-slate2">
+                O meio de pagamento exige o documento do pagador para emitir a cobrança. Peço uma
+                vez só — nas próximas ele já vem preenchido, e ele não aparece em nenhum documento
+                que você emite.
+              </p>
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                <input
+                  value={documento}
+                  onChange={(ev) => setDocumento(ev.target.value)}
+                  placeholder="CPF ou CNPJ"
+                  inputMode="numeric"
+                  className="min-w-0 flex-1 rounded-sm border border-line px-3 py-2 text-[16px] outline-none focus:border-accent sm:max-w-[260px] sm:text-[13.5px]"
+                />
+                <button
+                  // ux-ok: o erro e o resultado aparecem nesta mesma caixa
+                  onClick={() => contratar(pedindoDoc)}
+                  disabled={ocupado === pedindoDoc}
+                  className="whitespace-nowrap rounded-sm bg-ink px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-40"
+                >
+                  {ocupado === pedindoDoc ? "Gerando…" : "Continuar"}
+                </button>
+              </div>
+            </>
+          )}
+          {erroCheckout && (
+            <p className="mt-2 break-words rounded-sm bg-surface px-3 py-2 text-[12.5px] leading-relaxed text-slate2">
+              {erroCheckout}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* ------------------------------------------------- CENTRAL DE FATURAS
           Fica NESTA tela, e não num item de menu novo: quem procura a segunda

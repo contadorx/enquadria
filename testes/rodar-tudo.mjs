@@ -76,7 +76,7 @@ try {
     "lib/plano.ts", "lib/potencial.ts", "lib/reguas.ts", "lib/janela.ts",
     "lib/emails-cliente.ts", "lib/erros-auth.ts", "lib/ajuda.ts", "lib/cobranca.ts", "lib/nps.ts",
     "lib/escritorio.ts", "lib/roteiro.ts", "lib/abertura.ts", "lib/comparativo.ts",
-    "lib/curso.ts", "lib/faturas.ts",
+    "lib/curso.ts", "lib/faturas.ts", "lib/documento.ts",
   ];
   const cfg = path.join(RAIZ, "tsconfig.testes.json");
   fs.writeFileSync(cfg, JSON.stringify({
@@ -113,7 +113,7 @@ const coleta = await import(path.join(TMP, "coleta.js"));
 
 /* ============================================ 1. SUÍTES DE FUNÇÃO PURA == */
 secao("Suítes de função pura");
-for (const suite of ["cockpit", "motor", "coleta", "muro", "reguas", "janela", "cnpj", "envio", "erros-auth", "ajuda", "cobranca", "nps", "escritorio", "roteiro", "abertura", "curso", "faturas"]) {
+for (const suite of ["cockpit", "motor", "coleta", "muro", "reguas", "janela", "cnpj", "envio", "erros-auth", "ajuda", "cobranca", "nps", "escritorio", "roteiro", "abertura", "curso", "faturas", "documento"]) {
   const arq = path.join(RAIZ, "testes", `${suite}.test.mjs`);
   if (!fs.existsSync(arq)) {
     ok(`suíte ${suite}`, false, "arquivo não encontrado");
@@ -359,6 +359,47 @@ secao("Menu — a estrutura que já foi desfeita sem querer");
   const planos = fs.readFileSync(path.join(RAIZ, "app/painel/planos/page.tsx"), "utf8");
   ok("a tela de Planos não carrega as abas de Configurações/Equipe/Indique",
      !/AbasEscritorio/.test(planos));
+}
+
+
+/* ============================ 1g. O CAMINHO DO DINHEIRO NÃO PODE CALAR == */
+secao("Contratação — o clique que não fazia nada");
+{
+  /**
+   * Bug real: "Assinar" não fazia NADA. Três defeitos empilhados —
+   *   1. não mandávamos `cpfCnpj`, que o Asaas exige para criar cliente;
+   *   2. o erro do Asaas era engolido num `catch` que devolvia null;
+   *   3. a tela só tratava "tem link" e "Asaas desligado" — faltava o
+   *      terceiro caso, Asaas LIGADO e sem link, que é onde o clique morria.
+   *
+   * Nada disso quebra build, e nenhum teste de função pura alcança. O que
+   * protege é exigir que cada elo continue existindo.
+   */
+  const asaas = fs.readFileSync(path.join(RAIZ, "lib/asaas.ts"), "utf8");
+  /* olhar só por "cpfCnpj" no arquivo casava com o NOME DO PARÂMETRO e passava
+     mesmo com o campo fora do corpo do POST — o defeito exato que existia.
+     A checagem tem que ser no corpo enviado ao endpoint de clientes. */
+  const posCustomers = asaas.indexOf('`${base}/customers`');
+  const corpoCliente = posCustomers < 0 ? "" : asaas.slice(posCustomers, posCustomers + 400);
+  ok("a criação do cliente manda cpfCnpj NO CORPO do POST",
+     /body:[\s\S]*cpfCnpj/.test(corpoCliente),
+     corpoCliente.replace(/\s+/g, " ").slice(0, 140));
+  ok("as chamadas mandam User-Agent (sem ele o Asaas responde 401)",
+     /User-Agent/.test(asaas));
+  ok("o erro do Asaas sobe em vez de virar null",
+     /erro\?: string/.test(asaas) && !/\} catch \{\s*return \{ ativo: true \};/.test(asaas));
+
+  const checkout = fs.readFileSync(path.join(RAIZ, "app/api/checkout/route.ts"), "utf8");
+  ok("o checkout recusa antes de chamar o Asaas quando falta documento",
+     /criticaDocumento/.test(checkout) && /falta_documento/.test(checkout));
+  ok("e responde erro quando o Asaas está ligado e não devolveu link",
+     /cobranca\.ativo && !cobranca\.checkout_url/.test(checkout));
+
+  const tela = fs.readFileSync(path.join(RAIZ, "app/painel/planos/page.tsx"), "utf8");
+  ok("a tela de planos tem onde mostrar o erro da contratação",
+     /erroCheckout/.test(tela));
+  ok("e trata o pop-up bloqueado, que também parece clique perdido",
+     /bloqueou a janela/.test(tela));
 }
 
 /* ============================================== 2. A MASSA NO PARSER ==== */

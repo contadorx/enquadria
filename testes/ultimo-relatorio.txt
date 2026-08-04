@@ -20,6 +20,7 @@ ok    suíte roteiro (24 asserções)
 ok    suíte abertura (34 asserções)
 ok    suíte curso (9 asserções)
 ok    suíte faturas (35 asserções)
+ok    suíte documento (20 asserções)
 
 ── Auditoria de UX (percepção, não estética) ───────────────────
 ok    auditoria de UX (6 regras limpas)
@@ -70,6 +71,15 @@ ok    e divide a faixa com a abertura
 ok    Plataforma é UM item de menu, com o resto dentro da página
 ok    e a faixa de abas do Negócio não é uma segunda lista escrita à mão
 ok    a tela de Planos não carrega as abas de Configurações/Equipe/Indique
+
+── Contratação — o clique que não fazia nada ───────────────────
+ok    a criação do cliente manda cpfCnpj NO CORPO do POST
+ok    as chamadas mandam User-Agent (sem ele o Asaas responde 401)
+ok    o erro do Asaas sobe em vez de virar null
+ok    o checkout recusa antes de chamar o Asaas quando falta documento
+ok    e responde erro quando o Asaas está ligado e não devolveu link
+ok    a tela de planos tem onde mostrar o erro da contratação
+ok    e trata o pop-up bloqueado, que também parece clique perdido
 
 ── Massa de empresas no parser do app ──────────────────────────
 ok    lê 47 linhas
@@ -175,4 +185,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 144 verificações automáticas
+TUDO PASSOU — 152 verificações automáticas
