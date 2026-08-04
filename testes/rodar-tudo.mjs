@@ -253,6 +253,27 @@ secao("Impressão — o PDF que chega ao cliente");
   const comum = fs.readFileSync(path.join(RAIZ, "lib/impressao.ts"), "utf8");
   ok("o CSS comum apaga o fundo cinza do app no papel",
      /html,\s*body\s*\{\s*background:\s*#fff/.test(comum));
+
+  /**
+   * A MARGEM NÃO PODE DEPENDER SÓ DO `@page`.
+   *
+   * Bug real: PDF com o texto encostado na borda. A opção "Margens" da janela
+   * de impressão é do usuário e sobrescreve o `@page` — quem deixou em
+   * "Nenhuma" uma vez imprime assim para sempre. Com a folha zerando o
+   * próprio padding, não sobrava nada entre o texto e o corte.
+   *
+   * Este teste existe porque `padding: 0 !important` na impressão PARECE
+   * limpeza correta: a folha imita papel na tela, então zerar soa certo. É
+   * exatamente o tipo de "arrumação" que volta.
+   */
+  // a partir do CSS de verdade, não do comentário que o explica
+  const css = comum.slice(comum.indexOf("export const CSS_IMPRESSAO"));
+  const bloco = css.slice(css.indexOf(".sheet {"), css.indexOf("tr, li"));
+  ok("a folha guarda a própria margem na impressão (o usuário pode zerar a do papel)",
+     /padding:\s*\d+mm/.test(bloco) && !/padding:\s*0\s*!important/.test(bloco),
+     bloco.replace(/\s+/g, " ").slice(0, 120));
+  ok("e o @page também declara margem, para quando o navegador respeitar",
+     /@page\s*\{\s*margin:\s*\d+mm/.test(comum));
   ok("e impede a linha de tabela partida entre páginas",
      /tr,\s*li\s*\{\s*page-break-inside:\s*avoid/.test(comum));
 
@@ -265,6 +286,8 @@ secao("Impressão — o PDF que chega ao cliente");
   const botao = fs.readFileSync(path.join(RAIZ, "components/BotaoImprimir.tsx"), "utf8");
   ok("o botão de PDF ensina a desmarcar cabeçalhos e rodapés",
      /Cabeçalhos e rodapés/.test(botao) && /Salvar como PDF/.test(botao));
+  ok("e a avisar sobre a opção de margens, que é a que corta o texto",
+     /Margens/.test(botao));
 }
 
 /* =========================== 1e. TIRAR EMPRESA DA FILA TEM VOLTA ======== */
