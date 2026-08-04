@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase-server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { criarCobranca } from "@/lib/asaas";
 import { criticaDocumento, limparDocumento } from "@/lib/documento";
+import { decidirContratacao, type AssinaturaResumo } from "@/lib/assinatura";
+import { encerrarAssinaturas } from "@/lib/assinatura-server";
 import { enviarEmail } from "@/lib/email";
 import { htmlCobrancaGerada } from "@/lib/emails-cliente";
 
@@ -48,6 +50,58 @@ export async function POST(req: Request) {
     .eq("id", corpo.plano_id)
     .maybeSingle();
   if (!plano) return NextResponse.json({ erro: "plano inválido" }, { status: 400 });
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * UMA CONTA, UM PLANO — a regra que faltava, e o que ela conserta.
+   *
+   * Antes, cada clique em "Assinar" criava uma assinatura e uma cobrança. Numa
+   * tarde de testes: 17 assinaturas na mesma conta e boletos abertos de dois
+   * planos diferentes. O risco não é a bagunça da tabela — é o cliente pagar o
+   * boleto errado e o webhook, obediente, ativar o plano que ele abandonou por
+   * cima do que acabou de comprar.
+   *
+   * A decisão inteira é `decidirContratacao`, função pura e testada. Aqui só
+   * executamos: reaproveitar a cobrança aberta do mesmo plano, encerrar as
+   * pendentes que perderam a validade, e manter INTOCADO o plano pago que
+   * ainda vale — os dias que sobram dele viram crédito na confirmação, e não
+   * agora, porque cancelar acesso já pago de quem está pagando mais seria o
+   * pior momento possível para acertar contas.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const hoje = new Date();
+  const { data: minhas } = await supabase
+    .from("assinaturas")
+    .select("id, plano_id, status, valido_ate, asaas_id, checkout_url")
+    .eq("tenant_id", tenantId);
+
+  const plano_de_acao = decidirContratacao(plano.id, (minhas ?? []) as AssinaturaResumo[], hoje);
+  const admin = createAdminClient();
+
+  if (plano_de_acao.cancelar.length) {
+    const r = await encerrarAssinaturas(admin ?? supabase, plano_de_acao.cancelar);
+    if (r.avisos.length) console.error("[checkout] ao encerrar superadas:", r.avisos.join(" · "));
+  }
+
+  /**
+   * CLICOU DE NOVO NO MESMO PLANO: devolve o link que já existe.
+   *
+   * Quem clica duas vezes está procurando o boleto que perdeu, não pedindo um
+   * segundo. Emitir outro deixaria duas cobranças do mesmo valor na mão da
+   * mesma pessoa — e alguém paga as duas.
+   */
+  if (plano_de_acao.acao === "reaproveitar" && plano_de_acao.reaproveitar?.checkout_url) {
+    return NextResponse.json({
+      ok: true,
+      assinatura_id: plano_de_acao.reaproveitar.id,
+      asaas_ativo: true,
+      checkout_url: plano_de_acao.reaproveitar.checkout_url,
+      reaproveitada: true,
+      credito_dias: plano_de_acao.credito_dias,
+      fatura_registrada: true,
+      fatura_erro: null,
+    });
+  }
 
   const { data: assinatura, error: aErr } = await supabase
     .from("assinaturas")
@@ -111,7 +165,6 @@ export async function POST(req: Request) {
      * saía (ele vem depois) e a fatura não aparecia em lugar nenhum.
      * ─────────────────────────────────────────────────────────────────────
      */
-    const admin = createAdminClient();
     const { error: eF } = await (admin ?? supabase).from("faturas").upsert(
       {
         tenant_id: tenantId,
@@ -198,5 +251,9 @@ export async function POST(req: Request) {
     checkout_url: cobranca.checkout_url ?? null,
     fatura_registrada: !faturaErro,
     fatura_erro: faturaErro,
+    /* o que a tela precisa dizer: quantos dias pagos vêm junto, e que o plano
+       anterior só sai de cena quando este for pago */
+    credito_dias: plano_de_acao.credito_dias,
+    substitui: plano_de_acao.ativa_atual?.plano_id ?? null,
   });
 }

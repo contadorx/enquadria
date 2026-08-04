@@ -6,6 +6,7 @@ import { LIMITE_GRATIS } from "@/lib/plano";
 import { CentralFaturas } from "@/components/CentralFaturas";
 import type { Fatura } from "@/lib/faturas";
 import { criticaDocumento, documentoValido } from "@/lib/documento";
+import { diasRestantes, fraseCredito } from "@/lib/assinatura";
 
 interface Plano {
   id: string;
@@ -52,6 +53,8 @@ export default function Planos() {
    */
   const [pendentes, setPendentes] = useState<Set<string>>(new Set());
   const temPendente = pendentes.size > 0;
+  /** dias já pagos que sobram do plano ativo — viram crédito na troca */
+  const [diasRestantes_, setDiasRestantes] = useState(0);
 
   /**
    * Uma função, não um efeito solto: o que a tela mostra depois de contratar
@@ -109,6 +112,11 @@ export default function Planos() {
       );
     }
 
+    /* dias pagos que ainda restam: é o que a tela promete que não se perde na
+       troca de plano, e o que o webhook soma quando o novo for confirmado */
+    if (a?.valido_ate) setDiasRestantes(diasRestantes(a.valido_ate, new Date()));
+    else setDiasRestantes(0);
+
     const { count } = await supabase
       .from("laudos")
       .select("id", { count: "exact", head: true });
@@ -146,6 +154,8 @@ export default function Planos() {
         falta_documento?: boolean;
         fatura_registrada?: boolean;
         fatura_erro?: string;
+        reaproveitada?: boolean;
+        credito_dias?: number;
       };
 
       if (resp.ok && json.checkout_url) {
@@ -167,6 +177,18 @@ export default function Planos() {
          * Se o servidor disser que não gravou, isso vira texto na tela — o
          * pagamento continua válido, mas eu fico sabendo na hora.
          */
+        /* clicou de novo e recebeu de volta o MESMO boleto: dizer isso evita a
+           dúvida honesta de "será que agora tenho duas cobranças?" */
+        if (json.reaproveitada) {
+          setErroCheckout(
+            "Esta é a mesma cobrança que já estava aberta — abri o link dela em vez de emitir uma segunda."
+          );
+        } else if (json.credito_dias && json.credito_dias > 0) {
+          setErroCheckout(
+            `Cobrança gerada. Você continua no plano atual até ela ser paga, e ${json.credito_dias === 1 ? "o dia que resta entra" : `os ${json.credito_dias} dias que restam entram`} no novo na confirmação.`
+          );
+        }
+
         if (json.fatura_registrada === false) {
           setErroCheckout(
             `Cobrança gerada e enviada por e-mail — o link está na aba que abriu. Não consegui registrar a fatura no histórico${json.fatura_erro ? ` (${json.fatura_erro})` : ""}; o pagamento vale do mesmo jeito e eu acerto o histórico.`
@@ -289,13 +311,28 @@ export default function Planos() {
                     : ocupado === p.id
                       ? "..."
                       : ePendente
-                        ? "Gerar nova cobrança"
-                        : "Assinar"}
+                        ? /* NÃO diz mais "Gerar nova cobrança": era a promessa de
+                             emitir um segundo boleto do mesmo valor, e quem
+                             clicava duas vezes acabava com dois na mão */
+                          "Ver a cobrança em aberto"
+                        : ativo
+                          ? "Trocar para este plano"
+                          : "Assinar"}
                 </button>
                 {ePendente && (
                   <p className="mt-2 text-[11.5px] leading-relaxed text-amarelo">
-                    Contratado, aguardando o pagamento. A cobrança está em <b>Minhas faturas</b>,
-                    logo abaixo — o acesso abre sozinho quando o pagamento for confirmado.
+                    Contratado, aguardando o pagamento. É a mesma cobrança de sempre — o botão
+                    abre o link dela, não emite outra. Está também em <b>Minhas faturas</b>, logo
+                    abaixo, e o acesso abre sozinho na confirmação.
+                  </p>
+                )}
+                {/* TROCA DE PLANO: o que acontece precisa estar escrito ANTES do
+                    clique. "Vou perder o que já paguei?" é a pergunta que
+                    trava a compra — e a resposta é não. */}
+                {!eAtivo && !ePendente && ativo && (
+                  <p className="mt-2 text-[11.5px] leading-relaxed text-muted">
+                    Você continua no plano atual até esta cobrança ser paga.
+                    {diasRestantes_ > 0 ? ` ${fraseCredito(diasRestantes_)}` : ""}
                   </p>
                 )}
                 </>

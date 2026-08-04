@@ -76,7 +76,7 @@ try {
     "lib/plano.ts", "lib/potencial.ts", "lib/reguas.ts", "lib/janela.ts",
     "lib/emails-cliente.ts", "lib/erros-auth.ts", "lib/ajuda.ts", "lib/cobranca.ts", "lib/nps.ts",
     "lib/escritorio.ts", "lib/roteiro.ts", "lib/abertura.ts", "lib/comparativo.ts",
-    "lib/curso.ts", "lib/faturas.ts", "lib/documento.ts",
+    "lib/curso.ts", "lib/faturas.ts", "lib/documento.ts", "lib/assinatura.ts",
   ];
   const cfg = path.join(RAIZ, "tsconfig.testes.json");
   fs.writeFileSync(cfg, JSON.stringify({
@@ -113,7 +113,7 @@ const coleta = await import(path.join(TMP, "coleta.js"));
 
 /* ============================================ 1. SUÍTES DE FUNÇÃO PURA == */
 secao("Suítes de função pura");
-for (const suite of ["cockpit", "motor", "coleta", "muro", "reguas", "janela", "cnpj", "envio", "erros-auth", "ajuda", "cobranca", "nps", "escritorio", "roteiro", "abertura", "curso", "faturas", "documento"]) {
+for (const suite of ["cockpit", "motor", "coleta", "muro", "reguas", "janela", "cnpj", "envio", "erros-auth", "ajuda", "cobranca", "nps", "escritorio", "roteiro", "abertura", "curso", "faturas", "documento", "assinatura"]) {
   const arq = path.join(RAIZ, "testes", `${suite}.test.mjs`);
   if (!fs.existsSync(arq)) {
     ok(`suíte ${suite}`, false, "arquivo não encontrado");
@@ -508,6 +508,48 @@ secao("Contratação — o clique que não fazia nada");
    */
   ok("e recarrega o estado depois da contratação",
      /await carregar\(\)/.test(telaPlanos));
+
+  /**
+   * ═════════════════════════════════════════════════════════════════════════
+   * UMA CONTA, UM PLANO — a ligação entre a regra e o mundo.
+   *
+   * A decisão em si é função pura e está coberta em `testes/assinatura.test.mjs`
+   * (36 asserções, quebradas de propósito em quatro frentes). O que NENHUM
+   * teste de função pura alcança é a fiação: a rota chamar a decisão, o webhook
+   * encerrar as superadas, o boleto velho morrer no Asaas. Cada elo abaixo,
+   * quando some, produz o mesmo sintoma da denúncia original — cobrança
+   * duplicada e dois planos na mesma conta.
+   * ═════════════════════════════════════════════════════════════════════════
+   */
+  ok("o checkout decide pela regra de plano único, não por conta própria",
+     /decidirContratacao/.test(ck) && /encerrarAssinaturas/.test(ck));
+  ok("e clicar de novo no mesmo plano devolve a cobrança existente",
+     /reaproveitar/.test(ck) && /reaproveitada: true/.test(ck));
+
+  const wh = fs.readFileSync(path.join(RAIZ, "app/api/asaas/route.ts"), "utf8");
+  ok("a troca de plano só acontece quando o pagamento é confirmado",
+     /decidirSucessao/.test(wh) && /encerrarAssinaturas/.test(wh));
+  /* a ORDEM é o que impede a conta ficar sem plano nenhum com o dinheiro pago */
+  ok("...e as antigas caem DEPOIS de a nova virar ativa",
+     wh.indexOf('status: "ativa"') < wh.indexOf("await encerrarAssinaturas"),
+     { ativa: wh.indexOf('status: "ativa"'), encerrar: wh.indexOf("await encerrarAssinaturas") });
+  ok("os dias pagos que sobram entram no plano novo",
+     /credito/.test(wh) && /validadeFinal\(/.test(wh));
+
+  /**
+   * O BOLETO ABANDONADO PRECISA MORRER NO ASAAS.
+   *
+   * Deixá-lo aberto é o pior dos dois mundos: o cliente pode pagar o plano que
+   * largou, e o webhook — que não sabe de nada — ativa aquele por cima do que
+   * ele acabou de comprar.
+   */
+  ok("existe como cancelar a cobrança no Asaas",
+     /export async function cancelarCobranca/.test(asaas) && /method: "DELETE"/.test(asaas));
+  const encerrar = fs.readFileSync(path.join(RAIZ, "lib/assinatura-server.ts"), "utf8");
+  ok("e o encerramento usa isso antes de marcar a fatura",
+     encerrar.indexOf("cancelarCobranca(") < encerrar.indexOf('status: "cancelado"'));
+  ok("e fatura PAGA nunca é reescrita",
+     /\.in\("status", \["pendente", "vencido"\]\)/.test(encerrar));
 
   const tela = fs.readFileSync(path.join(RAIZ, "app/painel/planos/page.tsx"), "utf8");
   ok("a tela de planos tem onde mostrar o erro da contratação",

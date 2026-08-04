@@ -21,12 +21,13 @@ ok    suíte abertura (34 asserções)
 ok    suíte curso (9 asserções)
 ok    suíte faturas (35 asserções)
 ok    suíte documento (20 asserções)
+ok    suíte assinatura (36 asserções)
 
 ── Auditoria de UX (percepção, não estética) ───────────────────
 ok    auditoria de UX (6 regras limpas)
 
 ── Auditoria de schema (colunas que ninguém garante que existem) 
-ok    auditoria de schema (23 tabelas com proveniência)
+ok    auditoria de schema (24 tabelas com proveniência)
 
 ── Auditoria de upsert (o onConflict que o Postgres não consegue inferir) 
 ok    auditoria de upsert (9 conferidos)
@@ -92,6 +93,14 @@ ok    e o resultado da gravação volta na resposta do checkout
 ok    a tela de planos mostra a assinatura pendente de pagamento
 ok    e lê TODAS as pendentes, não a primeira que aparecer
 ok    e recarrega o estado depois da contratação
+ok    o checkout decide pela regra de plano único, não por conta própria
+ok    e clicar de novo no mesmo plano devolve a cobrança existente
+ok    a troca de plano só acontece quando o pagamento é confirmado
+ok    ...e as antigas caem DEPOIS de a nova virar ativa
+ok    os dias pagos que sobram entram no plano novo
+ok    existe como cancelar a cobrança no Asaas
+ok    e o encerramento usa isso antes de marcar a fatura
+ok    e fatura PAGA nunca é reescrita
 ok    a tela de planos tem onde mostrar o erro da contratação
 ok    e trata o pop-up bloqueado, que também parece clique perdido
 
@@ -199,4 +208,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 164 verificações automáticas
+TUDO PASSOU — 173 verificações automáticas

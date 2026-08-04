@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { statusDoAsaas } from "@/lib/faturas";
+import { decidirSucessao, validadeFinal, type AssinaturaResumo } from "@/lib/assinatura";
+import { encerrarAssinaturas } from "@/lib/assinatura-server";
 
 /**
  * Webhook do Asaas — chega SEM sessão de usuário, então usa service role
@@ -223,7 +225,7 @@ export async function POST(req: Request) {
   // quantos dias este plano concede
   const { data: assin } = await supabase
     .from("assinaturas")
-    .select("id, plano_id")
+    .select("id, plano_id, tenant_id")
     .eq("id", assinaturaId)
     .maybeSingle();
 
@@ -240,12 +242,46 @@ export async function POST(req: Request) {
     else if (p?.ciclo === "anual") diasAcesso = 365;
   }
 
+  /**
+   * ═════════════════════════════════════════════════════════════════════════
+   * A SUCESSÃO DE PLANO — o único lugar do sistema onde "pago" é verdade.
+   *
+   * Uma conta tem UM plano. Quem estava no mensal e comprou o anual não pode
+   * perder acesso no clique (ver a rota de checkout): o plano pago segue de pé
+   * até o novo ser pago. É AQUI que a troca acontece de fato.
+   *
+   * E os dias que sobravam do plano anterior VÊM JUNTO. Quem pagou 30 dias e
+   * migrou no dia 12 tem 18 dias comprados que não podem evaporar — evaporar
+   * seria cobrar duas vezes pelo mesmo período, e é o tipo de conta que o
+   * cliente refaz. Somar os dias resolve sem estorno, sem nota de crédito e
+   * sem ninguém precisar escrever pedindo.
+   *
+   * Cancelar as demais fica por conta de `encerrarAssinaturas`, que também
+   * derruba no Asaas o boleto que ficou para trás — senão ele continua
+   * pagável, e o próximo webhook reativaria o plano abandonado por cima deste.
+   * ═════════════════════════════════════════════════════════════════════════
+   */
+  const tenantId = (assin as { tenant_id?: string } | null)?.tenant_id;
+  let credito = 0;
+  let encerradas: string[] = [];
+
+  if (tenantId) {
+    const { data: irmas } = await supabase
+      .from("assinaturas")
+      .select("id, plano_id, status, valido_ate")
+      .eq("tenant_id", tenantId);
+    const s = decidirSucessao(assinaturaId, (irmas ?? []) as AssinaturaResumo[], new Date());
+    credito = s.credito_dias;
+    encerradas = s.cancelar;
+  }
+
   // conta a partir da data do pagamento, não de "agora": se o webhook chegar
   // atrasado, o cliente não perde os dias que já eram dele.
+  /* a string CRUA do Asaas, não `new Date(string)`: "2026-08-04" vira
+     meia-noite UTC, que é 21h do dia anterior aqui — um dia de acesso a menos
+     para todo mundo que paga */
   const base = evento.payment?.confirmedDate || evento.payment?.paymentDate || evento.payment?.dueDate;
-  const validoAte = base ? new Date(base) : new Date();
-  validoAte.setDate(validoAte.getDate() + diasAcesso);
-  const data = validoAte.toISOString().slice(0, 10);
+  const data = validadeFinal(base ?? new Date(), diasAcesso, credito);
 
   const { error } = await supabase
     .from("assinaturas")
@@ -258,5 +294,22 @@ export async function POST(req: Request) {
     .eq("id", assinaturaId);
 
   if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, dias_acesso: diasAcesso, valido_ate: data });
+
+  /* só depois de a nova estar ATIVA: se encerrássemos antes e o update acima
+     falhasse, a conta ficaria sem plano nenhum — com o dinheiro já pago */
+  let avisos: string[] = [];
+  if (encerradas.length) {
+    const r = await encerrarAssinaturas(supabase, encerradas);
+    avisos = r.avisos;
+    if (avisos.length) console.error("[asaas] sucessão de plano:", avisos.join(" · "));
+  }
+
+  return NextResponse.json({
+    ok: true,
+    dias_acesso: diasAcesso,
+    credito_dias: credito,
+    valido_ate: data,
+    encerradas: encerradas.length,
+    avisos: avisos.length ? avisos : undefined,
+  });
 }

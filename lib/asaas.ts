@@ -153,6 +153,45 @@ export async function criarCobranca(params: {
 // Princípio: nunca dizer "está integrado" sem ter perguntado ao Asaas.
 // ============================================================================
 
+/**
+ * CANCELA UMA COBRANÇA no Asaas.
+ *
+ * Chamada quando a pessoa troca de plano e a cobrança antiga ainda não foi
+ * paga. Sem isto, o boleto do plano abandonado continua pagável — e o dia em
+ * que alguém o pagasse, o webhook ativaria obedientemente o plano errado por
+ * cima do que a pessoa acabou de comprar. Pior: duas cobranças abertas na mão
+ * do cliente é convite a pagar as duas.
+ *
+ * PAGAMENTO JÁ CONFIRMADO NÃO É CANCELADO — o Asaas recusa, e é bom que recuse:
+ * dinheiro que entrou vira estorno, decisão de gente, não de webhook. Por isso
+ * o erro volta em vez de virar exceção: a troca de plano não pode falhar por
+ * causa da faxina da cobrança velha.
+ */
+export async function cancelarCobranca(
+  asaasId: string
+): Promise<{ cancelada: boolean; erro?: string }> {
+  const key = process.env.ASAAS_API_KEY;
+  if (!key) return { cancelada: false, erro: "ASAAS_API_KEY não está no ambiente." };
+
+  try {
+    const resp = await fetch(`${baseUrl()}/payments/${encodeURIComponent(asaasId)}`, {
+      method: "DELETE",
+      headers: cabecalhos(key),
+      cache: "no-store",
+    });
+    // 404 = já não existe lá; para o nosso lado o efeito é o mesmo
+    if (resp.status === 404) return { cancelada: true };
+    if (!resp.ok) {
+      const t = await resp.text().catch(() => "");
+      return { cancelada: false, erro: `Asaas ${resp.status}${t ? `: ${t.slice(0, 160)}` : ""}` };
+    }
+    const j = (await resp.json().catch(() => ({}))) as { deleted?: boolean };
+    return { cancelada: j.deleted !== false };
+  } catch (e) {
+    return { cancelada: false, erro: e instanceof Error ? e.message : "falha de rede" };
+  }
+}
+
 function baseUrl(): string {
   const env = (process.env.ASAAS_ENV as "sandbox" | "production") ?? "sandbox";
   return BASE[env];
