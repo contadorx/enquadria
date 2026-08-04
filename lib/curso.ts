@@ -74,6 +74,8 @@ export const MODULOS: Modulo[] = [
         titulo: "A decisão que a sua carteira tem que tomar em 30 dias",
         minutos: 7,
         onda: 1,
+        // cole aqui o link do YouTube desta aula (o do botão compartilhar serve)
+        video: null,
         resumo:
           "O que a Resolução CGSN nº 186/2026 abriu, para quem vale, o que muda em janeiro de 2027 e por que isto não é planejamento de 2033.",
         topicos: [
@@ -89,6 +91,8 @@ export const MODULOS: Modulo[] = [
         titulo: "Quem ganha, quem perde e quem não muda nada",
         minutos: 7,
         onda: 1,
+        // cole aqui o link do YouTube desta aula (o do botão compartilhar serve)
+        video: null,
         resumo:
           "Os três perfis de cliente e o único fator que separa os dois lados: quem aproveita o crédito na outra ponta.",
         topicos: [
@@ -104,6 +108,8 @@ export const MODULOS: Modulo[] = [
         titulo: "Abra a sua carteira agora",
         minutos: 7,
         onda: 1,
+        // cole aqui o link do YouTube desta aula (o do botão compartilhar serve)
+        video: null,
         resumo:
           "Aula de fazer, não de ouvir. Ao final você tem, na sua tela, o número de clientes que precisam decidir.",
         topicos: [
@@ -127,6 +133,8 @@ export const MODULOS: Modulo[] = [
         titulo: "A alíquota que ninguém calcula direito",
         minutos: 9,
         onda: 2,
+        // cole aqui o link do YouTube desta aula (o do botão compartilhar serve)
+        video: null,
         resumo:
           "Dois erros que empurram a decisão para o lado errado: usar a nominal do topo da faixa, e calcular por um anexo só a empresa que segrega receita.",
         topicos: [
@@ -144,6 +152,8 @@ export const MODULOS: Modulo[] = [
         titulo: "As seis contas da decisão",
         minutos: 9,
         onda: 2,
+        // cole aqui o link do YouTube desta aula (o do botão compartilhar serve)
+        video: null,
         resumo:
           "Receita qualificada, carga híbrida, custo líquido, repasse de equilíbrio, folga do adquirente e folga da negociação.",
         topicos: [
@@ -160,6 +170,8 @@ export const MODULOS: Modulo[] = [
         titulo: "O número que você ainda não tem",
         minutos: 8,
         onda: 2,
+        // cole aqui o link do YouTube desta aula (o do botão compartilhar serve)
+        video: null,
         resumo:
           "A alíquota de referência só é fixada até 31/10/2026 — depois de a janela fechar. Como decidir com esse buraco.",
         topicos: [
@@ -182,6 +194,8 @@ export const MODULOS: Modulo[] = [
         titulo: "Quanto cobrar (e como apresentar)",
         minutos: 9,
         onda: 3,
+        // cole aqui o link do YouTube desta aula (o do botão compartilhar serve)
+        video: null,
         resumo:
           "Por empresa analisada, não por hora. A conta que o empresário entende e o erro de dar o diagnóstico de graça.",
         topicos: [
@@ -198,6 +212,8 @@ export const MODULOS: Modulo[] = [
         titulo: "O papel que sustenta o preço",
         minutos: 8,
         onda: 3,
+        // cole aqui o link do YouTube desta aula (o do botão compartilhar serve)
+        video: null,
         resumo:
           "Por que “analisei e recomendo permanecer” não é entregável, e o que um laudo precisa ter para sobreviver a uma pergunta do Fisco.",
         topicos: [
@@ -214,6 +230,8 @@ export const MODULOS: Modulo[] = [
         titulo: "30 dias, na ordem certa",
         minutos: 8,
         onda: 3,
+        // cole aqui o link do YouTube desta aula (o do botão compartilhar serve)
+        video: null,
         resumo:
           "O calendário operacional semana a semana, o que fica para novembro e o que volta em março.",
         topicos: [

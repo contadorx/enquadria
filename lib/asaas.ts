@@ -103,6 +103,12 @@ export interface StatusAsaas {
   ambiente: "sandbox" | "production";
   tem_chave: boolean;
   url_webhook: string;
+  /**
+   * O webhook exige token? Enquanto não exigir, qualquer POST forjado ativa
+   * uma assinatura — e o painel precisa dizer isso em voz alta, porque é o
+   * tipo de risco que não dá sinal nenhum até virar prejuízo.
+   */
+  webhook_protegido: boolean;
   conta?: { nome?: string; email?: string; cpfCnpj?: string };
   saldo_centavos?: number;
   erro?: string;
@@ -121,6 +127,7 @@ export async function statusAsaas(): Promise<StatusAsaas> {
     ambiente,
     tem_chave: !!key,
     url_webhook: `${app.replace(/\/$/, "")}/api/asaas`,
+    webhook_protegido: !!process.env.ASAAS_WEBHOOK_TOKEN,
   };
   if (!key) return { ...base_, erro: "ASAAS_API_KEY não está no ambiente." };
 
