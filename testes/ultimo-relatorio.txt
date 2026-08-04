@@ -18,12 +18,13 @@ ok    suíte nps (40 asserções)
 ok    suíte escritorio (12 asserções)
 ok    suíte roteiro (24 asserções)
 ok    suíte abertura (34 asserções)
+ok    suíte curso (9 asserções)
 
 ── Auditoria de UX (percepção, não estética) ───────────────────
 ok    auditoria de UX (6 regras limpas)
 
 ── Auditoria de schema (colunas que ninguém garante que existem) 
-ok    auditoria de schema (22 tabelas com proveniência)
+ok    auditoria de schema (23 tabelas com proveniência)
 
 ── Endereços públicos — o que chega ao cliente sem login ───────
 ok    /assinar/[token] existe e é pública
@@ -55,6 +56,16 @@ ok    o dossiê abre empresa arquivada (senão arquivar não tem volta)
 ok    mas a FILA continua escondendo as arquivadas
 ok    existe a tela que lista as arquivadas
 ok    e ela é alcançável pelo menu
+
+── Menu — a estrutura que já foi desfeita sem querer ───────────
+ok    Reforma e Curso andam juntos (o que a pessoa quer APRENDER)
+ok    Ajuda e chamados andam juntos (o que ela quer RESOLVER)
+ok    e as duas duplas não se misturam
+ok    o comparativo de regimes tem porta própria, fora da empresa
+ok    e divide a faixa com a abertura
+ok    Plataforma é UM item de menu, com o resto dentro da página
+ok    e a faixa de abas do Negócio não é uma segunda lista escrita à mão
+ok    a tela de Planos não carrega as abas de Configurações/Equipe/Indique
 
 ── Massa de empresas no parser do app ──────────────────────────
 ok    lê 47 linhas
@@ -160,4 +171,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 131 verificações automáticas
+TUDO PASSOU — 140 verificações automáticas

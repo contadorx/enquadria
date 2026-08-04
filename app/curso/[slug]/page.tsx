@@ -3,12 +3,14 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { CursoMateriais } from "@/components/CursoMateriais";
 import { urlDeEmbed } from "@/lib/ajuda";
+import { createClient } from "@/lib/supabase-server";
 import {
   CURSO,
   RESSALVA,
   TODAS_AULAS,
   aulaPorSlug,
   materiaisDe,
+  videoDaAula,
 } from "@/lib/curso";
 
 /**
@@ -24,6 +26,9 @@ export function generateStaticParams() {
   return TODAS_AULAS.map((a) => ({ slug: a.slug }));
 }
 
+/* o link do vídeo vem do banco (0038) — ver nota no índice do curso */
+export const revalidate = 60;
+
 export function generateMetadata({ params }: { params: { slug: string } }): Metadata {
   const achado = aulaPorSlug(params.slug);
   if (!achado) return { title: CURSO.nome };
@@ -33,10 +38,18 @@ export function generateMetadata({ params }: { params: { slug: string } }): Meta
   };
 }
 
-export default function AulaPage({ params }: { params: { slug: string } }) {
+export default async function AulaPage({ params }: { params: { slug: string } }) {
   const achado = aulaPorSlug(params.slug);
   if (!achado) notFound();
   const { aula, modulo } = achado;
+
+  const supabase = createClient();
+  const { data: linha } = await supabase
+    .from("curso_videos")
+    .select("video_url")
+    .eq("slug", aula.slug)
+    .maybeSingle();
+  const doBanco = (linha?.video_url as string | null) ?? null;
 
   const i = TODAS_AULAS.findIndex((a) => a.slug === aula.slug);
   const anterior = i > 0 ? TODAS_AULAS[i - 1] : null;
@@ -57,9 +70,8 @@ export default function AulaPage({ params }: { params: { slug: string } }) {
    * dia a gravação for para outro provedor, o `https://` dele passa. O que não
    * passa é um `javascript:` — e é isso que a checagem impede.
    */
-  const embed =
-    urlDeEmbed(aula.video) ??
-    (aula.video && /^https:\/\//i.test(aula.video) ? aula.video : null);
+  const url = videoDaAula(aula, { [aula.slug]: doBanco });
+  const embed = urlDeEmbed(url) ?? (url && /^https:\/\//i.test(url) ? url : null);
 
   return (
     <div className="min-h-screen bg-bg">

@@ -2,6 +2,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
 import { EstudoDeAbertura } from "@/components/EstudoDeAbertura";
 import { faseDaJanela } from "@/lib/janela";
+import { Abas } from "@/components/Abas";
+import { ABAS_ESTUDOS } from "@/lib/nav";
 
 /**
  * ABERTURA DE EMPRESA — a pergunta que não fecha em 30 de setembro.
@@ -34,6 +36,7 @@ export default async function Abertura() {
 
   return (
     <div>
+      <Abas itens={ABAS_ESTUDOS} />
       <h1 className="text-[19px] font-bold tracking-tight">Estudo de abertura</h1>
       <p className="mt-0.5 max-w-[76ch] text-[13px] leading-relaxed text-muted">
         Em que regime um negócio novo deve nascer — com três cenários de faturamento, porque quem

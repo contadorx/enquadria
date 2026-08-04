@@ -1,7 +1,9 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { CursoMateriais } from "@/components/CursoMateriais";
+import { createClient } from "@/lib/supabase-server";
 import {
+  comVideos,
   CURSO,
   MATERIAIS,
   MODULOS,
@@ -36,8 +38,27 @@ export const metadata: Metadata = {
 const horas = Math.floor(TOTAL_MINUTOS / 60);
 const minutos = TOTAL_MINUTOS % 60;
 
-export default function CursoPage() {
-  const primeira = MODULOS[0].aulas[0];
+/**
+ * O VÍDEO VEM DO BANCO (migration 0038): publicar aula não exige deploy.
+ * `revalidate` mantém a página estática e barata — o link novo aparece no
+ * próximo minuto, que é rápido o suficiente para quem acabou de publicar e
+ * evita uma consulta por visita numa página pública.
+ */
+export const revalidate = 60;
+
+export default async function CursoPage() {
+  const supabase = createClient();
+  const { data: linhas } = await supabase.from("curso_videos").select("slug, video_url");
+  const modulos = comVideos(
+    MODULOS,
+    Object.fromEntries(
+      ((linhas ?? []) as { slug: string; video_url: string | null }[]).map((l) => [
+        l.slug,
+        l.video_url,
+      ])
+    )
+  );
+  const primeira = modulos[0].aulas[0];
 
   return (
     <div className="min-h-screen bg-bg">
@@ -161,7 +182,7 @@ export default function CursoPage() {
           </p>
 
           <div className="mt-6 space-y-6">
-            {MODULOS.map((m) => (
+            {modulos.map((m) => (
               <div key={m.numero}>
                 <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <h3 className="text-[16px] font-bold text-ink">

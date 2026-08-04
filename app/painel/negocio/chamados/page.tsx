@@ -1,7 +1,5 @@
 "use client";
 
-import { ABAS_SUPORTE } from "@/lib/nav";
-import { Abas } from "@/components/Abas";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 
@@ -111,7 +109,6 @@ export default function ChamadosAdmin() {
 
   return (
     <div className="max-w-[80ch]">
-      <Abas itens={ABAS_SUPORTE} />
       <h1 className="text-[19px] font-bold tracking-tight">Chamados</h1>
       <p className="mt-0.5 text-[13px] text-muted">
         {abertos > 0

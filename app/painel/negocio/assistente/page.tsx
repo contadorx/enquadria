@@ -1,7 +1,5 @@
 "use client";
 
-import { ABAS_SUPORTE } from "@/lib/nav";
-import { Abas } from "@/components/Abas";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { calcularNps } from "@/lib/nps";
@@ -61,7 +59,6 @@ export default function AssistenteAdmin() {
 
   return (
     <div className="max-w-[76ch]">
-      <Abas itens={ABAS_SUPORTE} />
       <h1 className="text-[19px] font-bold tracking-tight">Assistente e NPS</h1>
 
       {erro && <p className="mt-4 rounded-sm bg-vermelhowash px-3 py-2 text-[12.5px] text-vermelho">{erro}</p>}

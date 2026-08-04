@@ -63,15 +63,17 @@ export const NAV: GrupoNav[] = [
        */
       { href: "/painel/reforma", label: "Reforma", curto: "Reforma", marcador: "reforma" },
       /**
-       * ABERTURA — o item que faz o produto sobreviver a 30 de setembro.
+       * ESTUDOS — os dois serviços que não pertencem a uma empresa da carteira.
        *
-       * Fica no grupo de TRABALHO e no primeiro nível, ao lado do Cockpit, e
-       * não escondido dentro da empresa: o estudo de abertura não pertence a
-       * nenhuma empresa da carteira — ele é feito para quem AINDA NÃO é
-       * cliente. Enterrá-lo num submenu seria manter o produto refém de uma
-       * janela que fecha.
+       * O comparativo de regimes existia só DENTRO do dossiê de uma empresa, e
+       * por isso ninguém achava: para simular o regime de um prospecto era
+       * preciso primeiro cadastrar uma empresa que não é cliente. O estudo de
+       * abertura tem a mesma natureza — atende quem ainda não é cliente.
+       *
+       * Os dois no primeiro nível, juntos: são o que mantém o produto vendendo
+       * depois que a janela de setembro fecha.
        */
-      { href: "/painel/abertura", label: "Abertura", curto: "Abertura" },
+      { href: "/painel/estudos", label: "Estudos", curto: "Estudos" },
       { href: "/painel/ajuda", label: "Ajuda", curto: "Ajuda" },
       /* Planos volta a ser item próprio. Eu tinha feito isso a seu pedido e
          desfiz sem querer na reorganização: contratar é a ação que o produto
@@ -84,15 +86,19 @@ export const NAV: GrupoNav[] = [
   },
 ];
 
+/**
+ * PLATAFORMA — UM item de menu, e todo o resto dentro da página.
+ *
+ * Eram seis links no menu lateral para telas que só o superadmin abre. Isso
+ * dobrava o tamanho do menu de quem trabalha na carteira todo dia — o menu de
+ * administração competindo por espaço com o de trabalho.
+ *
+ * Agora o menu leva a um lugar só e a navegação interna vive nas abas da
+ * própria área (components/NegocioAbas).
+ */
 export const NAV_PLATAFORMA: GrupoNav = {
   grupo: "Plataforma",
-  itens: [
-    { href: "/painel/negocio", label: "Visão geral", curto: "Negócio" },
-    { href: "/painel/negocio/contas", label: "Contas e receita" },
-    { href: "/painel/negocio/emails", label: "Comunicação" },
-    { href: "/painel/negocio/chamados", label: "Suporte" },
-    { href: "/painel/negocio/ajuda", label: "Conteúdo" },
-  ],
+  itens: [{ href: "/painel/negocio", label: "Negócio", curto: "Negócio" }],
 };
 
 /** As abas de Escritório — um assunto, não um grupo de menu. */
@@ -106,36 +112,58 @@ export const ABAS_ESCRITORIO: ItemNav[] = [
 ];
 
 /**
- * Ajuda e chamados: um assunto só. A Reforma saiu daqui — ela é empurrada, e
- * conteúdo empurrado escondido atrás de um menu de dúvidas não chega em
- * ninguém.
+ * DUAS DUPLAS, e a divisão é pela PERGUNTA que a pessoa está fazendo.
+ *
+ * APRENDER (Reforma + Curso): "o que mudou e como se faz". Conteúdo que é
+ * EMPURRADO — ninguém acorda com vontade de estudar reforma tributária, e por
+ * isso os dois andam juntos: quem abre a Reforma para ler a novidade é
+ * exatamente quem pode querer a aula sobre ela.
+ *
+ * RESOLVER (Central de ajuda + Meus chamados): "estou travado agora". É o
+ * outro estado mental, e misturar os dois fazia a Reforma competir com um
+ * problema em aberto — que sempre ganha.
+ *
+ * O curso continua PÚBLICO lá fora: `/curso` é o ativo de aquisição do tráfego
+ * frio, e exigir cadastro para assistir mataria o público que ele serve. Aqui
+ * é só o caminho de volta, para quem já é usuário. Mesma rota, duas portas.
  */
+export const ABAS_APRENDER: ItemNav[] = [
+  { href: "/painel/reforma", label: "Reforma" },
+  { href: "/curso", label: "Curso" },
+];
+
 export const ABAS_AJUDA: ItemNav[] = [
   { href: "/painel/ajuda", label: "Central de ajuda" },
-  /**
-   * O CURSO ENTRA AQUI — e continua público lá fora.
-   *
-   * `/curso` já existe, fora da área logada, e precisa continuar assim: ele é
-   * o ativo de aquisição do tráfego frio, e exigir cadastro para assistir
-   * mataria justamente o público que ele serve.
-   *
-   * O que faltava era o caminho de VOLTA: quem já é usuário não tem como achar
-   * as aulas por dentro do produto. Mesma rota, duas portas.
-   */
-  { href: "/curso", label: "Curso" },
   { href: "/painel/chamados", label: "Meus chamados" },
 ];
 
-/** As telas de gestão que saíram do menu da plataforma. */
-export const ABAS_PLATAFORMA: ItemNav[] = [
+/** os dois serviços que atendem quem ainda não está na carteira */
+export const ABAS_ESTUDOS: ItemNav[] = [
+  { href: "/painel/estudos", label: "Comparativo de regimes" },
+  { href: "/painel/abertura", label: "Abertura de empresa" },
+];
+
+/**
+ * TODA a navegação da plataforma, numa lista só.
+ *
+ * Eram duas listas (`ABAS_PLATAFORMA` e `ABAS_SUPORTE`) mais uma terceira,
+ * escrita à mão dentro de `NegocioAbas` — três lugares para a mesma coisa, e a
+ * faixa da tela já não batia com o que o menu dizia existir.
+ *
+ * A ordem é a do uso: dinheiro primeiro, depois relacionamento, e por último
+ * conteúdo — que se mexe uma vez por mês, não por dia.
+ */
+export const ABAS_NEGOCIO: ItemNav[] = [
+  { href: "/painel/negocio", label: "Visão" },
   { href: "/painel/negocio/contas", label: "Contas" },
   { href: "/painel/negocio/cobrancas", label: "Cobranças" },
   { href: "/painel/negocio/planos", label: "Planos & Asaas" },
-];
-
-export const ABAS_SUPORTE: ItemNav[] = [
-  { href: "/painel/negocio/chamados", label: "Chamados" },
+  { href: "/painel/negocio/emails", label: "E-mails proativos" },
+  { href: "/painel/negocio/chamados", label: "Suporte" },
   { href: "/painel/negocio/assistente", label: "Assistente e NPS" },
+  { href: "/painel/negocio/ajuda", label: "Conteúdo" },
+  /* onde se publica aula: o link do vídeo saiu do código na 0038 */
+  { href: "/painel/negocio/curso", label: "Curso" },
 ];
 
 /** O menu que a pessoa realmente vê. */
@@ -160,7 +188,7 @@ export function tituloDaRota(pathname: string): string {
   if (pathname.startsWith("/painel/ajuda/")) return "Ajuda";
   const todos = [...NAV, NAV_PLATAFORMA]
     .flatMap((g) => g.itens)
-    .concat(ABAS_ESCRITORIO, ABAS_AJUDA, ABAS_PLATAFORMA, ABAS_SUPORTE);
+    .concat(ABAS_ESCRITORIO, ABAS_APRENDER, ABAS_AJUDA, ABAS_ESTUDOS, ABAS_NEGOCIO);
   // a rota mais específica que casa com o caminho vence
   const achado = todos
     .filter((i) => pathname === i.href || pathname.startsWith(i.href + "/"))

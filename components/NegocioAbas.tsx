@@ -2,13 +2,20 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ABAS_NEGOCIO } from "@/lib/nav";
 
-const ABAS = [
-  { href: "/painel/negocio", label: "Visão" },
-  { href: "/painel/negocio/cobrancas", label: "Cobranças" },
-  { href: "/painel/negocio/emails", label: "E-mails proativos" },
-  { href: "/painel/negocio/planos", label: "Planos & Asaas" },
-];
+/**
+ * TODA a navegação da plataforma mora aqui.
+ *
+ * O menu lateral tinha seis links para telas que só o superadmin abre — o
+ * menu de administração competindo por espaço com o de trabalho, para todo
+ * mundo. Agora o menu leva a um lugar só e a navegação interna é esta faixa.
+ *
+ * A ordem é a do uso: dinheiro primeiro (visão, contas, cobranças, planos),
+ * depois relacionamento (comunicação, suporte, assistente) e por último
+ * conteúdo (ajuda, curso) — que se mexe uma vez por mês, não por dia.
+ */
+const ABAS = ABAS_NEGOCIO;
 
 export function NegocioAbas() {
   const path = usePathname();

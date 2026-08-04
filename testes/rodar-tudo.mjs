@@ -76,6 +76,7 @@ try {
     "lib/plano.ts", "lib/potencial.ts", "lib/reguas.ts", "lib/janela.ts",
     "lib/emails-cliente.ts", "lib/erros-auth.ts", "lib/ajuda.ts", "lib/cobranca.ts", "lib/nps.ts",
     "lib/escritorio.ts", "lib/roteiro.ts", "lib/abertura.ts", "lib/comparativo.ts",
+    "lib/curso.ts",
   ];
   const cfg = path.join(RAIZ, "tsconfig.testes.json");
   fs.writeFileSync(cfg, JSON.stringify({
@@ -112,7 +113,7 @@ const coleta = await import(path.join(TMP, "coleta.js"));
 
 /* ============================================ 1. SUÍTES DE FUNÇÃO PURA == */
 secao("Suítes de função pura");
-for (const suite of ["cockpit", "motor", "coleta", "muro", "reguas", "janela", "cnpj", "envio", "erros-auth", "ajuda", "cobranca", "nps", "escritorio", "roteiro", "abertura"]) {
+for (const suite of ["cockpit", "motor", "coleta", "muro", "reguas", "janela", "cnpj", "envio", "erros-auth", "ajuda", "cobranca", "nps", "escritorio", "roteiro", "abertura", "curso"]) {
   const arq = path.join(RAIZ, "testes", `${suite}.test.mjs`);
   if (!fs.existsSync(arq)) {
     ok(`suíte ${suite}`, false, "arquivo não encontrado");
@@ -287,6 +288,54 @@ secao("Arquivar — a saída e o caminho de volta");
 
   const nav = fs.readFileSync(path.join(RAIZ, "lib/nav.ts"), "utf8");
   ok("e ela é alcançável pelo menu", /\/painel\/arquivadas/.test(nav));
+}
+
+
+/* ================================= 1f. O MENU NÃO PODE REGREDIR ========= */
+secao("Menu — a estrutura que já foi desfeita sem querer");
+{
+  /**
+   * Esta estrutura foi decidida, desfeita numa reorganização e redecidida.
+   * Nada aqui quebra build: um item de menu que reaparece no lugar errado só
+   * é percebido por quem usa o produto todo dia — e aí já foi ao ar.
+   */
+  const nav = fs.readFileSync(path.join(RAIZ, "lib/nav.ts"), "utf8");
+  const bloco = (nome) => {
+    const i = nav.indexOf(`export const ${nome}`);
+    if (i < 0) return "";
+    return nav.slice(i, nav.indexOf("];", i));
+  };
+
+  ok("Reforma e Curso andam juntos (o que a pessoa quer APRENDER)",
+     /painel\/reforma/.test(bloco("ABAS_APRENDER")) && /"\/curso"/.test(bloco("ABAS_APRENDER")));
+  ok("Ajuda e chamados andam juntos (o que ela quer RESOLVER)",
+     /painel\/ajuda/.test(bloco("ABAS_AJUDA")) && /painel\/chamados/.test(bloco("ABAS_AJUDA")));
+  ok("e as duas duplas não se misturam",
+     !/painel\/reforma/.test(bloco("ABAS_AJUDA")) && !/painel\/chamados/.test(bloco("ABAS_APRENDER")));
+
+  ok("o comparativo de regimes tem porta própria, fora da empresa",
+     fs.existsSync(path.join(RAIZ, "app/painel/estudos/page.tsx")) &&
+     /painel\/estudos/.test(bloco("ABAS_ESTUDOS")));
+  ok("e divide a faixa com a abertura",
+     /painel\/abertura/.test(bloco("ABAS_ESTUDOS")));
+
+  /**
+   * A área de plataforma é só do superadmin. Seis links dela no menu lateral
+   * dobravam o menu de quem trabalha na carteira todo dia.
+   */
+  const plataforma = nav.slice(nav.indexOf("export const NAV_PLATAFORMA"), nav.indexOf("export const ABAS_ESCRITORIO"));
+  const itensPlataforma = (plataforma.match(/href:/g) || []).length;
+  ok("Plataforma é UM item de menu, com o resto dentro da página",
+     itensPlataforma === 1, `${itensPlataforma} itens no menu`);
+
+  const abasNegocio = fs.readFileSync(path.join(RAIZ, "components/NegocioAbas.tsx"), "utf8");
+  ok("e a faixa de abas do Negócio não é uma segunda lista escrita à mão",
+     abasNegocio.includes("ABAS_NEGOCIO") && !/const ABAS = \[/.test(abasNegocio));
+
+  /* Planos é item próprio de menu; a faixa do escritório não pertence a ele */
+  const planos = fs.readFileSync(path.join(RAIZ, "app/painel/planos/page.tsx"), "utf8");
+  ok("a tela de Planos não carrega as abas de Configurações/Equipe/Indique",
+     !/AbasEscritorio/.test(planos));
 }
 
 /* ============================================== 2. A MASSA NO PARSER ==== */

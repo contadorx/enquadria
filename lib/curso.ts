@@ -321,3 +321,49 @@ export const AULAS_NO_AR = TODAS_AULAS.filter((a) => !!a.video).length;
 /** o aviso que acompanha qualquer número dito no curso */
 export const RESSALVA =
   "A alíquota de referência de IBS/CBS só é fixada por Resolução do Senado até 31/10/2026 — depois do fechamento da janela. Todo número do curso é estimativa de cenário, e a responsabilidade técnica é do contador que assina.";
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * O VÍDEO VEM DO BANCO — o código é só o texto da aula.
+ *
+ * O link do vídeo saiu de `lib/curso.ts` e foi para a tabela `curso_videos`
+ * (migration 0038), editável em Negócio → Curso. Publicar aula deixou de
+ * exigir commit e deploy.
+ *
+ * O campo `video` continua existindo aqui como PADRÃO: se um dia a tabela
+ * estiver vazia ou o banco fora do ar, a página cai no que está no código em
+ * vez de esconder um vídeo que já foi publicado. O banco tem precedência
+ * porque é onde está a última decisão de quem publica.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/** { slug da aula → url do vídeo }, como vem da tabela */
+export type MapaVideos = Record<string, string | null | undefined>;
+
+/**
+ * Devolve os módulos com o vídeo do banco aplicado.
+ *
+ * Função pura: recebe o mapa já lido, não consulta nada. É isso que a torna
+ * testável e que impede a página do curso de virar um lugar onde regra de
+ * negócio se esconde atrás de uma consulta.
+ *
+ * Vazio ou em branco no banco NÃO apaga o do código — string vazia é o estado
+ * "cadastrei e depois limpei o campo", que não deve derrubar uma aula no ar
+ * por acidente. Para tirar do ar, apaga-se a linha.
+ */
+export function comVideos(modulos: Modulo[], mapa: MapaVideos | null | undefined): Modulo[] {
+  if (!mapa) return modulos;
+  return modulos.map((m) => ({
+    ...m,
+    aulas: m.aulas.map((a) => {
+      const doBanco = mapa[a.slug];
+      const url = typeof doBanco === "string" ? doBanco.trim() : "";
+      return url ? { ...a, video: url } : a;
+    }),
+  }));
+}
+
+/** o mesmo, para uma aula só */
+export function videoDaAula(aula: Aula, mapa: MapaVideos | null | undefined): string | null {
+  const doBanco = mapa?.[aula.slug];
+  const url = typeof doBanco === "string" ? doBanco.trim() : "";
+  return url || aula.video || null;
+}
