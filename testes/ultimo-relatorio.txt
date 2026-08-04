@@ -115,6 +115,10 @@ ok    existe a migration que deixa a service role ler os escritórios
 ok    a guarda nova aceita superadmin E service role
 ok    ...e não usa current_user, que mentiria dentro de SECURITY DEFINER
 ok    e a RPC de escritórios passou a usar a guarda nova
+ok    existe a migration que deixa a plataforma ver todos os escritórios
+ok    a política nova é sobre tenants e usa a guarda de plataforma
+ok    ...e NÃO concede delete (as FK descem em cascade)
+ok    a tela de contas confirma a gravação pedindo a linha de volta
 ok    o contexto das réguas LÊ o erro da RPC em vez de descartá-lo
 ok    e fonte quebrada não vira fila vazia silenciosa
 ok    o cron não relata 0 planejados sem dizer nada
@@ -225,4 +229,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 190 verificações automáticas
+TUDO PASSOU — 194 verificações automáticas

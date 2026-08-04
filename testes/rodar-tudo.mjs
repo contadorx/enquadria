@@ -657,6 +657,36 @@ secao("Contratação — o clique que não fazia nada");
        /negocio_escritorios[\s\S]*e_plataforma\(\)/.test(sql));
   }
 
+  /**
+   * ═════════════════════════════════════════════════════════════════════════
+   * A TELA DE CONTAS PRECISA ENXERGAR AS CONTAS.
+   *
+   * Ela lê `tenants` pelo cliente do navegador, sujeita à RLS — e `tenants`
+   * tinha UMA política: `id = tenant_atual()`. Uma linha, a própria. Era a
+   * única tabela de plataforma sem política de gestor: faturas, chamados,
+   * indicacoes, nps, ajuda, curso e assistente já tinham.
+   * ═════════════════════════════════════════════════════════════════════════
+   */
+  const mig43 = path.join(RAIZ, "supabase/migrations/0043_contas_da_plataforma.sql");
+  ok("existe a migration que deixa a plataforma ver todos os escritórios", fs.existsSync(mig43));
+  if (fs.existsSync(mig43)) {
+    const sql43 = fs.readFileSync(mig43, "utf8").replace(/^\s*--.*$/gm, "");
+    ok("a política nova é sobre tenants e usa a guarda de plataforma",
+       /on public\.tenants/.test(sql43) && /e_plataforma\(\)/.test(sql43));
+    /* `tenants` é a raiz do grafo e as FK descem em CASCADE: um delete
+       acidental na tela de administração apagaria a operação de um cliente */
+    ok("...e NÃO concede delete (as FK descem em cascade)",
+       !/for all/i.test(sql43) && !/for delete/i.test(sql43),
+       (sql43.match(/for (all|delete)/i) || ["ok"])[0]);
+  }
+
+  const telaContas = fs.readFileSync(path.join(RAIZ, "app/painel/negocio/contas/page.tsx"), "utf8");
+  /* RLS que recusa escrita não devolve erro: devolve zero linhas. Sem pedir a
+     linha de volta, a tela diz "salvo" tendo salvo nada. */
+  ok("a tela de contas confirma a gravação pedindo a linha de volta",
+     /\.update\(campos\)[\s\S]{0,80}\.select\("id"\)/.test(telaContas) &&
+     /!alterado\?\.length/.test(telaContas));
+
   const rg = fs.readFileSync(path.join(RAIZ, "lib/reguas.ts"), "utf8");
   /* olhar por "error" no arquivo inteiro casaria com qualquer coisa: a
      checagem é na desestruturação da RPC, que era exatamente o que faltava */

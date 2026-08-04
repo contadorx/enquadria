@@ -62,10 +62,31 @@ export default function ContasAdmin() {
     setSalvando(true);
     setErro(null);
     const supabase = createClient();
-    const { error } = await supabase.from("tenants").update(campos).eq("id", id);
+    /**
+     * `.select()` NO UPDATE — e isto não é enfeite.
+     *
+     * Quando a RLS recusa uma escrita, o Postgres não devolve erro: devolve
+     * ZERO LINHAS afetadas. Sem o `select`, `error` vem nulo, a tela mostra
+     * "salvo" e nada foi salvo. Foi exatamente o que aconteceu enquanto
+     * `tenants` não tinha política de gestor (ver 0043): marcar outra conta
+     * como teste não gravava, e a tela dizia que sim.
+     *
+     * Pedindo a linha de volta, "nada voltou" vira aviso.
+     */
+    const { data: alterado, error } = await supabase
+      .from("tenants")
+      .update(campos)
+      .eq("id", id)
+      .select("id");
     setSalvando(false);
     if (error) {
       setErro(error.message);
+      return;
+    }
+    if (!alterado?.length) {
+      setErro(
+        "O banco não alterou nenhuma linha — provavelmente falta permissão para editar esta conta. Rode a migration 0043."
+      );
       return;
     }
     setOk(true);
