@@ -45,7 +45,7 @@ const DIAS_PADRAO = 31;
 async function registrarBatida(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
-  dados: { evento?: string; assinatura?: string; aceito: boolean; motivo?: string }
+  dados: { evento?: string; assinatura?: string; aceito: boolean; motivo?: string; fatura_erro?: string }
 ) {
   try {
     await supabase.from("plataforma_config").upsert(
@@ -87,14 +87,14 @@ async function registrarFatura(
   }
 ) {
   try {
-    if (!p.externalReference) return;
+    if (!p.externalReference) return "pagamento sem externalReference";
     const { data: assin } = await supabase
       .from("assinaturas")
       .select("id, tenant_id, plano_id")
       .eq("id", p.externalReference)
       .maybeSingle();
     const a = assin as { id?: string; tenant_id?: string; plano_id?: string } | null;
-    if (!a?.tenant_id) return;
+    if (!a?.tenant_id) return `assinatura ${p.externalReference} não encontrada`;
 
     let planoNome: string | null = null;
     if (a.plano_id) {
@@ -106,7 +106,7 @@ async function registrarFatura(
     const status = statusDoAsaas(evento || p.status);
     const pagoEm = status === "pago" ? p.confirmedDate || p.paymentDate || null : null;
 
-    await supabase.from("faturas").upsert(
+    const { error } = await supabase.from("faturas").upsert(
       {
         tenant_id: a.tenant_id,
         assinatura_id: a.id ?? null,
@@ -123,9 +123,22 @@ async function registrarFatura(
       },
       { onConflict: "asaas_id" }
     );
+
+    /**
+     * O `try/catch` NÃO BASTAVA — e foi por isso que o bug ficou invisível.
+     *
+     * O supabase-js não LANÇA quando o banco recusa: ele devolve `{ error }`.
+     * O `catch` abaixo só pega falha de rede. Enquanto o índice de `faturas`
+     * era parcial (ver 0040), todo upsert voltava 42P10 aqui dentro, o `error`
+     * não era lido, e o webhook respondia 200 alegremente com a tabela vazia.
+     */
+    if (error) console.error("[asaas] fatura recusada pelo banco:", error.message);
+    return error?.message ?? null;
   } catch (e) {
     // a fatura é histórico: nunca pode impedir a ativação do acesso
-    console.error("[asaas] fatura não gravada:", e instanceof Error ? e.message : e);
+    const m = e instanceof Error ? e.message : String(e);
+    console.error("[asaas] fatura não gravada:", m);
+    return m;
   }
 }
 
@@ -178,16 +191,21 @@ export async function POST(req: Request) {
    * webhook gravam a mesma fatura, e sem a trava as duas escritas produzem
    * duas linhas para o mesmo pagamento.
    */
+  let faturaErro: string | null = null;
   if (admin && evento.payment?.id) {
-    await registrarFatura(admin, evento.event ?? "", evento.payment);
+    faturaErro = await registrarFatura(admin, evento.event ?? "", evento.payment);
   }
 
   if (admin) {
+    /* a batida guarda a falha da fatura: é o que faz o painel de plataforma
+       conseguir dizer "o webhook chega, mas a fatura não grava" — a pergunta
+       que ficou dias sem resposta */
     await registrarBatida(admin, {
       evento: evento.event,
       assinatura: assinaturaId,
       aceito: true,
       motivo: confirmado ? undefined : "evento fora dos dois que ativam acesso",
+      fatura_erro: faturaErro ?? undefined,
     });
   }
 

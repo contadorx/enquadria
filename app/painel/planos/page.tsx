@@ -37,69 +37,87 @@ export default function Planos() {
   const [pedindoDoc, setPedindoDoc] = useState<string | null>(null);
   const [erroCheckout, setErroCheckout] = useState<string | null>(null);
   /**
-   * A ASSINATURA CONTRATADA E AINDA NÃO PAGA.
+   * OS PLANOS CONTRATADOS E AINDA NÃO PAGOS — no plural, e isso é a correção.
    *
    * `assinatura_ativa` só devolve o que já está ATIVO — e é assim que tem que
    * ser, porque é ela que libera o produto. O efeito colateral era esta tela:
    * quem contratava e ia pagar o boleto voltava e via "Plano gratuito" com o
    * botão "Assinar" de novo, como se nada tivesse acontecido. O terceiro
    * estado — contratado, aguardando pagamento — não existia.
+   *
+   * O primeiro remendo guardava UMA pendência (`.limit(1)`), e o defeito
+   * apareceu na hora em que existia mais de uma: contratando o anual, a tela
+   * continuava mostrando "Assinar" no cartão do anual, porque a única
+   * pendência lida por acaso era a do mensal. Estado por plano, não global.
    */
-  const [pendente, setPendente] = useState<{ plano_id: string } | null>(null);
+  const [pendentes, setPendentes] = useState<Set<string>>(new Set());
+  const temPendente = pendentes.size > 0;
+
+  /**
+   * Uma função, não um efeito solto: o que a tela mostra depois de contratar
+   * tem que ser lido do banco DE NOVO. Antes, contratar abria a aba do
+   * pagamento e deixava esta página exatamente como estava — sem a fatura nova
+   * na lista e sem o cartão mudar de estado. Parecia que nada aconteceu.
+   */
+  async function carregar() {
+    const supabase = createClient();
+
+    const uid = (await supabase.auth.getUser()).data.user?.id ?? "";
+    supabase
+      .from("profiles")
+      .select("tenants(cpf_cnpj)")
+      .eq("id", uid)
+      .maybeSingle()
+      .then(({ data: pf }) => {
+        const t = pf?.tenants as { cpf_cnpj?: string } | { cpf_cnpj?: string }[] | null;
+        const doc = (Array.isArray(t) ? t[0]?.cpf_cnpj : t?.cpf_cnpj) ?? "";
+        if (doc) setDocumento((atual) => atual || doc);
+      });
+
+    /* a RLS de `faturas` já limita ao próprio escritório */
+    supabase
+      .from("faturas")
+      .select("id, asaas_id, descricao, valor_centavos, status, vencimento, pago_em, link_pagamento, link_boleto, criado_em")
+      .then(({ data: fs }) => setFaturas((fs ?? []) as unknown as Fatura[]));
+
+    const { data } = await supabase
+      .from("planos")
+      .select("id, nome, descricao, preco_centavos, recorrente")
+      .eq("ativo", true)
+      .order("ordem");
+    if (data) setPlanos(data);
+
+    const { data: assin } = await supabase.rpc("assinatura_ativa");
+    const a = Array.isArray(assin) ? assin[0] : assin;
+    if (a?.plano_id) {
+      setAtivo(a.plano_id);
+      setIlimitado(a.limite_analises == null);
+      setPendentes(new Set());
+    } else {
+      setAtivo(null);
+      /* TODAS as pendentes, não uma: cada cartão precisa saber do próprio
+         estado. Sem ordenar por data — a auditoria de schema mostrou que
+         `assinaturas.criado_em` não tem proveniência nas migrations deste
+         repositório, e pedir coluna que talvez não exista quebra em produção
+         sem quebrar aqui. */
+      const { data: pend } = await supabase
+        .from("assinaturas")
+        .select("plano_id")
+        .eq("status", "pendente");
+      setPendentes(
+        new Set(((pend ?? []) as { plano_id?: string }[]).map((x) => x.plano_id).filter(Boolean) as string[])
+      );
+    }
+
+    const { count } = await supabase
+      .from("laudos")
+      .select("id", { count: "exact", head: true });
+    setLaudos(count ?? 0);
+  }
 
   useEffect(() => {
-    const supabase = createClient();
-    (async () => {
-      /* a RLS de `faturas` já limita ao próprio escritório */
-      supabase
-        .from("profiles")
-        .select("tenants(cpf_cnpj)")
-        .eq("id", (await supabase.auth.getUser()).data.user?.id ?? "")
-        .maybeSingle()
-        .then(({ data: pf }) => {
-          const t = pf?.tenants as { cpf_cnpj?: string } | { cpf_cnpj?: string }[] | null;
-          const doc = (Array.isArray(t) ? t[0]?.cpf_cnpj : t?.cpf_cnpj) ?? "";
-          if (doc) setDocumento(doc);
-        });
-
-      supabase
-        .from("faturas")
-        .select("id, asaas_id, descricao, valor_centavos, status, vencimento, pago_em, link_pagamento, link_boleto, criado_em")
-        .then(({ data: fs }) => setFaturas((fs ?? []) as unknown as Fatura[]));
-
-      const { data } = await supabase
-        .from("planos")
-        .select("id, nome, descricao, preco_centavos, recorrente")
-        .eq("ativo", true)
-        .order("ordem");
-      if (data) setPlanos(data);
-
-      const { data: assin } = await supabase.rpc("assinatura_ativa");
-      const a = Array.isArray(assin) ? assin[0] : assin;
-      if (a?.plano_id) {
-        setAtivo(a.plano_id);
-        setIlimitado(a.limite_analises == null);
-      } else {
-        /* sem assinatura ativa: será que existe uma esperando pagamento? */
-        /* sem ordenar por data: a auditoria de schema mostrou que
-           `assinaturas.criado_em` não tem proveniência nas migrations deste
-           repositório, e pedir coluna que talvez não exista quebra em
-           produção sem quebrar aqui. Qual das pendentes aparece não importa —
-           a tela só precisa saber que existe uma. */
-        const { data: pend } = await supabase
-          .from("assinaturas")
-          .select("id, plano_id")
-          .eq("status", "pendente")
-          .limit(1);
-        const p0 = (pend ?? [])[0] as { plano_id?: string } | undefined;
-        if (p0?.plano_id) setPendente({ plano_id: p0.plano_id });
-      }
-
-      const { count } = await supabase
-        .from("laudos")
-        .select("id", { count: "exact", head: true });
-      setLaudos(count ?? 0);
-    })();
+    carregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const semAssinatura = !ativo;
@@ -126,6 +144,8 @@ export default function Planos() {
         checkout_url?: string;
         asaas_ativo?: boolean;
         falta_documento?: boolean;
+        fatura_registrada?: boolean;
+        fatura_erro?: string;
       };
 
       if (resp.ok && json.checkout_url) {
@@ -134,6 +154,24 @@ export default function Planos() {
            tela para a pessoa abrir na mão */
         if (!janela) setErroCheckout(`Cobrança gerada. O navegador bloqueou a janela — abra em: ${json.checkout_url}`);
         setPedindoDoc(null);
+
+        /* relê o banco: é o que faz o cartão virar "aguardando pagamento" e a
+           fatura nova aparecer em Minhas faturas sem a pessoa dar F5 */
+        await carregar();
+
+        /**
+         * A FATURA QUE NÃO GRAVOU não pode mais passar em silêncio.
+         *
+         * Foi assim que o bug do índice parcial durou: a cobrança nascia no
+         * Asaas, o e-mail saía, e a linha da fatura falhava sem ninguém ver.
+         * Se o servidor disser que não gravou, isso vira texto na tela — o
+         * pagamento continua válido, mas eu fico sabendo na hora.
+         */
+        if (json.fatura_registrada === false) {
+          setErroCheckout(
+            `Cobrança gerada e enviada por e-mail — o link está na aba que abriu. Não consegui registrar a fatura no histórico${json.fatura_erro ? ` (${json.fatura_erro})` : ""}; o pagamento vale do mesmo jeito e eu acerto o histórico.`
+          );
+        }
         return;
       }
 
@@ -168,7 +206,7 @@ export default function Planos() {
       <div className="mt-4 flex flex-wrap items-center justify-between gap-4 rounded border border-line bg-surface px-4 py-3.5">
         <div>
           <div className="text-[13px] font-semibold">
-            {ativo ? "Plano ativo" : pendente ? "Contratado — aguardando pagamento" : "Plano gratuito"}
+            {ativo ? "Plano ativo" : temPendente ? "Contratado — aguardando pagamento" : "Plano gratuito"}
           </div>
           <div className="mt-0.5 text-[12.5px] text-muted">
             {ilimitado ? (
@@ -197,7 +235,7 @@ export default function Planos() {
         {planos.map((p) => {
           const eAtivo = ativo === p.id;
           /* contratado e esperando o pagamento cair — nem grátis, nem ativo */
-          const ePendente = !eAtivo && pendente?.plano_id === p.id;
+          const ePendente = !eAtivo && pendentes.has(p.id);
           const gratuito = p.preco_centavos === 0;
           const destaque = p.id === "assinatura" || p.id === "pro_anual";
           const atualGratuito = gratuito && semAssinatura;

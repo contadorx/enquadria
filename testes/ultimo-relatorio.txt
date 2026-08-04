@@ -28,6 +28,9 @@ ok    auditoria de UX (6 regras limpas)
 ── Auditoria de schema (colunas que ninguém garante que existem) 
 ok    auditoria de schema (23 tabelas com proveniência)
 
+── Auditoria de upsert (o onConflict que o Postgres não consegue inferir) 
+ok    auditoria de upsert (9 conferidos)
+
 ── Endereços públicos — o que chega ao cliente sem login ───────
 ok    /assinar/[token] existe e é pública
 ok    /coleta/[token] existe e é pública
@@ -85,8 +88,10 @@ ok    e a importação só aceita pagamento com externalReference nosso
 ok    o link de pagamento sai por e-mail na hora da contratação
 ok    a RLS de faturas dá só leitura ao escritório
 ok    ...e por isso o checkout grava a fatura com o cliente de serviço
-ok    e o erro da gravação não é engolido
+ok    e o resultado da gravação volta na resposta do checkout
 ok    a tela de planos mostra a assinatura pendente de pagamento
+ok    e lê TODAS as pendentes, não a primeira que aparecer
+ok    e recarrega o estado depois da contratação
 ok    a tela de planos tem onde mostrar o erro da contratação
 ok    e trata o pop-up bloqueado, que também parece clique perdido
 
@@ -194,4 +199,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 161 verificações automáticas
+TUDO PASSOU — 164 verificações automáticas

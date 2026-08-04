@@ -72,6 +72,15 @@ export async function POST(req: Request) {
     externo: assinatura.id,
   });
 
+  /**
+   * O QUE ACONTECEU COM A FATURA sobe na resposta.
+   *
+   * Enquanto isto era só `console.error`, o bug do índice parcial (0040) durou
+   * dias: a cobrança nascia, o e-mail saía, a fatura não gravava e a única
+   * pista morava num log que ninguém abre. Falha silenciosa é falha que dura.
+   */
+  let faturaErro: string | null = null;
+
   if (cobranca.asaas_id || cobranca.checkout_url) {
     await supabase
       .from("assinaturas")
@@ -103,7 +112,7 @@ export async function POST(req: Request) {
      * ─────────────────────────────────────────────────────────────────────
      */
     const admin = createAdminClient();
-    const { error: erroFatura } = await (admin ?? supabase).from("faturas").upsert(
+    const { error: eF } = await (admin ?? supabase).from("faturas").upsert(
       {
         tenant_id: tenantId,
         assinatura_id: assinatura.id,
@@ -120,12 +129,11 @@ export async function POST(req: Request) {
       { onConflict: "asaas_id" }
     );
 
-    /* erro engolido foi a causa do bug; agora ele aparece no log com nome */
-    if (erroFatura) {
-      console.error(
-        `[checkout] fatura NÃO registrada (assinatura ${assinatura.id}): ${erroFatura.message}` +
-          (admin ? "" : " — SUPABASE_SERVICE_ROLE_KEY ausente, a escrita foi tentada com a sessão e a RLS recusa")
-      );
+    /* erro engolido foi a causa do bug; agora ele vai para o log E para a tela */
+    if (eF) {
+      faturaErro =
+        eF.message + (admin ? "" : " — SUPABASE_SERVICE_ROLE_KEY ausente, a escrita foi tentada com a sessão e a RLS recusa");
+      console.error(`[checkout] fatura NÃO registrada (assinatura ${assinatura.id}): ${faturaErro}`);
     }
 
     /**
@@ -188,5 +196,7 @@ export async function POST(req: Request) {
     assinatura_id: assinatura.id,
     asaas_ativo: cobranca.ativo,
     checkout_url: cobranca.checkout_url ?? null,
+    fatura_registrada: !faturaErro,
+    fatura_erro: faturaErro,
   });
 }

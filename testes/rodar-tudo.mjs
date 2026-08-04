@@ -159,6 +159,27 @@ secao("Auditoria de schema (colunas que ninguém garante que existem)");
      r.status === 0 ? undefined : saida.split("\n").filter((l) => l.startsWith("SUSPEITA")).slice(0, 6));
 }
 
+/* ==================================== 1b3. UPSERT QUE O BANCO RECUSA ==== */
+secao("Auditoria de upsert (o onConflict que o Postgres não consegue inferir)");
+{
+  /**
+   * A central de faturas ficou VAZIA por dias com tudo aparentemente
+   * funcionando: cobrança gerada, e-mail enviado, webhook recebido, 200 em
+   * todo mundo. O culpado era um `where` numa linha de índice — `ON CONFLICT
+   * (asaas_id)` não infere índice PARCIAL, e o supabase-js devolve o erro em
+   * vez de lançar, então ninguém lia.
+   *
+   * Três upserts estavam quebrados pelo mesmo motivo (faturas, curso_leads,
+   * convites) e nenhum teste alcançava: compilam, passam no lint, sobem, e só
+   * o banco reclama — para ninguém.
+   */
+  const r = spawnSync("node", [path.join(RAIZ, "testes", "auditar-upsert.mjs")], { encoding: "utf8" });
+  const saida = (r.stdout || "") + (r.stderr || "");
+  const conferidos = (saida.match(/^ok: /gm) || []).length;
+  ok(`auditoria de upsert (${conferidos} conferidos)`, r.status === 0,
+     r.status === 0 ? undefined : saida.split("\n").filter((l) => l.startsWith("QUEBRADO")).slice(0, 8));
+}
+
 /* ======================================= 1c. O QUE O CLIENTE ALCANÇA ==== */
 secao("Endereços públicos — o que chega ao cliente sem login");
 {
@@ -450,12 +471,43 @@ secao("Contratação — o clique que não fazia nada");
   ok("...e por isso o checkout grava a fatura com o cliente de serviço",
      /\(admin \?\? supabase\)\.from\("faturas"\)/.test(ck),
      (ck.match(/[\w.() ?]*\.from\("faturas"\)/) || ["não achei a chamada"])[0]);
-  ok("e o erro da gravação não é engolido", /erroFatura/.test(ck));
+
+  /**
+   * O ERRO DA GRAVAÇÃO PRECISA CHEGAR NA TELA, não só no log.
+   *
+   * Enquanto a falha da fatura era um `console.error`, o bug do índice parcial
+   * (0041) durou dias: a cobrança nascia, o e-mail saía, a linha não gravava, e
+   * a única pista morava num log que ninguém abre. Log não é aviso.
+   */
+  ok("e o resultado da gravação volta na resposta do checkout",
+     /fatura_registrada/.test(ck) && /fatura_erro/.test(ck));
 
   /* o terceiro estado da tela de planos: contratado e ainda não pago */
   const telaPlanos = fs.readFileSync(path.join(RAIZ, "app/painel/planos/page.tsx"), "utf8");
   ok("a tela de planos mostra a assinatura pendente de pagamento",
      /pendente/.test(telaPlanos) && /aguardando/i.test(telaPlanos));
+
+  /**
+   * E O ESTADO É POR PLANO, não global.
+   *
+   * Bug real: com uma pendência de mensal na mesa, contratar o ANUAL não mudava
+   * o botão do cartão anual. A tela lia UMA pendência (`.limit(1)`) e comparava
+   * com todos os cartões — o cartão certo perdia a corrida por acaso.
+   */
+  ok("e lê TODAS as pendentes, não a primeira que aparecer",
+     !/\.eq\("status", "pendente"\)\s*\n?\s*\.limit\(1\)/.test(telaPlanos) &&
+     /pendentes\.has\(p\.id\)/.test(telaPlanos),
+     /limit\(1\)/.test(telaPlanos) ? "ainda usa limit(1)" : "não indexa por plano");
+
+  /**
+   * E A TELA RELÊ O BANCO DEPOIS DE CONTRATAR.
+   *
+   * Sem isto, contratar abria a aba do pagamento e deixava esta página
+   * exatamente como estava: sem a fatura nova na lista e sem o cartão mudar de
+   * estado. Do lado de quem clicou, indistinguível de "não funcionou".
+   */
+  ok("e recarrega o estado depois da contratação",
+     /await carregar\(\)/.test(telaPlanos));
 
   const tela = fs.readFileSync(path.join(RAIZ, "app/painel/planos/page.tsx"), "utf8");
   ok("a tela de planos tem onde mostrar o erro da contratação",

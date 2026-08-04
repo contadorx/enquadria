@@ -335,7 +335,7 @@ export async function reconciliarAssinatura(
 export async function importarFaturas(
   db: DbSimples,
   limite = 100
-): Promise<{ lidas: number; gravadas: number; ignoradas: number; erro?: string }> {
+): Promise<{ lidas: number; gravadas: number; ignoradas: number; falhas?: number; erro?: string }> {
   const key = process.env.ASAAS_API_KEY;
   if (!key) return { lidas: 0, gravadas: 0, ignoradas: 0, erro: "ASAAS_API_KEY não está no ambiente." };
 
@@ -373,6 +373,17 @@ export async function importarFaturas(
 
   let gravadas = 0;
   let ignoradas = 0;
+  /**
+   * FALHA NÃO É GRAVAÇÃO.
+   *
+   * Este laço contava `gravadas++` logo depois do upsert, sem olhar o `error`.
+   * Com o índice parcial da 0039 recusando TODO upsert (ver 0040), a
+   * importação dizia "40 faturas gravadas" com a tabela vazia — a ferramenta
+   * de recuperação mentindo exatamente na hora em que era chamada para
+   * consertar o problema.
+   */
+  let falhas = 0;
+  let primeiroErro: string | null = null;
 
   for (const p of pagamentos) {
     if (!p.id || !p.externalReference) {
@@ -393,7 +404,7 @@ export async function importarFaturas(
     const status = statusDoAsaas(p.status);
     const pagoEm = status === "pago" ? p.confirmedDate || p.paymentDate || null : null;
 
-    await db.from("faturas").upsert(
+    const { error } = await db.from("faturas").upsert(
       {
         tenant_id: a.tenant_id,
         assinatura_id: a.id ?? null,
@@ -409,8 +420,20 @@ export async function importarFaturas(
       },
       { onConflict: "asaas_id" }
     );
-    gravadas++;
+
+    if (error) {
+      falhas++;
+      primeiroErro = primeiroErro ?? error.message;
+    } else {
+      gravadas++;
+    }
   }
 
-  return { lidas: pagamentos.length, gravadas, ignoradas };
+  return {
+    lidas: pagamentos.length,
+    gravadas,
+    ignoradas,
+    falhas,
+    erro: falhas ? `${falhas} de ${pagamentos.length} recusadas pelo banco: ${primeiroErro}` : undefined,
+  };
 }
