@@ -1,5 +1,6 @@
 import { carregarNegocio, brl } from "@/lib/negocio";
 import { statusAsaas } from "@/lib/asaas";
+import { createClient } from "@/lib/supabase-server";
 import { PlanoCartao, NovoPlano, TestarAsaas } from "@/components/NegocioUI";
 
 export const dynamic = "force-dynamic";
@@ -7,6 +8,24 @@ export const dynamic = "force-dynamic";
 export default async function PlanosNegocio() {
   const n = await carregarNegocio();
   const status = await statusAsaas();
+
+  /**
+   * O ÚLTIMO EVENTO QUE O ASAAS MANDOU.
+   *
+   * Chave da API configurada prova que o app fala com o Asaas. NÃO prova que o
+   * Asaas fala com o app — o webhook é cadastrado do lado de lá, e enquanto
+   * ninguém paga, um webhook faltando é indistinguível de um webhook certo.
+   * O primeiro sinal seria um cliente escrevendo "paguei e não entrou".
+   */
+  const supabase = createClient();
+  const { data: cfgWebhook } = await supabase
+    .from("plataforma_config")
+    .select("valor, atualizado_em")
+    .eq("chave", "asaas_webhook")
+    .maybeSingle();
+  const ultimoWebhook = (cfgWebhook?.valor ?? null) as
+    | { evento?: string; em?: string; aceito?: boolean; motivo?: string }
+    | null;
 
   if (n.erro) {
     return (
@@ -73,6 +92,48 @@ export default async function PlanosNegocio() {
             <p className="mt-1 break-all font-mono text-[11px]">{status.url_webhook}</p>
             <p className="mt-1 text-[11px] leading-snug text-muted">
               No Asaas: Integrações → Webhooks. Eventos <b>PAYMENT_CONFIRMED</b> e <b>PAYMENT_RECEIVED</b>.
+            </p>
+
+            {/* prova de vida — ver nota no topo do arquivo */}
+            <p className="mt-2 text-[11px] leading-snug">
+              {ultimoWebhook?.em ? (
+                <>
+                  <b className="text-verde">Recebendo eventos.</b>{" "}
+                  <span className="text-muted">
+                    Último: {ultimoWebhook.evento ?? "—"} em{" "}
+                    {new Date(ultimoWebhook.em).toLocaleString("pt-BR")}
+                    {ultimoWebhook.aceito === false ? ` · RECUSADO (${ultimoWebhook.motivo})` : ""}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <b className="text-amarelo">Nenhum evento recebido até agora.</b>{" "}
+                  <span className="text-muted">
+                    Se já houve pagamento, o webhook não está cadastrado — o cliente pagou e não
+                    entrou. Use “sincronizar” em Cobranças enquanto isso.
+                  </span>
+                </>
+              )}
+            </p>
+
+            <p className="mt-2 text-[11px] leading-snug">
+              {status.webhook_protegido ? (
+                <>
+                  <b className="text-verde">Protegido por token.</b>{" "}
+                  <span className="text-muted">
+                    Só evento com o <code>asaas-access-token</code> certo ativa assinatura.
+                  </span>
+                </>
+              ) : (
+                <>
+                  <b className="text-vermelho">Sem token de autenticação.</b>{" "}
+                  <span className="text-muted">
+                    Qualquer POST nesse endereço pode ativar uma assinatura. Preencha o campo
+                    “Token de autenticação” no webhook do Asaas e a variável{" "}
+                    <code>ASAAS_WEBHOOK_TOKEN</code> com o mesmo valor.
+                  </span>
+                </>
+              )}
             </p>
           </div>
         </div>
