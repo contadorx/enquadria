@@ -70,7 +70,12 @@ export default async function Emails() {
   let previsao: Envio[] = [];
   let erroPrevisao: string | null = null;
   try {
-    previsao = planejar(await carregarContexto(supabase));
+    const ctx = await carregarContexto(supabase);
+    /* fonte quebrada não pode virar "nada a enviar" na tela também: aqui o
+       painel funcionava (sessão de superadmin) enquanto o cron falhava, e foi
+       essa diferença que escondeu o bug */
+    erroPrevisao = ctx.erro ?? null;
+    previsao = ctx.erro ? [] : planejar(ctx);
   } catch (e) {
     erroPrevisao = e instanceof Error ? e.message : "não consegui montar a prévia";
   }

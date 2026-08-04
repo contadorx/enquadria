@@ -10,7 +10,7 @@
  * Rodado pelo testes/rodar-tudo.mjs junto das demais suítes puras.
  */
 
-import { planejar, emHorarioDeEnvio } from "./reguas.js";
+import { planejar, emHorarioDeEnvio, separarFila } from "./reguas.js";
 
 let f = 0;
 const ok = (c, m, e) => {
@@ -269,6 +269,33 @@ ok(emHorarioDeEnvio(utc(7, 15)), "sexta ao meio-dia: envia");
 
 // janela configurável
 ok(emHorarioDeEnvio(utc(3, 11), 8, 18), "com início às 8h, 11h UTC passa a valer");
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * FONTE QUEBRADA NÃO É "NADA A ENVIAR"
+ *
+ * O caso real: `negocio_escritorios()` barrava a service role, o erro era
+ * descartado, e o cron respondia {"planejados":0,"erros":[]}. Zero e zero — o
+ * mesmo que um dia tranquilo devolve. Foi assim que o motor ficou dias mudo
+ * enquanto a tela mostrava 16 na fila.
+ *
+ * `separarFila` existe para a outra metade do mesmo problema: o que está na
+ * fila e NUNCA vai sair precisa ter nome próprio.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+{
+  const E = (para) => ({
+    regra: "r", nome_regra: "R", categoria: "ativacao", tenant_id: "t",
+    escritorio: "X", para, assunto: "a", corpo: "c", chave_unica: "k", motivo: "m",
+  });
+  const { sairao, travados } = separarFila([E("a@b.c"), E(null), E("d@e.f"), E(null)]);
+  ok(sairao.length === 2, "separarFila: dois saem", sairao.length);
+  ok(travados.length === 2, "separarFila: dois travados sem destinatário", travados.length);
+  ok(sairao.length + travados.length === 4, "separarFila: nenhum sumiu no caminho");
+  ok(sairao.every((e) => !!e.para), "separarFila: quem sai TEM endereço");
+  ok(travados.every((e) => !e.para), "separarFila: quem trava NÃO tem endereço");
+
+  const vazio = separarFila([]);
+  ok(vazio.sairao.length === 0 && vazio.travados.length === 0, "separarFila: fila vazia não quebra");
+}
 
 console.log(f === 0 ? "TODOS OS TESTES PASSARAM" : `${f} FALHAS`);
 process.exit(f ? 1 : 0);

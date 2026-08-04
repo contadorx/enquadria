@@ -85,6 +85,19 @@ export async function GET(req: Request) {
     const r = await executarReguas(supabase, { simular: simular || !podeEnviar });
     reguas = { planejados: r.planejados, enviados: r.enviados, semEmail: r.semEmail };
     if (r.erros.length) erros.push(...r.erros.slice(0, 10));
+
+    /**
+     * ZERO PLANEJADOS COM ZERO ERROS É UMA AFIRMAÇÃO, não um silêncio.
+     *
+     * Foi exatamente o que esta rota respondeu por dias enquanto a tela
+     * mostrava 16 na fila — porque a RPC que lê os escritórios barrava a
+     * service role e o erro era descartado. A 0042 conserta a permissão; esta
+     * linha faz o relatório dizer em que pé está, para o próximo caso não
+     * precisar de investigação.
+     */
+    if (r.planejados === 0 && !r.erros.length) {
+      erros.push("nada planejado — confira se há escritório na base e se as réguas estão ligadas");
+    }
     if (simular) {
       lista = r.lista.map((e) => ({
         escritorio: e.escritorio, regra: e.nome_regra, motivo: e.motivo, para: e.para, assunto: e.assunto,

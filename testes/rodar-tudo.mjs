@@ -625,6 +625,49 @@ secao("Contratação — o clique que não fazia nada");
   ok("cada execução do motor deixa um batimento", /reguas_execucao/.test(cron));
   ok("e a tela mostra quando ele rodou pela última vez", /ultimaExec/.test(telaEmails));
 
+  /**
+   * ═════════════════════════════════════════════════════════════════════════
+   * O CRON PRECISA CONSEGUIR LER A BASE — o bug mais caro desta sequência.
+   *
+   * `negocio_escritorios()` é SECURITY DEFINER e exigia superadmin. O cron usa
+   * a service role, para quem `auth.uid()` é NULL: a função levantava
+   * "acesso restrito". O erro era descartado (a linha desestruturava só o
+   * `data`), a lista vinha vazia, e a resposta era {"planejados":0,"erros":[]}
+   * — indistinguível de um dia sem nada a fazer. Dias mudos com a tela
+   * mostrando 16 na fila, porque LÁ quem chama é a sessão do superadmin.
+   * ═════════════════════════════════════════════════════════════════════════
+   */
+  const mig42 = path.join(RAIZ, "supabase/migrations/0042_cron_le_escritorios.sql");
+  ok("existe a migration que deixa a service role ler os escritórios", fs.existsSync(mig42));
+  if (fs.existsSync(mig42)) {
+    const sql = fs.readFileSync(mig42, "utf8");
+    /* A VARREDURA IGNORA COMENTÁRIOS, e isso não é detalhe: esta migration
+       EXPLICA o bug em prosa, citando "service_role" e "current_user" no
+       texto. Olhando o arquivo inteiro, a guarda passava mesmo com a
+       liberação removida do código — porque a explicação continuava lá. */
+    const codigo = sql.replace(/^\s*--.*$/gm, "");
+    ok("a guarda nova aceita superadmin E service role",
+       /= 'service_role'/.test(codigo) && /is_superadmin/.test(codigo),
+       (codigo.match(/return[^;]*service_role[^;]*/) || ["não achei a liberação"])[0].trim());
+    /* current_user dentro de SECURITY DEFINER é o DONO da função, não quem
+       chamou: checar por ali daria "postgres" para todo mundo e liberaria geral */
+    ok("...e não usa current_user, que mentiria dentro de SECURITY DEFINER",
+       !/current_user/.test(codigo));
+    ok("e a RPC de escritórios passou a usar a guarda nova",
+       /negocio_escritorios[\s\S]*e_plataforma\(\)/.test(sql));
+  }
+
+  const rg = fs.readFileSync(path.join(RAIZ, "lib/reguas.ts"), "utf8");
+  /* olhar por "error" no arquivo inteiro casaria com qualquer coisa: a
+     checagem é na desestruturação da RPC, que era exatamente o que faltava */
+  ok("o contexto das réguas LÊ o erro da RPC em vez de descartá-lo",
+     /\{ data: escRaw, error: escErro \}/.test(rg),
+     (rg.match(/const \[\{ data: escRaw[^\]]*/) || ["não achei a leitura"])[0].slice(0, 90));
+  ok("e fonte quebrada não vira fila vazia silenciosa",
+     /if \(ctx\.erro\)/.test(rg) && /erros: \[ctx\.erro\]/.test(rg));
+  ok("o cron não relata 0 planejados sem dizer nada",
+     /planejados === 0 && !r\.erros\.length/.test(cron));
+
   const tela = fs.readFileSync(path.join(RAIZ, "app/painel/planos/page.tsx"), "utf8");
   ok("a tela de planos tem onde mostrar o erro da contratação",
      /erroCheckout/.test(tela));

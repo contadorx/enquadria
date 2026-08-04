@@ -80,6 +80,16 @@ export interface Envio {
 
 export interface Contexto {
   escritorios: EscritorioRegua[];
+  /**
+   * A FONTE FALHOU — e isso não pode virar "nada a fazer".
+   *
+   * Sem este campo, um erro ao ler a base de escritórios produzia lista vazia,
+   * `planejar()` devolvia zero e o cron respondia
+   * `{"planejados":0,"erros":[]}`. Zero e zero: exatamente o que um dia
+   * tranquilo também devolve. Foi assim que o motor ficou dias sem mandar nada
+   * enquanto a tela mostrava 16 na fila.
+   */
+  erro?: string;
   regras: Regra[];
   jaEnviados: Set<string>;
   limiteGratis: number;
@@ -489,7 +499,7 @@ export function planejar(ctx: Contexto): Envio[] {
 // CONTEXTO
 // ---------------------------------------------------------------------------
 export async function carregarContexto(db: any): Promise<Contexto> {
-  const [{ data: escRaw }, { data: regrasRaw }, { data: cfgRaw }, { data: enviados }, { data: planoGratis }] =
+  const [{ data: escRaw, error: escErro }, { data: regrasRaw }, { data: cfgRaw }, { data: enviados }, { data: planoGratis }] =
     await Promise.all([
       db.rpc("negocio_escritorios"),
       db.from("plataforma_reguas").select("*").order("ordem", { ascending: true }),
@@ -501,6 +511,22 @@ export async function carregarContexto(db: any): Promise<Contexto> {
 
   const cfg: Record<string, any> = {};
   for (const c of ((cfgRaw as any[]) || [])) cfg[c.chave] = c.valor;
+
+  /**
+   * O ERRO DA RPC, que era descartado — a causa raiz do motor mudo.
+   *
+   * `negocio_escritorios()` é SECURITY DEFINER e barrava a service role: para
+   * ela `auth.uid()` é NULL, `e_superadmin()` devolve false, e a função levanta
+   * "acesso restrito ao dono da plataforma". O painel funcionava (chama pela
+   * sessão do superadmin); o CRON não — a mesma função, dois resultados.
+   *
+   * O `error` vinha e ninguém lia, porque a linha desestruturava só o `data`.
+   * A migration 0042 conserta a permissão; esta linha garante que, se algum dia
+   * a leitura falhar de novo, isso apareça em vez de virar fila vazia.
+   */
+  const erro = escErro
+    ? `não consegui ler os escritórios: ${escErro.message ?? escErro}`
+    : undefined;
 
   const escritorios = (((escRaw as any[]) || []) as any[]).map((e) => ({
     id: e.id,
@@ -524,6 +550,7 @@ export async function carregarContexto(db: any): Promise<Contexto> {
 
   return {
     escritorios,
+    erro,
     regras: ((regrasRaw as any[]) || []) as Regra[],
     jaEnviados: new Set(((enviados as any[]) || []).map((x) => x.chave_unica)),
     limiteGratis: Number((planoGratis as any)?.limite_analises ?? 2),
@@ -554,6 +581,12 @@ export async function executarReguas(
   opts: { simular?: boolean } = {}
 ): Promise<ResultadoRegua> {
   const ctx = await carregarContexto(db);
+
+  /* fonte quebrada NÃO é "nada a enviar": parar aqui, com o motivo, evita o
+     relatório tranquilizador de 0 planejados / 0 erros */
+  if (ctx.erro) {
+    return { planejados: 0, enviados: 0, semEmail: 0, erros: [ctx.erro], lista: [] };
+  }
 
   if (!ctx.config.ativas) {
     return { planejados: 0, enviados: 0, semEmail: 0, erros: ["réguas desligadas em Negócio → E-mails"], lista: [] };
