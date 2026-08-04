@@ -428,6 +428,35 @@ secao("Contratação — o clique que não fazia nada");
   ok("o link de pagamento sai por e-mail na hora da contratação",
      /htmlCobrancaGerada/.test(checkout2));
 
+
+  /**
+   * QUEM ESCREVE FATURA É O SERVIDOR — nunca a sessão do usuário.
+   *
+   * Bug real: o checkout gravava a fatura com o cliente da SESSÃO. A RLS de
+   * `faturas` dá ao escritório apenas SELECT (de propósito: quem pudesse
+   * escrever inseriria uma linha "paga" e liberaria acesso sem pagar). A
+   * escrita era recusada, o supabase-js devolve `{error}` em vez de lançar, o
+   * código ignorava — e o sintoma foi: o e-mail da cobrança saía e a fatura
+   * não aparecia em lugar nenhum.
+   */
+  const mig39 = fs.readFileSync(path.join(RAIZ, "supabase/migrations/0039_faturas.sql"), "utf8");
+  ok("a RLS de faturas dá só leitura ao escritório",
+     /faturas_do_escritorio[\s\S]{0,120}for select/.test(mig39));
+
+  const ck = fs.readFileSync(path.join(RAIZ, "app/api/checkout/route.ts"), "utf8");
+  /* olhar uma janela em volta da chamada casava com o `createAdminClient` da
+     linha vizinha e passava mesmo com a escrita feita pela sessão — que é o
+     defeito exato que existia. A checagem é na CHAMADA. */
+  ok("...e por isso o checkout grava a fatura com o cliente de serviço",
+     /\(admin \?\? supabase\)\.from\("faturas"\)/.test(ck),
+     (ck.match(/[\w.() ?]*\.from\("faturas"\)/) || ["não achei a chamada"])[0]);
+  ok("e o erro da gravação não é engolido", /erroFatura/.test(ck));
+
+  /* o terceiro estado da tela de planos: contratado e ainda não pago */
+  const telaPlanos = fs.readFileSync(path.join(RAIZ, "app/painel/planos/page.tsx"), "utf8");
+  ok("a tela de planos mostra a assinatura pendente de pagamento",
+     /pendente/.test(telaPlanos) && /aguardando/i.test(telaPlanos));
+
   const tela = fs.readFileSync(path.join(RAIZ, "app/painel/planos/page.tsx"), "utf8");
   ok("a tela de planos tem onde mostrar o erro da contratação",
      /erroCheckout/.test(tela));

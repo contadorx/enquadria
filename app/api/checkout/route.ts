@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
+import { createAdminClient } from "@/lib/supabase-admin";
 import { criarCobranca } from "@/lib/asaas";
 import { criticaDocumento, limparDocumento } from "@/lib/documento";
 import { enviarEmail } from "@/lib/email";
@@ -86,8 +87,23 @@ export async function POST(req: Request) {
      *
      * O `upsert` por `asaas_id` (índice único na 0039) faz esta escrita e a do
      * webhook convergirem para a MESMA linha, não importa qual chegue antes.
+     *
+     * ─────────────────────────────────────────────────────────────────────
+     * ESCREVE COM O CLIENTE DE SERVIÇO, e isto é a correção de um bug meu.
+     *
+     * A RLS de `faturas` dá ao escritório apenas SELECT — de propósito: se o
+     * usuário pudesse escrever na própria tabela de faturas, poderia inserir
+     * uma linha "paga" e liberar acesso sem pagar. Quem escreve fatura é o
+     * servidor, a partir do que o Asaas confirma.
+     *
+     * Só que este trecho estava usando o cliente da SESSÃO. A RLS recusava a
+     * escrita, o supabase-js devolve `{ error }` em vez de lançar, o código
+     * ignorava, e o resultado era exatamente o relatado: o e-mail da cobrança
+     * saía (ele vem depois) e a fatura não aparecia em lugar nenhum.
+     * ─────────────────────────────────────────────────────────────────────
      */
-    await supabase.from("faturas").upsert(
+    const admin = createAdminClient();
+    const { error: erroFatura } = await (admin ?? supabase).from("faturas").upsert(
       {
         tenant_id: tenantId,
         assinatura_id: assinatura.id,
@@ -103,6 +119,14 @@ export async function POST(req: Request) {
       },
       { onConflict: "asaas_id" }
     );
+
+    /* erro engolido foi a causa do bug; agora ele aparece no log com nome */
+    if (erroFatura) {
+      console.error(
+        `[checkout] fatura NÃO registrada (assinatura ${assinatura.id}): ${erroFatura.message}` +
+          (admin ? "" : " — SUPABASE_SERVICE_ROLE_KEY ausente, a escrita foi tentada com a sessão e a RLS recusa")
+      );
+    }
 
     /**
      * O E-MAIL COM O LINK, AGORA — sem depender de webhook.

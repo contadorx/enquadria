@@ -83,6 +83,10 @@ ok    e o alias reexporta o mesmo handler, sem copiar a lógica
 ok    existe como reimportar as faturas que o webhook perdeu
 ok    e a importação só aceita pagamento com externalReference nosso
 ok    o link de pagamento sai por e-mail na hora da contratação
+ok    a RLS de faturas dá só leitura ao escritório
+ok    ...e por isso o checkout grava a fatura com o cliente de serviço
+ok    e o erro da gravação não é engolido
+ok    a tela de planos mostra a assinatura pendente de pagamento
 ok    a tela de planos tem onde mostrar o erro da contratação
 ok    e trata o pop-up bloqueado, que também parece clique perdido
 
@@ -190,4 +194,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 157 verificações automáticas
+TUDO PASSOU — 161 verificações automáticas

@@ -36,6 +36,16 @@ export default function Planos() {
   const [documento, setDocumento] = useState("");
   const [pedindoDoc, setPedindoDoc] = useState<string | null>(null);
   const [erroCheckout, setErroCheckout] = useState<string | null>(null);
+  /**
+   * A ASSINATURA CONTRATADA E AINDA NÃO PAGA.
+   *
+   * `assinatura_ativa` só devolve o que já está ATIVO — e é assim que tem que
+   * ser, porque é ela que libera o produto. O efeito colateral era esta tela:
+   * quem contratava e ia pagar o boleto voltava e via "Plano gratuito" com o
+   * botão "Assinar" de novo, como se nada tivesse acontecido. O terceiro
+   * estado — contratado, aguardando pagamento — não existia.
+   */
+  const [pendente, setPendente] = useState<{ plano_id: string } | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -69,6 +79,20 @@ export default function Planos() {
       if (a?.plano_id) {
         setAtivo(a.plano_id);
         setIlimitado(a.limite_analises == null);
+      } else {
+        /* sem assinatura ativa: será que existe uma esperando pagamento? */
+        /* sem ordenar por data: a auditoria de schema mostrou que
+           `assinaturas.criado_em` não tem proveniência nas migrations deste
+           repositório, e pedir coluna que talvez não exista quebra em
+           produção sem quebrar aqui. Qual das pendentes aparece não importa —
+           a tela só precisa saber que existe uma. */
+        const { data: pend } = await supabase
+          .from("assinaturas")
+          .select("id, plano_id")
+          .eq("status", "pendente")
+          .limit(1);
+        const p0 = (pend ?? [])[0] as { plano_id?: string } | undefined;
+        if (p0?.plano_id) setPendente({ plano_id: p0.plano_id });
       }
 
       const { count } = await supabase
@@ -144,7 +168,7 @@ export default function Planos() {
       <div className="mt-4 flex flex-wrap items-center justify-between gap-4 rounded border border-line bg-surface px-4 py-3.5">
         <div>
           <div className="text-[13px] font-semibold">
-            {semAssinatura ? "Plano gratuito" : "Plano ativo"}
+            {ativo ? "Plano ativo" : pendente ? "Contratado — aguardando pagamento" : "Plano gratuito"}
           </div>
           <div className="mt-0.5 text-[12.5px] text-muted">
             {ilimitado ? (
@@ -172,6 +196,8 @@ export default function Planos() {
       <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {planos.map((p) => {
           const eAtivo = ativo === p.id;
+          /* contratado e esperando o pagamento cair — nem grátis, nem ativo */
+          const ePendente = !eAtivo && pendente?.plano_id === p.id;
           const gratuito = p.preco_centavos === 0;
           const destaque = p.id === "assinatura" || p.id === "pro_anual";
           const atualGratuito = gratuito && semAssinatura;
@@ -207,15 +233,34 @@ export default function Planos() {
                   {atualGratuito ? "Seu plano atual" : "Incluso em todos os planos"}
                 </div>
               ) : (
+                <>
                 <button
                   onClick={() => contratar(p.id)}
                   disabled={ocupado === p.id || eAtivo}
+                  title={ePendente ? "Já existe uma cobrança em aberto deste plano" : undefined}
                   className={`mt-5 rounded-sm py-2.5 text-sm font-semibold ${
-                    eAtivo ? "bg-verdewash text-verde" : "bg-ink text-white disabled:opacity-40"
+                    eAtivo
+                      ? "bg-verdewash text-verde"
+                      : ePendente
+                        ? "border border-amarelo bg-amarelowash text-amarelo"
+                        : "bg-ink text-white disabled:opacity-40"
                   }`}
                 >
-                  {eAtivo ? "Plano ativo" : ocupado === p.id ? "..." : "Assinar"}
+                  {eAtivo
+                    ? "Plano ativo"
+                    : ocupado === p.id
+                      ? "..."
+                      : ePendente
+                        ? "Gerar nova cobrança"
+                        : "Assinar"}
                 </button>
+                {ePendente && (
+                  <p className="mt-2 text-[11.5px] leading-relaxed text-amarelo">
+                    Contratado, aguardando o pagamento. A cobrança está em <b>Minhas faturas</b>,
+                    logo abaixo — o acesso abre sozinho quando o pagamento for confirmado.
+                  </p>
+                )}
+                </>
               )}
             </div>
           );
