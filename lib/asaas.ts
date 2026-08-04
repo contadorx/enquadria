@@ -8,6 +8,8 @@
  * Ambiente: ASAAS_ENV = 'sandbox' | 'production' (default sandbox).
  */
 
+import { statusDoAsaas } from "./faturas";
+
 const BASE = {
   sandbox: "https://sandbox.asaas.com/api/v3",
   production: "https://api.asaas.com/v3",
@@ -161,6 +163,8 @@ export interface StatusAsaas {
   ambiente: "sandbox" | "production";
   tem_chave: boolean;
   url_webhook: string;
+  /** caminho alternativo, aceito pelo mesmo handler */
+  url_webhook_alt: string;
   /**
    * O webhook exige token? Enquanto não exigir, qualquer POST forjado ativa
    * uma assinatura — e o painel precisa dizer isso em voz alta, porque é o
@@ -185,6 +189,10 @@ export async function statusAsaas(): Promise<StatusAsaas> {
     ambiente,
     tem_chave: !!key,
     url_webhook: `${app.replace(/\/$/, "")}/api/asaas`,
+    /* o mesmo webhook responde nos dois caminhos: o segundo é o que a gente
+       digitou no painel do Asaas por engano em 04/08 e levou 404 + penalização.
+       Manter os dois é mais barato que um dia de eventos perdidos. */
+    url_webhook_alt: `${app.replace(/\/$/, "")}/api/webhooks/asaas`,
     webhook_protegido: !!process.env.ASAAS_WEBHOOK_TOKEN,
   };
   if (!key) return { ...base_, erro: "ASAAS_API_KEY não está no ambiente." };
@@ -304,4 +312,105 @@ export async function reconciliarAssinatura(
     .eq("id", assinaturaId);
 
   return { status: pagamento.status, pago: true, valido_ate: validoAte };
+}
+
+
+/**
+ * IMPORTA AS FATURAS QUE JÁ EXISTEM NO ASAAS.
+ *
+ * POR QUE ISTO PRECISOU EXISTIR: o webhook ficou apontando para um endereço
+ * errado e o Asaas devolveu 404 em cada evento até suspender a fila. As
+ * cobranças foram criadas normalmente lá — e aqui não havia nada. Reativar o
+ * webhook resolve o futuro; o passado só volta perguntando.
+ *
+ * É a mesma ideia do botão "sincronizar" de uma assinatura, no atacado:
+ * webhook é entrega best-effort, e todo sistema que depende de webhook precisa
+ * de um caminho para reconstruir o estado sem ele.
+ *
+ * O VÍNCULO É O `externalReference` — o id da assinatura que nós mesmos
+ * mandamos ao criar a cobrança. Pagamento sem ele não é nosso (pode ser de
+ * outra origem na mesma conta Asaas) e é ignorado: pendurar uma cobrança
+ * alheia no escritório errado seria pior que não ter a linha.
+ */
+export async function importarFaturas(
+  db: DbSimples,
+  limite = 100
+): Promise<{ lidas: number; gravadas: number; ignoradas: number; erro?: string }> {
+  const key = process.env.ASAAS_API_KEY;
+  if (!key) return { lidas: 0, gravadas: 0, ignoradas: 0, erro: "ASAAS_API_KEY não está no ambiente." };
+
+  let pagamentos: Array<{
+    id?: string;
+    value?: number;
+    description?: string;
+    status?: string;
+    dueDate?: string;
+    invoiceUrl?: string;
+    bankSlipUrl?: string;
+    externalReference?: string;
+    confirmedDate?: string;
+    paymentDate?: string;
+  }> = [];
+
+  try {
+    const resp = await fetch(`${baseUrl()}/payments?limit=${limite}&order=desc`, {
+      headers: cabecalhos(key),
+      cache: "no-store",
+    });
+    if (!resp.ok) {
+      return {
+        lidas: 0,
+        gravadas: 0,
+        ignoradas: 0,
+        erro: resp.status === 401 ? "O Asaas recusou a chave (401)." : `Asaas respondeu ${resp.status}.`,
+      };
+    }
+    const j = (await resp.json()) as { data?: typeof pagamentos };
+    pagamentos = j.data ?? [];
+  } catch (e) {
+    return { lidas: 0, gravadas: 0, ignoradas: 0, erro: e instanceof Error ? e.message : "falha de rede" };
+  }
+
+  let gravadas = 0;
+  let ignoradas = 0;
+
+  for (const p of pagamentos) {
+    if (!p.id || !p.externalReference) {
+      ignoradas++;
+      continue;
+    }
+    const { data: assin } = await db
+      .from("assinaturas")
+      .select("id, tenant_id, plano_id")
+      .eq("id", p.externalReference)
+      .maybeSingle();
+    const a = assin as { id?: string; tenant_id?: string; plano_id?: string } | null;
+    if (!a?.tenant_id) {
+      ignoradas++;
+      continue;
+    }
+
+    const status = statusDoAsaas(p.status);
+    const pagoEm = status === "pago" ? p.confirmedDate || p.paymentDate || null : null;
+
+    await db.from("faturas").upsert(
+      {
+        tenant_id: a.tenant_id,
+        assinatura_id: a.id ?? null,
+        asaas_id: p.id,
+        valor_centavos: Math.round(Number(p.value || 0) * 100),
+        status,
+        vencimento: p.dueDate ?? null,
+        pago_em: pagoEm ? new Date(pagoEm).toISOString() : null,
+        link_pagamento: p.invoiceUrl ?? null,
+        link_boleto: p.bankSlipUrl ?? null,
+        descricao: p.description ?? null,
+        atualizado_em: new Date().toISOString(),
+      },
+      { onConflict: "asaas_id" }
+    );
+    gravadas++;
+  }
+
+  return { lidas: pagamentos.length, gravadas, ignoradas };
 }

@@ -310,6 +310,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, status: await statusAsaas() });
     }
 
+    /**
+     * RECONSTRÓI AS FATURAS a partir do que existe no Asaas.
+     *
+     * Existe porque o webhook pode ter ficado horas (ou dias) apontando para o
+     * endereço errado — foi o que aconteceu em 04/08/2026, com 404 em cada
+     * evento até o Asaas suspender a fila. Reativar o webhook conserta o
+     * futuro; o passado só volta perguntando.
+     */
+    case "importar_faturas": {
+      const { importarFaturas } = await import("@/lib/asaas");
+      const r = await importarFaturas(dbEscrita(supabase));
+      return NextResponse.json(r.erro ? { erro: r.erro } : { ok: true, ...r });
+    }
+
     case "snapshot": {
       const { data, error } = await supabase.rpc("negocio_snapshot");
       if (error) return NextResponse.json({ erro: error.message }, { status: 500 });

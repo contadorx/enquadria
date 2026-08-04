@@ -766,6 +766,8 @@ export function NovoPlano() {
 export function TestarAsaas({ inicial }: { inicial: Record<string, unknown> }) {
   const [s, setS] = useState(inicial);
   const [pend, start] = useTransition();
+  /* o que a importação trouxe — ver "importar_faturas" na API */
+  const [importado, setImportado] = useState<string | null>(null);
   const conta = s.conta as { nome?: string; email?: string; cpfCnpj?: string } | undefined;
 
   return (
@@ -788,6 +790,34 @@ export function TestarAsaas({ inicial }: { inicial: Record<string, unknown> }) {
         ) : (
           <span className="text-[12px] font-bold text-vermelho">✕ não conectado</span>
         )}
+      </div>
+
+      {/*
+        O CONSERTO DO PASSADO. Webhook parado (endereço errado, servidor fora,
+        fila suspensa pelo Asaas) deixa buraco no histórico: a cobrança existe
+        lá e não existe aqui. Reativar o webhook resolve daqui para frente;
+        isto traz o que ficou para trás.
+      */}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button
+          className={btnClaro}
+          disabled={pend}
+          onClick={() =>
+            start(async () => {
+              const r = await acao({ acao: "importar_faturas" });
+              setImportado(
+                r.erro
+                  ? String(r.erro)
+                  : `${r.gravadas} fatura(s) gravada(s) de ${r.lidas} lida(s)${
+                      r.ignoradas ? ` · ${r.ignoradas} ignorada(s) por não serem deste sistema` : ""
+                    }.`
+              );
+            })
+          }
+        >
+          {pend ? "Importando…" : "Importar faturas do Asaas"}
+        </button>
+        {importado && <span className="text-[12px] text-slate2">{importado}</span>}
       </div>
 
       {typeof s.erro === "string" && (

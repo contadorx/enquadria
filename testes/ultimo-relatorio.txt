@@ -78,6 +78,11 @@ ok    as chamadas mandam User-Agent (sem ele o Asaas responde 401)
 ok    o erro do Asaas sobe em vez de virar null
 ok    o checkout recusa antes de chamar o Asaas quando falta documento
 ok    e responde erro quando o Asaas está ligado e não devolveu link
+ok    o webhook também responde em /api/webhooks/asaas
+ok    e o alias reexporta o mesmo handler, sem copiar a lógica
+ok    existe como reimportar as faturas que o webhook perdeu
+ok    e a importação só aceita pagamento com externalReference nosso
+ok    o link de pagamento sai por e-mail na hora da contratação
 ok    a tela de planos tem onde mostrar o erro da contratação
 ok    e trata o pop-up bloqueado, que também parece clique perdido
 
@@ -185,4 +190,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 152 verificações automáticas
+TUDO PASSOU — 157 verificações automáticas

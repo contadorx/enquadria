@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { criarCobranca } from "@/lib/asaas";
 import { criticaDocumento, limparDocumento } from "@/lib/documento";
+import { enviarEmail } from "@/lib/email";
+import { htmlCobrancaGerada } from "@/lib/emails-cliente";
 
 /** cria a assinatura pendente e a cobrança Asaas para um plano */
 export async function POST(req: Request) {
@@ -101,6 +103,40 @@ export async function POST(req: Request) {
       },
       { onConflict: "asaas_id" }
     );
+
+    /**
+     * O E-MAIL COM O LINK, AGORA — sem depender de webhook.
+     *
+     * Era o elo que faltava: a cobrança nascia e o contador ficava sem nada na
+     * mão. Falha aqui não desfaz a contratação (o link já está na tela e na
+     * central de faturas), então o erro só vai para o log.
+     */
+    const paraEmail = perfil?.email ?? user.email;
+    if (paraEmail && cobranca.checkout_url) {
+      try {
+        const r = await enviarEmail({
+          para: paraEmail,
+          nome,
+          assunto: `Sua cobrança do ${plano.nome} — Enquadria`,
+          html: htmlCobrancaGerada({
+            escritorio: { nome: "Enquadria" },
+            plano: plano.nome,
+            valor: (plano.preco_centavos / 100).toLocaleString("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            }),
+            vencimento: cobranca.vencimento
+              ? new Date(`${cobranca.vencimento}T12:00:00`).toLocaleDateString("pt-BR")
+              : null,
+            link: cobranca.checkout_url,
+          }),
+          tag: "cobranca-gerada",
+        });
+        if (!r.enviado) console.error(`[checkout] e-mail da cobrança não saiu: ${r.motivo}`);
+      } catch (e) {
+        console.error("[checkout] e-mail da cobrança falhou:", e instanceof Error ? e.message : e);
+      }
+    }
   }
 
   /**

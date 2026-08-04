@@ -395,6 +395,39 @@ secao("Contratação — o clique que não fazia nada");
   ok("e responde erro quando o Asaas está ligado e não devolveu link",
      /cobranca\.ativo && !cobranca\.checkout_url/.test(checkout));
 
+
+  /**
+   * O WEBHOOK PRECISA RESPONDER NOS DOIS CAMINHOS.
+   *
+   * Caso real (04/08/2026): a rota vive em `/api/asaas`, o painel do Asaas foi
+   * configurado com `/api/webhooks/asaas` — o caminho mais natural de escrever.
+   * Resultado: 404 em todo evento, penalização automática, fila suspensa. A
+   * cobrança existia lá e não existia aqui: sem fatura, sem e-mail, sem acesso.
+   *
+   * Nada disso quebra build. O que protege é exigir que os dois endereços
+   * continuem existindo — e que o segundo NÃO seja uma segunda implementação,
+   * que divergiria na primeira correção.
+   */
+  const alias = path.join(RAIZ, "app/api/webhooks/asaas/route.ts");
+  ok("o webhook também responde em /api/webhooks/asaas", fs.existsSync(alias));
+  if (fs.existsSync(alias)) {
+    const src = fs.readFileSync(alias, "utf8");
+    ok("e o alias reexporta o mesmo handler, sem copiar a lógica",
+       /export \{ POST \} from "@\/app\/api\/asaas\/route"/.test(src) && !/statusDoAsaas|upsert/.test(src));
+  }
+
+  /* webhook é entrega best-effort: tem que existir caminho para reconstruir */
+  const asaasLib = fs.readFileSync(path.join(RAIZ, "lib/asaas.ts"), "utf8");
+  ok("existe como reimportar as faturas que o webhook perdeu",
+     /export async function importarFaturas/.test(asaasLib));
+  ok("e a importação só aceita pagamento com externalReference nosso",
+     /externalReference/.test(asaasLib.slice(asaasLib.indexOf("importarFaturas"))));
+
+  /* a cobrança gerada não pode depender de webhook para chegar em alguém */
+  const checkout2 = fs.readFileSync(path.join(RAIZ, "app/api/checkout/route.ts"), "utf8");
+  ok("o link de pagamento sai por e-mail na hora da contratação",
+     /htmlCobrancaGerada/.test(checkout2));
+
   const tela = fs.readFileSync(path.join(RAIZ, "app/painel/planos/page.tsx"), "utf8");
   ok("a tela de planos tem onde mostrar o erro da contratação",
      /erroCheckout/.test(tela));

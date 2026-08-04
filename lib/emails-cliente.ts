@@ -225,6 +225,45 @@ export function htmlAberturaCliente(params: {
    ═══════════════════════════════════════════════════════════════════════ */
 
 /**
+ * A COBRANÇA QUE ACABOU DE SER GERADA.
+ *
+ * POR QUE ESTE E-MAIL EXISTE. A cobrança nascia e ficava esperando o contador
+ * lembrar de voltar à tela — ou torcendo para o aviso do meio de pagamento
+ * chegar. Em 04/08/2026 aconteceu o caso extremo: a cobrança foi criada no
+ * Asaas, o webhook estava apontando para um endereço errado, e do lado de cá
+ * não havia fatura, nem e-mail, nem nada. O dinheiro existia e ninguém sabia.
+ *
+ * Este e-mail não depende de webhook nenhum: sai no mesmo instante em que o
+ * link de pagamento é gerado, com o link dentro. É o comprovante de que a
+ * contratação aconteceu.
+ *
+ * VAI PARA O CONTADOR, não para o cliente dele — é ele quem assina o Enquadria.
+ */
+export function htmlCobrancaGerada(params: {
+  escritorio: string | Escritorio;
+  plano: string;
+  valor: string;
+  vencimento?: string | null;
+  link: string;
+}): string {
+  return moldura({
+    escritorio: params.escritorio,
+    paraCliente: false,
+    corpo: `
+    <p>Sua cobrança do <strong>${escapar(params.plano)}</strong> foi gerada:
+    <strong>${escapar(params.valor)}</strong>${
+      params.vencimento ? `, com vencimento em ${escapar(params.vencimento)}` : ""
+    }.</p>
+    ${botao(params.link, "Pagar agora")}
+    <p style="font-size:13px;color:#64748B">Pix, boleto ou cartão — você escolhe na página. O acesso
+    abre automaticamente assim que o pagamento é confirmado; no Pix costuma ser em minutos, no
+    boleto pode levar um dia útil.</p>
+    <p style="font-size:13px;color:#64748B">Este link fica guardado em <strong>Planos → Minhas
+    faturas</strong>, junto com todo o histórico. Não precisa procurar este e-mail depois.</p>`,
+  });
+}
+
+/**
  * A EMPRESA RESPONDEU A COLETA.
  *
  * Sem este aviso, o formulário voltava e ficava esperando alguém abrir o dossiê

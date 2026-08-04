@@ -91,7 +91,13 @@ export default async function PlanosNegocio() {
             <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Webhook</p>
             <p className="mt-1 break-all font-mono text-[11px]">{status.url_webhook}</p>
             <p className="mt-1 text-[11px] leading-snug text-muted">
-              No Asaas: Integrações → Webhooks. Eventos <b>PAYMENT_CONFIRMED</b> e <b>PAYMENT_RECEIVED</b>.
+              No Asaas: Integrações → Webhooks. Eventos <b>PAYMENT_CREATED</b>,{" "}
+              <b>PAYMENT_CONFIRMED</b>, <b>PAYMENT_RECEIVED</b> e <b>PAYMENT_OVERDUE</b>.
+            </p>
+            {/* o 404 de 04/08 veio de digitar o outro caminho; os dois valem */}
+            <p className="mt-1 break-all text-[10.5px] leading-snug text-muted">
+              Este endereço também funciona:{" "}
+              <span className="font-mono">{status.url_webhook_alt}</span>
             </p>
 
             {/* prova de vida — ver nota no topo do arquivo */}
