@@ -172,6 +172,48 @@ export function htmlComparativoCliente(params: {
 }
 
 
+/**
+ * O ESTUDO DE ABERTURA — o único e-mail deste conjunto que vai a alguém que
+ * NÃO É CLIENTE de ninguém ainda.
+ *
+ * Isso muda o tom inteiro. Não há relação estabelecida, não há "sobre a
+ * empresa X": há uma pessoa que perguntou se vale a pena abrir e recebeu, de
+ * volta, um documento com nome, número e assinatura profissional. É a peça
+ * comercial mais forte do produto, e ela se estraga com uma linha de venda —
+ * o documento é que vende.
+ *
+ * O convite ao fim é explícito de propósito: sem ele, um estudo excelente
+ * termina em "obrigado" e o contador nunca sabe se ganhou o cliente.
+ */
+export function htmlAberturaCliente(params: {
+  negocio: string;
+  escritorio: string | Escritorio;
+  link: string;
+  numero: number;
+  /** o regime de menor carga no cenário projetado */
+  regime?: string | null;
+}): string {
+  const numero = String(params.numero).padStart(4, "0");
+  const frase = params.regime
+    ? `No faturamento que você projetou, o regime de menor carga é o <strong>${escapar(params.regime)}</strong>.`
+    : `O estudo coloca os regimes lado a lado, com a carga anual de cada um.`;
+
+  return moldura({
+    escritorio: params.escritorio,
+    corpo: `
+    <p>Como combinamos, preparei o <strong>estudo de abertura nº ${numero}</strong> para a
+    <strong>${escapar(params.negocio)}</strong>.</p>
+    <p>${frase} O estudo roda três cenários de faturamento — inclusive um bem abaixo do esperado —
+    porque quem está abrindo tem projeção, não histórico: o que interessa saber é se a resposta
+    muda quando o mês vem fraco.</p>
+    ${botao(params.link, "Abrir o estudo")}
+    <p style="font-size:13px;color:#64748B">É um comparativo de cenários a partir das projeções que
+    você me passou, não uma apuração — e algumas alíquotas da reforma ainda nem foram publicadas.
+    Se quiser conversar sobre o resultado antes de decidir, é só responder a este e-mail.</p>`,
+  });
+}
+
+
 /* ═══════════════════════════════════════════════════════════════════════
    OS DOIS QUE VÃO AO CONTADOR
 
@@ -321,16 +363,21 @@ export function htmlPedidoColeta(params: {
 export function htmlConviteIndicacao(params: {
   indicado: string;
   quemIndicou: string;
-  escritorio: string;
+  /** o escritório de quem indicou, quando é diferente do nome dele */
+  escritorio?: string | null;
   link: string;
 }): string {
+  /* sem escritório separado, a frase não pode virar "Fulano, do Fulano," */
+  const casa = params.escritorio?.trim()
+    ? `, do ${escapar(params.escritorio.trim())},`
+    : "";
   return moldura({
     escritorio: { nome: "Enquadria" },
     paraCliente: false,
     corpo: `
     <p>Olá, ${escapar(params.indicado)}.</p>
-    <p><strong>${escapar(params.quemIndicou)}</strong>, do ${escapar(params.escritorio)}, indicou
-    você para conhecer o Enquadria.</p>
+    <p><strong>${escapar(params.quemIndicou)}</strong>${casa} indicou você para conhecer o
+    Enquadria.</p>
     <p>É um sistema para contadores decidirem, com laudo e memória de cálculo, quais clientes do
     Simples Nacional devem recolher IBS/CBS por fora do DAS a partir de 2027. A escolha precisa
     ser feita até <strong>30 de setembro</strong> e vale o ano inteiro.</p>

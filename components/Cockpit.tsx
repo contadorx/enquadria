@@ -457,6 +457,55 @@ export function Cockpit({
           })}
         </div>
 
+        {/*
+          "PRECISAM DECIDIR" É UNIVERSO, NÃO PENDÊNCIA.
+          O número não baixa conforme o trabalho anda — é a faixa A+B inteira.
+          Clicar nele trazia empresas já decididas no meio da lista sem dizer
+          isso em lugar nenhum. Esta linha é a diferença entre as duas coisas,
+          e só aparece quando o filtro está ligado.
+        */}
+        {etapa === "decidem" && (
+          <div className="mt-2 rounded-sm bg-surface2 px-3 py-2 text-[12px] leading-relaxed text-slate2">
+            {esteira.decidem_pendentes === 0 ? (
+              <>
+                As <b>{esteira.decidem}</b> empresas desta janela já têm laudo emitido. O que sobra
+                aqui é acompanhamento de assinatura.
+              </>
+            ) : (
+              <>
+                <b>{esteira.decidem_pendentes}</b> das {esteira.decidem} ainda não têm laudo — as
+                demais já foram avaliadas e aparecem como decididas. A fila começa pelas pendentes.{" "}
+                <button
+                  // ux-ok: o clique refaz a própria lista logo abaixo
+                  onClick={() => {
+                    setEtapa("decidem_pendentes");
+                    setMostrar(PAGINA);
+                  }}
+                  className="font-semibold text-accentdeep underline underline-offset-2"
+                >
+                  ver só as pendentes
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {etapa === "decidem_pendentes" && (
+          <div className="mt-2 rounded-sm bg-surface2 px-3 py-2 text-[12px] text-slate2">
+            Mostrando só as <b>{esteira.decidem_pendentes}</b> sem laudo.{" "}
+            <button
+              // ux-ok: o clique refaz a própria lista logo abaixo
+              onClick={() => {
+                setEtapa("decidem");
+                setMostrar(PAGINA);
+              }}
+              className="font-semibold text-accentdeep underline underline-offset-2"
+            >
+              ver as {esteira.decidem} da janela
+            </button>
+          </div>
+        )}
+
         <div className="mt-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-linesoft pt-2.5">
           <div className="text-[12.5px] text-slate2">
             <b className="font-mono text-[15px] text-ink">{moeda(mesa.valor)}</b> ainda na mesa —{" "}
@@ -706,6 +755,20 @@ export function Cockpit({
                     {l.saida && <span>{l.saida}</span>}
                     {l.re != null && <span>repasse {pct(l.re)}</span>}
                     {l.estimada && <span className="text-amarelo">premissas estimadas</span>}
+                    {/*
+                      O ESTADO DO FORMULÁRIO, na fila.
+                      Quem manda 20 pedidos de dados na segunda precisa saber na
+                      terça quem respondeu — e isso morava dentro de cada
+                      empresa, uma por uma. "respondeu" em destaque porque é o
+                      único destes estados que pede ação AGORA.
+                    */}
+                    {l.coleta === "aguardando" && <span className="text-amarelo">formulário enviado</span>}
+                    {l.coleta === "respondida" && (
+                      <span className="rounded-full bg-verdewash px-1.5 font-semibold text-verde">
+                        respondeu ✓
+                      </span>
+                    )}
+                    {l.coleta === "usada" && <span className="text-muted">respostas aplicadas</span>}
                     {l.laudo_numero != null && <span className="text-verde">laudo {String(l.laudo_numero).padStart(4, "0")}</span>}
                     {l.assinado && <span className="text-verde">assinado</span>}
                   </div>

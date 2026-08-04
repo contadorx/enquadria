@@ -27,9 +27,11 @@ export async function GET(req: Request) {
   const { data: empresa } = await supabase
     .from("empresas")
     .select(
-      "id, cnpj, razao_social, cnae_principal, porte, situacao, regime, anexo, rbt12, faixa, motivo_triagem, prioridade_maxima, fonte_dados, contato_nome, contato_email, contato_telefone"
+      "id, cnpj, razao_social, cnae_principal, porte, situacao, regime, anexo, rbt12, faixa, motivo_triagem, prioridade_maxima, fonte_dados, contato_nome, contato_email, contato_telefone, arquivada_em"
     )
-    .is("arquivada_em", null)
+    /* SEM o filtro de arquivada: a FILA esconde as arquivadas, o dossiê aberto
+       por id não pode esconder. Era o beco sem saída — arquivar tirava a
+       empresa da lista e, junto, tirava a única tela que sabe desarquivar. */
     .eq("id", id)
     .maybeSingle();
   if (!empresa) return NextResponse.json({ erro: "empresa não encontrada" }, { status: 404 });

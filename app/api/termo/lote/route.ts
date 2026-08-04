@@ -1,4 +1,6 @@
 import { ehOptar } from "@/lib/motor";
+import { COLUNAS_ESCRITORIO, type Escritorio } from "@/lib/escritorio";
+import { responsavelDoTenant } from "@/lib/escritorio-server";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { conteudoCanonico, sha256, novoToken, CLAUSULAS_CIENCIA } from "@/lib/esign";
@@ -41,10 +43,12 @@ export async function POST(req: Request) {
   // só faz sentido enviar termo do que já tem laudo emitido
   const { data: perfilT } = await supabase
     .from("profiles")
-    .select("tenants(nome, crc, logo_url)")
+    .select(`nome, tenants(${COLUNAS_ESCRITORIO})`)
     .eq("id", user.id)
     .maybeSingle();
-  const tt = perfilT?.tenants as { nome?: string; crc?: string; logo_url?: string } | null;
+  const tt = perfilT?.tenants as Escritorio | null;
+  /* o termo é congelado na emissão — inclusive quem assina por ele */
+  const responsavel = await responsavelDoTenant(supabase);
 
   let q = supabase.from("analises").select("id, empresa_id, saida, re, fc");
   if (corpo.analise_ids?.length) q = q.in("id", corpo.analise_ids);
@@ -128,7 +132,7 @@ export async function POST(req: Request) {
           decisao,
           clausulas: CLAUSULAS_CIENCIA,
           empresa: { razao_social: e.razao_social, cnpj: e.cnpj },
-          escritorio: { nome: tt?.nome, crc: tt?.crc, logo_url: tt?.logo_url },
+          escritorio: { ...(tt ?? {}), responsavel },
           analise: { saida: a.saida, re: a.re, fc: a.fc },
         },
       })

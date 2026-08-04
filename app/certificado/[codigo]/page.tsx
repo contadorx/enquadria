@@ -117,7 +117,7 @@ export default async function CertificadoPage({ params }: { params: { codigo: st
         <Link href="/curso" className="text-sm text-accentdeep">
           ← voltar ao curso
         </Link>
-        <BotaoImprimir />
+        <BotaoImprimir dica={false} />
       </div>
 
       <div className="folha">

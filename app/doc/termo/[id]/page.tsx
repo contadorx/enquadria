@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase-server";
+import { COLUNAS_ESCRITORIO, type Escritorio } from "@/lib/escritorio";
+import { comResponsavel } from "@/lib/escritorio-server";
 import { BotaoImprimir } from "@/components/BotaoImprimir";
 import { FolhaTermo } from "@/components/FolhaTermo";
 import { trilhaEmTexto } from "@/lib/esign";
@@ -25,11 +27,11 @@ export default async function TermoDoc({ params }: { params: { id: string } }) {
   const snap = termo.snapshot as {
     decisao?: "optar" | "permanecer";
     empresa?: { razao_social?: string; cnpj?: string };
-    escritorio?: { nome?: string; crc?: string; logo_url?: string };
+    escritorio?: Escritorio;
   } | null;
 
   let empresa: { razao_social?: string; cnpj?: string } | null = snap?.empresa ?? null;
-  let t: { nome?: string; crc?: string; logo_url?: string } | null = snap?.escritorio ?? null;
+  let t: Escritorio | null = snap?.escritorio ?? null;
 
   if (!empresa) {
     const { data: analise } = await supabase
@@ -48,11 +50,25 @@ export default async function TermoDoc({ params }: { params: { id: string } }) {
   }
 
   if (!t?.nome) {
+    /**
+     * `.maybeSingle()` sem filtro de id só funciona em escritório de UMA
+     * pessoa: com equipe, a RLS devolve os colegas também, a consulta erra por
+     * "múltiplas linhas" e o documento sai com o cabeçalho genérico. O filtro
+     * pelo próprio usuário é o que faltava.
+     */
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     const { data: perfil } = await supabase
       .from("profiles")
-      .select("tenants(nome, crc, logo_url)")
+      .select(`tenant_id, tenants(${COLUNAS_ESCRITORIO})`)
+      .eq("id", user?.id ?? "")
       .maybeSingle();
-    t = perfil?.tenants as { nome?: string; crc?: string; logo_url?: string } | null;
+    t = await comResponsavel(
+      supabase,
+      (perfil?.tenants as Escritorio | null) ?? null,
+      (perfil?.tenant_id as string | null) ?? null
+    );
   }
 
   const optou = (snap?.decisao ?? termo.decisao) === "optar";

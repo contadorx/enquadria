@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
+import { COLUNAS_ESCRITORIO, mostrarNomeEscrito, type Escritorio } from "@/lib/escritorio";
+import { comResponsavel } from "@/lib/escritorio-server";
+import { CSS_IMPRESSAO } from "@/lib/impressao";
 import { BotaoImprimir } from "@/components/BotaoImprimir";
 import { pct, SAIDAS, type Saida } from "@/lib/motor";
 import { ROTULO_FAIXA, type Faixa } from "@/lib/triagem";
@@ -14,11 +17,21 @@ const ORDEM: Faixa[] = ["A", "B", "C", "D", "MEI", "FORA"];
 export default async function Relatorio() {
   const supabase = createClient();
 
+  /* com equipe, `.maybeSingle()` sem filtro de id devolve várias linhas e o
+     cabeçalho cai no genérico — mesma nota do laudo */
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   const { data: perfil } = await supabase
     .from("profiles")
-    .select("tenants(nome, crc, logo_url)")
+    .select(`tenant_id, tenants(${COLUNAS_ESCRITORIO})`)
+    .eq("id", user?.id ?? "")
     .maybeSingle();
-  const t = perfil?.tenants as { nome?: string; crc?: string; logo_url?: string } | null;
+  const t = await comResponsavel(
+    supabase,
+    (perfil?.tenants as Escritorio | null) ?? null,
+    (perfil?.tenant_id as string | null) ?? null
+  );
 
   const { data: empresas } = await supabase.from("empresas").select("faixa");
   const contagem = ORDEM.reduce((a, f) => ({ ...a, [f]: 0 }), {} as Record<Faixa, number>);
@@ -121,7 +134,7 @@ export default async function Relatorio() {
               <img src={t.logo_url} alt="" className="logo" />
             )}
             <div>
-              <div className="firm">{t?.nome ?? "Escritório"}</div>
+              {mostrarNomeEscrito(t) && <div className="firm">{t?.nome ?? "Escritório"}</div>}
               {t?.crc && <div className="crc">{t.crc}</div>}
             </div>
           </div>
@@ -235,12 +248,7 @@ export default async function Relatorio() {
         ul { margin: 0 0 4px 18px; }
         li { margin-bottom: 4px; }
         .foot { margin-top: 26px; padding-top: 12px; border-top: 1px solid #EEF2F7; font-size: 10px; color: #64748B; line-height: 1.6; }
-        @media print {
-          .no-print { display: none !important; }
-          .doc { padding: 0; max-width: none; }
-          .sheet { border: none; border-radius: 0; padding: 0; }
-          @page { margin: 22mm; }
-        }
+        ${CSS_IMPRESSAO}
       ` }} />
     </div>
   );

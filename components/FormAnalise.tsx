@@ -25,6 +25,7 @@ import {
   type Segmento,
 } from "@/lib/motor";
 import { anexoPorCnae } from "@/lib/triagem";
+import { leituraDoDinheiro } from "@/lib/roteiro";
 import { parseValorBRL } from "@/lib/csv";
 import { Gauge } from "@/components/Gauge";
 
@@ -708,13 +709,23 @@ export function FormAnalise({
         {/* EM REAIS */}
         {dinheiro.receita != null && (
           <div className="mt-4 rounded-sm bg-surface2 p-3">
+            {/*
+              O TÍTULO DIZ DE QUEM É O DINHEIRO.
+              "O que isso vale no ano" não dizia para quem, e o número já foi
+              lido como honorário do escritório. É a conta da EMPRESA.
+            */}
             <div className="mb-1.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
-              O que isso vale no ano
+              O que isso vale no ano — para a empresa
             </div>
             <table className="w-full border-collapse text-[13px]">
               <tbody>
                 <tr>
-                  <td className="py-1 pr-2 text-muted">Ganho estimado (folga × receita qualificada × receita)</td>
+                  <td className="py-1 pr-2 text-muted">
+                    Ganho da empresa se optar
+                    <span className="block font-mono text-[10.5px] text-muted">
+                      folga da negociação × receita qualificada × receita
+                    </span>
+                  </td>
                   <td className="py-1 text-right font-mono font-semibold">
                     {dinheiro.ganho_anual != null && dinheiro.ganho_anual > 0
                       ? moeda(dinheiro.ganho_anual)
@@ -722,13 +733,20 @@ export function FormAnalise({
                   </td>
                 </tr>
                 <tr>
-                  <td className="py-1 pr-2 text-muted">Custo de apurar por fora (premissa sua)</td>
+                  <td className="py-1 pr-2 text-muted">
+                    Custo de apurar IBS/CBS por fora
+                    <span className="block font-mono text-[10.5px] text-muted">
+                      premissa sua, informada acima
+                    </span>
+                  </td>
                   <td className="py-1 text-right font-mono">
                     {dinheiro.custo_anual != null ? moeda(dinheiro.custo_anual) : "não informado"}
                   </td>
                 </tr>
                 <tr>
-                  <td className="py-1 pr-2 text-muted">Payback</td>
+                  {/* "Payback" era a única palavra em inglês da tela — e a que
+                      mais precisava ser entendida na reunião com o cliente */}
+                  <td className="py-1 pr-2 text-muted">Em quanto tempo o ganho cobre esse custo</td>
                   <td className="py-1 text-right font-mono">
                     {dinheiro.payback_meses != null
                       ? `${dinheiro.payback_meses.toFixed(1).replace(".", ",")} meses`
@@ -736,13 +754,24 @@ export function FormAnalise({
                   </td>
                 </tr>
                 <tr>
-                  <td className="py-1 pr-2 text-muted">Se o repasse não for aceito, a empresa absorve</td>
+                  <td className="py-1 pr-2 text-muted">
+                    Se o cliente dela não aceitar o repasse, a empresa absorve
+                  </td>
                   <td className="py-1 text-right font-mono text-vermelho">
                     {dinheiro.absorvido_anual != null ? moeda(dinheiro.absorvido_anual) : "—"}
                   </td>
                 </tr>
               </tbody>
             </table>
+
+            {/* A CONCLUSÃO EM UMA LINHA — a frase que o contador diria ao
+                cliente. Quatro números certos e nenhuma leitura era o que
+                fazia esta tabela parecer difícil. Ver lib/roteiro. */}
+            {leituraDoDinheiro(dinheiro) && (
+              <p className="mt-2.5 border-t border-line pt-2.5 text-[12.5px] leading-relaxed text-slate2">
+                {leituraDoDinheiro(dinheiro)}
+              </p>
+            )}
           </div>
         )}
 

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
+import { COLUNAS_ESCRITORIO, type Escritorio } from "@/lib/escritorio";
+import { responsavelDoTenant } from "@/lib/escritorio-server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { enviarEmail } from "@/lib/email";
 import { htmlComparativoCliente } from "@/lib/emails-cliente";
@@ -49,10 +51,10 @@ export async function POST(req: Request) {
 
   const { data: perfil } = await supabase
     .from("profiles")
-    .select("tenant_id, tenants(nome, crc, logo_url)")
+    .select(`tenant_id, nome, tenants(${COLUNAS_ESCRITORIO})`)
     .eq("id", user.id)
     .maybeSingle();
-  const t = perfil?.tenants as { nome?: string; crc?: string; logo_url?: string } | null;
+  const t = perfil?.tenants as Escritorio | null;
   const escritorio = { nome: t?.nome || "Seu contador", crc: t?.crc, logo_url: t?.logo_url };
   // o cliente responde ao comparativo pedindo reunião — tem de cair no contador
   const responderPara = user.email ? { email: user.email, nome: escritorio.nome } : undefined;
@@ -126,7 +128,7 @@ export async function POST(req: Request) {
     if (!d.escritorio && t) {
       await supabase
         .from("comparativos")
-        .update({ escritorio: { nome: t.nome, crc: t.crc, logo_url: t.logo_url } })
+        .update({ escritorio: { ...t, responsavel: await responsavelDoTenant(supabase) } })
         .eq("id", d.id);
     }
 

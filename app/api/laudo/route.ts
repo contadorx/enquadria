@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { situacaoPlano, mensagemBloqueio, montarMuro, type Assinatura } from "@/lib/plano";
 import { HONORARIO_PADRAO } from "@/lib/potencial";
+import { COLUNAS_ESCRITORIO, type Escritorio } from "@/lib/escritorio";
+import { responsavelDoTenant } from "@/lib/escritorio-server";
 
 /**
  * Emite o laudo de uma análise (RPC atômica que numera por tenant).
@@ -77,5 +79,54 @@ export async function POST(req: Request) {
 
   if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
   const laudo = data as { id: string; numero: number };
+
+  /**
+   * COMPLETA A IDENTIDADE NO SNAPSHOT.
+   *
+   * O snapshot do laudo é montado dentro da RPC `emitir_laudo`, em SQL, e ela
+   * congela o escritório com os três campos que existiam quando foi escrita:
+   * nome, CRC e logotipo. Dois campos novos ficam de fora — a preferência de
+   * imprimir (ou não) o nome ao lado do logo, e o nome de quem assina — e a
+   * VIA PÚBLICA do laudo lê SÓ o snapshot, de propósito: recompor ao vivo
+   * deixaria de ser prova.
+   *
+   * Sem este trecho, o contador veria o laudo de um jeito na tela dele e o
+   * cliente receberia outro cabeçalho. Preencher aqui, na emissão, custa uma
+   * leitura e uma escrita e mantém a RPC intocada — alterá-la exigiria
+   * reescrever uma função que não está neste repositório.
+   *
+   * Falha aqui não derruba a emissão: melhor um cabeçalho conservador do que
+   * um laudo perdido.
+   */
+  try {
+    const { data: perfil } = await supabase
+      .from("profiles")
+      .select(`tenant_id, tenants(${COLUNAS_ESCRITORIO})`)
+      .eq("id", user.id)
+      .maybeSingle();
+    const tenant = perfil?.tenants as Escritorio | null;
+    const responsavel = await responsavelDoTenant(supabase, (perfil?.tenant_id as string) ?? null);
+
+    if (tenant) {
+      const { data: atual } = await supabase
+        .from("laudos")
+        .select("snapshot")
+        .eq("id", laudo.id)
+        .maybeSingle();
+      const snap = (atual?.snapshot ?? null) as Record<string, unknown> | null;
+      if (snap) {
+        const antigo = (snap.escritorio ?? {}) as Escritorio;
+        snap.escritorio = {
+          ...antigo,
+          logo_com_nome: tenant.logo_com_nome ?? false,
+          responsavel: antigo.responsavel ?? responsavel,
+        };
+        await supabase.from("laudos").update({ snapshot: snap }).eq("id", laudo.id);
+      }
+    }
+  } catch (e) {
+    console.error("[laudo] identidade não entrou no snapshot:", e instanceof Error ? e.message : e);
+  }
+
   return NextResponse.json({ ok: true, laudo_id: laudo.id, numero: laudo.numero });
 }

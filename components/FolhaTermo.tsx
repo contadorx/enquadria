@@ -1,4 +1,6 @@
 import { formatarCnpj } from "@/lib/cnpj";
+import { assinaturaTecnica, mostrarNomeEscrito, type Escritorio } from "@/lib/escritorio";
+import { CSS_IMPRESSAO } from "@/lib/impressao";
 
 /**
  * A FOLHA DO TERMO — o documento em si, separado de quem o abre.
@@ -19,7 +21,7 @@ import { formatarCnpj } from "@/lib/cnpj";
 
 export interface DadosFolhaTermo {
   empresa: { razao_social?: string | null; cnpj?: string | null } | null;
-  escritorio: { nome?: string | null; crc?: string | null; logo_url?: string | null } | null;
+  escritorio: Escritorio | null;
   decisao: "optar" | "permanecer";
   assinado: boolean;
   assinante_nome?: string | null;
@@ -51,7 +53,8 @@ export function FolhaTermo({
               <img src={t.logo_url} alt="" className="logo" />
             )}
             <div>
-              <div className="firm">{t?.nome ?? "Escritório"}</div>
+              {/* logo que já traz o nome escrito não ganha o nome de novo ao lado */}
+              {mostrarNomeEscrito(t) && <div className="firm">{t?.nome ?? "Escritório"}</div>}
               {t?.crc && <div className="crc">{t.crc}</div>}
             </div>
           </div>
@@ -126,6 +129,8 @@ export function FolhaTermo({
           </div>
         )}
 
+        <div className="sign">{assinaturaTecnica(t)}</div>
+
         <div className="foot">
           Documento arquivado no dossiê da empresa. A validade da assinatura eletrônica decorre da
           Lei nº 14.063/2020 e da MP nº 2.200-2/2001, com a trilha de auditoria acima.
@@ -150,15 +155,11 @@ export function FolhaTermo({
         ul { margin: 0 0 4px 18px; list-style: none; padding: 0; }
         li { margin-bottom: 5px; }
         .box { border: 1px solid #0E7490; background: #ECFEFF; border-radius: 6px; padding: 12px 14px; font-size: 13px; margin-top: 8px; }
-        .foot { margin-top: 26px; padding-top: 12px; border-top: 1px solid #EEF2F7; font-size: 10px; color: #64748B; }
+        .sign { margin-top: 26px; padding-top: 22px; border-top: 1px solid #CBD5E1; font-size: 12px; font-weight: 700; color: #0F172A; text-align: center; width: 320px; margin-left: auto; margin-right: auto; }
+        .foot { margin-top: 18px; padding-top: 12px; border-top: 1px solid #EEF2F7; font-size: 10px; color: #64748B; }
         .verif { margin-top: 16px; border: 1px dashed #A5F3FC; background: #ECFEFF; border-radius: 6px; padding: 9px 12px; font-size: 10.5px; color: #0E7490; line-height: 1.55; }
         .cod { font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; color: #334155; word-break: break-all; margin-top: 4px; letter-spacing: .02em; }
-        @media print {
-          .no-print { display: none !important; }
-          .doc { padding: 0; max-width: none; }
-          .sheet { border: none; border-radius: 0; padding: 0; }
-          @page { margin: 18mm 16mm; }
-        }
+        ${CSS_IMPRESSAO}
       `,
         }}
       />

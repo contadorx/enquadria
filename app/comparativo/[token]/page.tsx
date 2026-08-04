@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase-admin";
+import type { Escritorio } from "@/lib/escritorio";
 import { ComparativoFolha } from "@/components/ComparativoFolha";
 import type { ResultadoComparativo } from "@/lib/comparativo";
 
@@ -49,7 +50,7 @@ export default async function ComparativoPublico({ params }: { params: { token: 
    * /api/comparativo/enviar); sem ela o documento sai sem marca, que é a falha
    * segura — melhor um documento sem logotipo do que um com o logotipo errado.
    */
-  const t = (doc.escritorio ?? null) as { nome?: string; crc?: string; logo_url?: string } | null;
+  const t = (doc.escritorio ?? null) as Escritorio | null;
 
   return (
     <ComparativoFolha

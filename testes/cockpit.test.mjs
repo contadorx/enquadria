@@ -22,6 +22,7 @@
 import {
   montarFila,
   contarEsteira,
+  estadoDaColeta,
   ordenarFila,
   naMesa,
   filtrarPorEtapa,
@@ -125,6 +126,60 @@ const soFora = montarFila([empresas[3]], [], [], []);
 ok(proximoEmpurrao(soFora) === null, "silêncio quando não há nada a fazer");
 
 ok(proximoEmpurrao([]) === null, "carteira vazia não inventa empurrão");
+
+
+/* ══════════════════ O ESTADO DO FORMULÁRIO E O QUE AINDA ESTÁ DE PÉ ══════
+ *
+ * Duas informações que o contador só conseguia obtendo empresa por empresa —
+ * e que erram em silêncio: uma fila que diz "aguardando" para quem já
+ * respondeu faz o contador ligar cobrando quem já entregou.
+ */
+
+ok(estadoDaColeta(null) === "nao", "sem coleta, nunca foi pedido");
+ok(estadoDaColeta({ empresa_id: "1", status: "cancelada", respondido_em: null, aplicada_em: null }) === "nao",
+   "coleta cancelada volta a ser 'nunca pedi'");
+ok(estadoDaColeta({ empresa_id: "1", status: "aberta", respondido_em: null, aplicada_em: null }) === "aguardando",
+   "enviada e sem resposta é aguardando");
+ok(estadoDaColeta({ empresa_id: "1", status: "respondida", respondido_em: "2026-08-01T10:00:00Z", aplicada_em: null }) === "respondida",
+   "respondida e não aplicada é o que pede ação");
+ok(estadoDaColeta({ empresa_id: "1", status: "respondida", respondido_em: "2026-08-01T10:00:00Z", aplicada_em: "2026-08-02T10:00:00Z" }) === "usada",
+   "aplicada na análise não pede mais nada");
+// status ainda 'aberta' mas com data de resposta: o banco pode chegar assim
+ok(estadoDaColeta({ empresa_id: "1", status: "aberta", respondido_em: "2026-08-01T10:00:00Z", aplicada_em: null }) === "respondida",
+   "a data de resposta vale mais que o status pendurado");
+
+{
+  // pedir de novo não pode apagar da tela a resposta que já chegou
+  const comColeta = montarFila(empresas, [], [], [], [
+    { empresa_id: "1", status: "aberta", respondido_em: null, aplicada_em: null },
+    { empresa_id: "1", status: "respondida", respondido_em: "2026-08-01T10:00:00Z", aplicada_em: null },
+    { empresa_id: "2", status: "aberta", respondido_em: null, aplicada_em: null },
+  ]);
+  const de = (id) => comColeta.find((l) => l.id === id).coleta;
+  ok(de("1") === "respondida", "duas coletas na mesma empresa: vence a mais avançada", de("1"));
+  ok(de("2") === "aguardando", "quem só tem pedido aberto continua aguardando");
+  ok(de("3") === "nao", "quem nunca recebeu formulário não ganha selo");
+}
+
+{
+  // o número de "precisam decidir" é universo; o pendente é o que sobra de pé
+  const est = contarEsteira(linhas);
+  ok(est.decidem >= est.decidem_pendentes, "pendentes nunca passam do universo", est);
+  const todasComLaudo = montarFila(
+    empresas,
+    [{ id: "an1", empresa_id: "1", saida: "S4", re: 0.06, prioridade: true, parametros: {}, calculado_em: "2026-07-20T10:00:00Z" },
+     { id: "an2", empresa_id: "2", saida: "S1", re: 0.2, prioridade: false, parametros: {}, calculado_em: "2026-07-21T10:00:00Z" }],
+    [{ id: "l1", analise_id: "an1", numero: 1 }, { id: "l2", analise_id: "an2", numero: 2 }],
+    []
+  );
+  const e2 = contarEsteira(todasComLaudo);
+  ok(e2.decidem === 2 && e2.decidem_pendentes === 0,
+     "com laudo em todas, o universo continua 2 e o pendente zera", e2);
+  ok(filtrarPorEtapa(todasComLaudo, "decidem_pendentes").length === 0,
+     "e o recorte das pendentes fica vazio");
+  ok(filtrarPorEtapa(linhas, "decidem_pendentes").every((l) => !l.laudo_id),
+     "o recorte das pendentes nunca traz empresa com laudo");
+}
 
 
 console.log(falhas === 0 ? "\nTODOS OS TESTES PASSARAM" : `\n${falhas} FALHAS`);

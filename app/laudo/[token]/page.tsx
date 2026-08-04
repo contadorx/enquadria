@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase-admin";
+import type { Escritorio } from "@/lib/escritorio";
 import { LaudoFolha } from "@/components/LaudoFolha";
 import type { AnaliseGravada } from "@/lib/laudo";
 
@@ -48,7 +49,7 @@ export default async function LaudoPublico({ params }: { params: { token: string
       faixa?: string;
       motivo_triagem?: string;
     };
-    escritorio?: { nome?: string; crc?: string; logo_url?: string };
+    escritorio?: Escritorio;
   } | null;
 
   /**

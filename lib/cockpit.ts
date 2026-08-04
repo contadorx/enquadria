@@ -68,6 +68,26 @@ export interface TermoCru {
   assinado_em: string | null;
 }
 
+export interface ColetaCru {
+  empresa_id: string;
+  status: string | null;
+  respondido_em: string | null;
+  aplicada_em: string | null;
+}
+
+/**
+ * O ESTADO DO PEDIDO DE DADOS, na fila.
+ *
+ * O contador manda o formulário para 20 clientes e volta no dia seguinte sem
+ * saber quem respondeu — a informação existia só dentro de cada empresa, uma
+ * por uma. "nao" (nunca pedi), "aguardando" (mandei e estou esperando),
+ * "respondida" (chegou e ainda não usei), "usada" (já entrou na análise).
+ *
+ * "usada" é separado de "respondida" de propósito: o que precisa da atenção
+ * do contador é a resposta que chegou e ainda não virou análise.
+ */
+export type EstadoColeta = "nao" | "aguardando" | "respondida" | "usada";
+
 export interface Linha {
   id: string;
   razao_social: string;
@@ -87,6 +107,7 @@ export interface Linha {
   termo_token: string | null;
   assinado: boolean;
   tem_contato: boolean;
+  coleta: EstadoColeta;
   rbt12: number | null;
   etapa: Etapa;
   acao: Acao;
@@ -129,7 +150,8 @@ export function montarFila(
   empresas: EmpresaCru[],
   analises: AnaliseCru[],
   laudos: LaudoCru[],
-  termos: TermoCru[]
+  termos: TermoCru[],
+  coletas: ColetaCru[] = []
 ): Linha[] {
   // uma análise por empresa na visão da fila: a mais recente manda
   const porEmpresa = new Map<string, AnaliseCru>();
@@ -142,6 +164,17 @@ export function montarFila(
     const novaData = a.calculado_em ?? "";
     const atualData = atual.calculado_em ?? "";
     if (novaData > atualData) porEmpresa.set(a.empresa_id, a);
+  }
+
+  // a coleta mais avançada de cada empresa manda: pedir de novo não pode
+  // apagar da tela a resposta que já chegou
+  const PESO_COLETA: Record<string, number> = { cancelada: 0, aberta: 1, respondida: 2 };
+  const coletaPorEmpresa = new Map<string, ColetaCru>();
+  for (const c of coletas) {
+    const atual = coletaPorEmpresa.get(c.empresa_id);
+    if (!atual || (PESO_COLETA[c.status ?? ""] ?? 0) > (PESO_COLETA[atual.status ?? ""] ?? 0)) {
+      coletaPorEmpresa.set(c.empresa_id, c);
+    }
   }
 
   const laudoPorAnalise = new Map(laudos.map((l) => [l.analise_id, l]));
@@ -170,11 +203,18 @@ export function montarFila(
       termo_token: termo?.token ?? null,
       assinado: !!termo && (termo.assinatura_status === "assinado" || !!termo.assinado_em),
       tem_contato: !!e.contato_email && !!e.contato_nome,
+      coleta: estadoDaColeta(coletaPorEmpresa.get(e.id) ?? null),
       rbt12: num(e.rbt12),
     };
 
     return { ...parcial, etapa: etapaDe(parcial), acao: proximaAcao(parcial) };
   });
+}
+
+export function estadoDaColeta(c: ColetaCru | null | undefined): EstadoColeta {
+  if (!c || c.status === "cancelada") return "nao";
+  if (c.status !== "respondida" && !c.respondido_em) return "aguardando";
+  return c.aplicada_em ? "usada" : "respondida";
 }
 
 const PESO_FAIXA: Record<Faixa, number> = { A: 0, B: 1, C: 2, D: 3, MEI: 4, FORA: 5 };
@@ -203,6 +243,16 @@ export function ordenarFila(linhas: Linha[]): Linha[] {
 export interface Esteira {
   importadas: number;
   decidem: number;
+  /**
+   * DAS QUE PRECISAM DECIDIR, quantas ainda não têm laudo.
+   *
+   * O número de "precisam decidir" é o universo — faixas A e B — e não muda
+   * conforme o trabalho anda. Isso confundia: clicar nele trazia empresas já
+   * analisadas e com laudo emitido, sem nenhuma indicação de que estavam
+   * prontas. O funil continua sendo funil; o que faltava era dizer quantas
+   * ainda estão de pé.
+   */
+  decidem_pendentes: number;
   analisadas: number;
   laudos: number;
   assinados: number;
@@ -214,6 +264,7 @@ export function contarEsteira(linhas: Linha[]): Esteira {
   return {
     importadas: linhas.length,
     decidem: decidem.length,
+    decidem_pendentes: decidem.filter((l) => !l.laudo_id).length,
     analisadas: linhas.filter((l) => l.analise_id).length,
     laudos: linhas.filter((l) => l.laudo_id).length,
     assinados: linhas.filter((l) => l.assinado).length,
@@ -222,7 +273,7 @@ export function contarEsteira(linhas: Linha[]): Esteira {
 
 export const ETAPAS: { chave: keyof Esteira; rotulo: string; ajuda: string }[] = [
   { chave: "importadas", rotulo: "importadas", ajuda: "toda a carteira que entrou no sistema" },
-  { chave: "decidem", rotulo: "precisam decidir", ajuda: "faixas A e B — o que a triagem não descartou" },
+  { chave: "decidem", rotulo: "precisam decidir", ajuda: "faixas A e B — o universo do trabalho desta janela, incluindo o que já virou laudo" },
   { chave: "analisadas", rotulo: "analisadas", ajuda: "com análise gravada, estimada ou confirmada" },
   { chave: "laudos", rotulo: "laudo emitido", ajuda: "documento numerado com a sua marca" },
   { chave: "assinados", rotulo: "termo assinado", ajuda: "prova de ciência do cliente, com verificação pública" },
@@ -243,9 +294,13 @@ export function naMesa(linhas: Linha[], honorario: number): { empresas: number; 
 export function filtrarPorEtapa(linhas: Linha[], etapa: keyof Esteira | null): Linha[] {
   if (!etapa || etapa === "importadas") return linhas;
   if (etapa === "decidem") return linhas.filter((l) => FAIXAS_TRABALHO.includes(l.faixa));
+  // o recorte do que ainda está de pé — usado pelo atalho "ver só as pendentes"
+  if (etapa === "decidem_pendentes")
+    return linhas.filter((l) => FAIXAS_TRABALHO.includes(l.faixa) && !l.laudo_id);
   if (etapa === "analisadas") return linhas.filter((l) => l.analise_id);
   if (etapa === "laudos") return linhas.filter((l) => l.laudo_id);
-  return linhas.filter((l) => l.assinado);
+  if (etapa === "assinados") return linhas.filter((l) => l.assinado);
+  return linhas;
 }
 
 const semAcento = (s: string) =>

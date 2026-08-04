@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase-server";
+import { COLUNAS_ESCRITORIO, type Escritorio } from "@/lib/escritorio";
+import { comResponsavel } from "@/lib/escritorio-server";
 import { ComparativoFolha } from "@/components/ComparativoFolha";
 import type { ResultadoComparativo } from "@/lib/comparativo";
 
@@ -32,11 +34,21 @@ export default async function ComparativoDoc({ params }: { params: { id: string 
         .maybeSingle()
     : { data: null };
 
+  /* com equipe, sem filtro de id a consulta devolve várias linhas e o
+     cabeçalho do documento cai no genérico — ver nota igual no laudo */
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   const { data: perfil } = await supabase
     .from("profiles")
-    .select("tenants(nome, crc, logo_url)")
+    .select(`tenant_id, tenants(${COLUNAS_ESCRITORIO})`)
+    .eq("id", user?.id ?? "")
     .maybeSingle();
-  const t = perfil?.tenants as { nome?: string; crc?: string; logo_url?: string } | null;
+  const t = await comResponsavel(
+    supabase,
+    (perfil?.tenants as Escritorio | null) ?? null,
+    (perfil?.tenant_id as string | null) ?? null
+  );
 
   return (
     <ComparativoFolha

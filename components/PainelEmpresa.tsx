@@ -12,6 +12,8 @@ import { EditarEmpresa } from "@/components/EditarEmpresa";
 import { FormAnalise, RESPOSTAS_PADRAO } from "@/components/FormAnalise";
 import { Comparativo } from "@/components/Comparativo";
 import { PedirDados, type ColetaGravada } from "@/components/PedirDados";
+import { RoteiroEmpresa } from "@/components/RoteiroEmpresa";
+import { ArquivarEmpresa } from "@/components/ArquivarEmpresa";
 import type { Derivadas } from "@/lib/coleta";
 import type { DetalheQual } from "@/lib/motor";
 
@@ -66,6 +68,7 @@ interface Dossie {
     contato_nome: string | null;
     contato_email: string | null;
     contato_telefone: string | null;
+    arquivada_em?: string | null;
   };
   rodadas: (AnaliseGravada & { janela_id: string | null })[];
   laudo: { id: string; numero: number; emitido_em: string } | null;
@@ -187,6 +190,9 @@ export function PainelEmpresa({
       setAvisoEnvio({ ok: false, texto: "não consegui copiar o link" });
     }
   }
+
+  /** o laudo que acabou de sair — some quando a gaveta é fechada */
+  const [emitido, setEmitido] = useState<{ id: string; numero: number; abriu: boolean } | null>(null);
 
   const [nomeSig, setNomeSig] = useState("");
   const [emailSig, setEmailSig] = useState("");
@@ -319,7 +325,21 @@ export function PainelEmpresa({
       });
       const json = await resp.json();
       if (resp.ok && json.laudo_id) {
-        window.open(`/doc/laudo/${json.laudo_id}`, "_blank");
+        /**
+         * ABRIR EM ABA NOVA PODE NÃO ABRIR.
+         *
+         * `window.open` volta null quando o navegador bloqueia a janela — e
+         * quando isso acontece o contador clica em "Emitir laudo", não vê nada
+         * acontecer e conclui que o botão está quebrado. Justamente no
+         * momento em que o produto entrega o documento que sustenta o
+         * honorário.
+         *
+         * O aviso abaixo é a prova na tela: existe emitido ou não, com o
+         * caminho para abrir na mão. E ele diz o que fazer em seguida, porque
+         * "emitido" não é o fim — o PDF é.
+         */
+        const janela = window.open(`/doc/laudo/${json.laudo_id}`, "_blank");
+        setEmitido({ id: json.laudo_id as string, numero: json.numero as number, abriu: !!janela });
         mudou();
       } else if (json.bloqueado_por_plano) {
         if (json.muro) setMuro(json.muro as Muro);
@@ -524,6 +544,17 @@ export function PainelEmpresa({
       {/* ------------------------------------------------------------ DECISÃO */}
       {aba === "decisao" && (
         <div className="space-y-4 pb-4">
+          {/* A ORDEM ESCRITA, antes do formulário. Ver lib/roteiro. */}
+          <RoteiroEmpresa
+            estado={{
+              temColeta: d.coleta?.status === "respondida",
+              temAnalise: !!a,
+              temLaudo: !!d.laudo,
+              temTermo: !!d.termo,
+              assinado,
+            }}
+          />
+
           <PedirDados
             empresaId={e.id}
             empresaNome={e.razao_social}
@@ -594,6 +625,36 @@ export function PainelEmpresa({
                 <p className="mt-2 text-[11.5px] text-amarelo">
                   Confirme as premissas acima antes de emitir: o laudo sai com a sua assinatura.
                 </p>
+              )}
+
+              {emitido && (
+                <div className="mt-3 rounded-sm border border-verde bg-verdewash p-3">
+                  <div className="text-[13px] font-semibold text-verde">
+                    ✓ Laudo nº {String(emitido.numero).padStart(4, "0")} emitido
+                    {emitido.abriu ? " — abriu em outra aba." : "."}
+                  </div>
+                  <p className="mt-1 text-[12px] leading-relaxed text-slate2">
+                    {emitido.abriu
+                      ? "Para o arquivo em PDF, use o botão Baixar PDF no topo da aba que abriu."
+                      : "O navegador bloqueou a janela nova. Abra pelo botão abaixo — o laudo já está gravado."}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <a
+                      href={`/doc/laudo/${emitido.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-sm bg-ink px-3 py-1.5 text-[12px] font-semibold text-white"
+                    >
+                      Abrir e baixar em PDF
+                    </a>
+                    <button
+                      onClick={() => setEmitido(null)}
+                      className="rounded-sm border border-line px-3 py-1.5 text-[12px] font-semibold text-slate2"
+                    >
+                      Fechar aviso
+                    </button>
+                  </div>
+                </div>
               )}
 
               <div className="mt-4 border-t border-linesoft pt-4">
@@ -1074,6 +1135,22 @@ export function PainelEmpresa({
               </div>
             </Bloco>
           )}
+
+          {/* ADMINISTRAÇÃO DA LINHA — no fim do dossiê, não no meio do trabalho.
+              "Subi a carteira errada, e agora?" não tinha resposta nenhuma até
+              aqui: a empresa errada ficava na fila para sempre, contando nos
+              números. Ver components/ArquivarEmpresa. */}
+          <div className="pt-1">
+            <ArquivarEmpresa
+              empresaId={e.id}
+              razaoSocial={e.razao_social}
+              arquivadaEm={e.arquivada_em ?? null}
+              aoMudar={() => {
+                mudou();
+                router.refresh();
+              }}
+            />
+          </div>
         </div>
       )}
 

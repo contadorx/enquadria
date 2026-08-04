@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase-server";
 import { Cockpit, type Aviso } from "@/components/Cockpit";
-import { contarEsteira, montarFila, type AnaliseCru, type EmpresaCru, type Linha } from "@/lib/cockpit";
+import { contarEsteira, montarFila, type AnaliseCru, type ColetaCru, type EmpresaCru, type Linha } from "@/lib/cockpit";
 import { estadoDaJanela, faseDaJanela } from "@/lib/janela";
 import { decidir, PARAMETROS_2027, type Respostas } from "@/lib/motor";
 import { atingidas, ordenar, type EmpresaRadar, type ItemRadar } from "@/lib/radar";
@@ -86,11 +86,19 @@ export default async function Painel() {
     .from("termos")
     .select("id, analise_id, token, assinatura_status, assinado_em");
 
+  /* quem já respondeu o formulário — a informação que só existia dentro de
+     cada empresa e que o contador precisa VER na fila */
+  const { data: coletas } = await supabase
+    .from("coletas")
+    .select("empresa_id, status, respondido_em, aplicada_em")
+    .limit(2000);
+
   const linhas = montarFila(
     (empresas ?? []) as EmpresaCru[],
     (analises ?? []) as AnaliseCru[],
     laudos ?? [],
-    termos ?? []
+    termos ?? [],
+    (coletas ?? []) as ColetaCru[]
   );
   const esteira = contarEsteira(linhas);
   const janela = estadoDaJanela();

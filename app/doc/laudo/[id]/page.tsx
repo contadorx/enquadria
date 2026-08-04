@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase-server";
+import { COLUNAS_ESCRITORIO, type Escritorio } from "@/lib/escritorio";
+import { comResponsavel } from "@/lib/escritorio-server";
 import { LaudoFolha } from "@/components/LaudoFolha";
 import type { AnaliseGravada } from "@/lib/laudo";
 
@@ -13,7 +15,7 @@ import type { AnaliseGravada } from "@/lib/laudo";
  * um terceiro refaça a conta no papel.
  *
  * FAIXAS C, D, MEI E FORA recebem a VERSÃO CURTA. O laudo existe para documentar
- * o descarte, não para simular uma decisão que não existe — quatro páginas de
+ * a permanência, não para simular uma decisão que não existe — quatro páginas de
  * memória de cálculo para dizer "não se aplica" seria enchimento, e enchimento
  * em documento assinado é o contrário de prova.
  */
@@ -36,7 +38,7 @@ export default async function LaudoDoc({ params }: { params: { id: string } }) {
   const snap = laudo.snapshot as {
     analise?: Record<string, unknown>;
     empresa?: { razao_social?: string; cnpj?: string; anexo?: number; regime?: string; faixa?: string };
-    escritorio?: { nome?: string; crc?: string; logo_url?: string };
+    escritorio?: Escritorio;
     janela?: string | null;
   } | null;
 
@@ -48,7 +50,7 @@ export default async function LaudoDoc({ params }: { params: { id: string } }) {
     regime?: string;
     faixa?: string;
   } | null = snap?.empresa ?? null;
-  let t: { nome?: string; crc?: string; logo_url?: string } | null = snap?.escritorio ?? null;
+  let t: Escritorio | null = snap?.escritorio ?? null;
 
   if (!analise) {
     const { data: aoVivo } = await supabase
@@ -74,11 +76,25 @@ export default async function LaudoDoc({ params }: { params: { id: string } }) {
   }
 
   if (!t) {
+    /**
+     * `.maybeSingle()` sem filtro de id só funciona em escritório de UMA
+     * pessoa: com equipe, a RLS devolve os colegas também, a consulta erra por
+     * "múltiplas linhas" e o documento sai com o cabeçalho genérico. O filtro
+     * pelo próprio usuário é o que faltava.
+     */
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     const { data: perfil } = await supabase
       .from("profiles")
-      .select("tenants(nome, crc, logo_url)")
+      .select(`tenant_id, tenants(${COLUNAS_ESCRITORIO})`)
+      .eq("id", user?.id ?? "")
       .maybeSingle();
-    t = perfil?.tenants as { nome?: string; crc?: string; logo_url?: string } | null;
+    t = await comResponsavel(
+      supabase,
+      (perfil?.tenants as Escritorio | null) ?? null,
+      (perfil?.tenant_id as string | null) ?? null
+    );
   }
 
   return (

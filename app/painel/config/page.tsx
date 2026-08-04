@@ -5,13 +5,18 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { AbasEscritorio } from "@/components/AbasEscritorio";
 import { NovaRodada } from "@/components/NovaRodada";
+import { COLUNAS_ESCRITORIO, type Escritorio } from "@/lib/escritorio";
 
 export default function Config() {
   const router = useRouter();
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [nome, setNome] = useState("");
   const [crc, setCrc] = useState("");
+  /** nome da PESSOA — assina o laudo, aparece na indicação e na equipe */
+  const [meuNome, setMeuNome] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  /** o logo já traz o nome escrito? então o documento não repete ao lado */
+  const [logoComNome, setLogoComNome] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [ok, setOk] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -26,14 +31,16 @@ export default function Config() {
       if (!user) return;
       const { data } = await supabase
         .from("profiles")
-        .select("tenant_id, tenants(nome, crc, logo_url)")
+        .select(`tenant_id, nome, tenants(${COLUNAS_ESCRITORIO})`)
         .eq("id", user.id)
         .maybeSingle();
-      const t = data?.tenants as { nome?: string; crc?: string; logo_url?: string } | null;
+      const t = data?.tenants as Escritorio | null;
       setTenantId(data?.tenant_id ?? null);
+      setMeuNome((data?.nome as string | null) ?? "");
       setNome(t?.nome ?? "");
       setCrc(t?.crc ?? "");
       setLogoUrl(t?.logo_url ?? null);
+      setLogoComNome(!!t?.logo_com_nome);
       // a próxima rodada recalcula a carteira a partir das respostas já dadas
       const { count } = await supabase.from("analises").select("id", { count: "exact", head: true });
       setTotalAnalises(count ?? 0);
@@ -48,10 +55,18 @@ export default function Config() {
     const supabase = createClient();
     const { error } = await supabase
       .from("tenants")
-      .update({ nome, crc: crc || null })
+      .update({ nome, crc: crc || null, logo_com_nome: logoComNome })
       .eq("id", tenantId);
+    /* o nome pessoal mora no perfil, não no escritório: numa equipe, cada um
+       tem o seu, e o do dono é o que assina o laudo */
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    const { error: erroPerfil } = user
+      ? await supabase.from("profiles").update({ nome: meuNome.trim() || null }).eq("id", user.id)
+      : { error: null };
     setSalvando(false);
-    if (error) {
+    if (error || erroPerfil) {
       // engolir o erro aqui era pior do que parece: a pessoa sai da tela
       // convencida de que salvou e o passo 1 da trilha nunca fecha.
       setErro("Não consegui salvar. Tente de novo — se insistir, recarregue a página.");
@@ -121,6 +136,22 @@ export default function Config() {
             />
           </label>
 
+          <label className="mb-1 block">
+            <span className="mb-1 block text-[12.5px] font-semibold">Seu nome</span>
+            <input
+              value={meuNome}
+              onChange={(e) => setMeuNome(e.target.value)}
+              placeholder="Como você assina profissionalmente"
+              className="w-full rounded-sm border border-line px-3 py-2 text-sm outline-none focus:border-accent"
+            />
+          </label>
+          <p className="mb-4 text-[11.5px] leading-relaxed text-muted">
+            Assina o laudo e o termo (“{meuNome.trim() || "Seu nome"}
+            {nome.trim() ? ` · ${nome.trim()}` : ""}
+            {crc.trim() ? ` — ${crc.trim()}` : ""}”), aparece na equipe e é quem indica quando você
+            recomenda o Enquadria a um colega. Sem ele, o documento é assinado só pela razão social.
+          </p>
+
           <label className="mb-4 block">
             <span className="mb-1 block text-[12.5px] font-semibold">CRC</span>
             <input
@@ -187,6 +218,30 @@ export default function Config() {
           <p className="mt-3 text-[11.5px] text-muted">
             PNG ou SVG com fundo transparente, de preferência. Aparece no topo dos documentos.
           </p>
+
+          {/*
+            A maioria dos logos de escritório já tem o nome escrito dentro da
+            imagem. O cabeçalho imprimia o logo e repetia o nome ao lado — e
+            quando os dois textos não são idênticos, a capa parece montada por
+            engano. Quem sabe se o logo tem nome é o dono dele.
+          */}
+          {logoUrl && (
+            <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-sm border border-line bg-surface2 p-3">
+              <input
+                type="checkbox"
+                checked={logoComNome}
+                onChange={(e) => setLogoComNome(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span className="text-[12.5px] leading-relaxed text-slate2">
+                <b>Meu logo já traz o nome do escritório.</b> Marcando, os documentos mostram só a
+                imagem — sem repetir o nome escrito ao lado dela. O CRC continua aparecendo.
+                <span className="mt-1 block text-[11.5px] text-muted">
+                  Lembre de salvar depois de marcar.
+                </span>
+              </span>
+            </label>
+          )}
         </div>
       </div>
 

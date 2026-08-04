@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
+import { COLUNAS_ESCRITORIO, type Escritorio } from "@/lib/escritorio";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { enviarEmail } from "@/lib/email";
 import { htmlPedidoColeta } from "@/lib/emails-cliente";
@@ -90,10 +91,10 @@ export async function POST(req: Request) {
 
   const { data: perfil } = await supabase
     .from("profiles")
-    .select("tenants(nome, crc, logo_url)")
+    .select(`nome, tenants(${COLUNAS_ESCRITORIO})`)
     .eq("id", user.id)
     .maybeSingle();
-  const t = perfil?.tenants as { nome?: string; crc?: string; logo_url?: string } | null;
+  const t = perfil?.tenants as Escritorio | null;
   const escritorio = { nome: t?.nome || "Seu contador", crc: t?.crc, logo_url: t?.logo_url };
 
   const base = process.env.NEXT_PUBLIC_SITE_URL || new URL(req.url).origin;

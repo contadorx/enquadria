@@ -3,7 +3,7 @@
 ok    compila sem erro
 
 ── Suítes de função pura ───────────────────────────────────────
-ok    suíte cockpit (24 asserções)
+ok    suíte cockpit (37 asserções)
 ok    suíte motor (79 asserções)
 ok    suíte coleta (42 asserções)
 ok    suíte muro (11 asserções)
@@ -15,12 +15,15 @@ ok    suíte erros-auth (20 asserções)
 ok    suíte ajuda (41 asserções)
 ok    suíte cobranca (15 asserções)
 ok    suíte nps (40 asserções)
+ok    suíte escritorio (12 asserções)
+ok    suíte roteiro (24 asserções)
+ok    suíte abertura (34 asserções)
 
 ── Auditoria de UX (percepção, não estética) ───────────────────
 ok    auditoria de UX (6 regras limpas)
 
 ── Auditoria de schema (colunas que ninguém garante que existem) 
-ok    auditoria de schema (21 tabelas com proveniência)
+ok    auditoria de schema (22 tabelas com proveniência)
 
 ── Endereços públicos — o que chega ao cliente sem login ───────
 ok    /assinar/[token] existe e é pública
@@ -28,13 +31,30 @@ ok    /coleta/[token] existe e é pública
 ok    /laudo/[token] existe e é pública
 ok    /comparativo/[token] existe e é pública
 ok    /termo/[token] existe e é pública
+ok    /abertura/[token] existe e é pública
 ok    /assinar/[token] lê por token, não por sessão
 ok    /coleta/[token] lê por token, não por sessão
 ok    /laudo/[token] lê por token, não por sessão
 ok    /comparativo/[token] lê por token, não por sessão
 ok    /termo/[token] lê por token, não por sessão
+ok    /abertura/[token] lê por token, não por sessão
 ok    o comprovante do cliente linka o termo, não a página de assinatura
 ok    a aula normaliza a URL do vídeo antes do iframe
+
+── Impressão — o PDF que chega ao cliente ──────────────────────
+ok    components/LaudoFolha.tsx usa o CSS de impressão comum
+ok    components/ComparativoFolha.tsx usa o CSS de impressão comum
+ok    components/FolhaTermo.tsx usa o CSS de impressão comum
+ok    app/doc/relatorio/page.tsx usa o CSS de impressão comum
+ok    o CSS comum apaga o fundo cinza do app no papel
+ok    e impede a linha de tabela partida entre páginas
+ok    o botão de PDF ensina a desmarcar cabeçalhos e rodapés
+
+── Arquivar — a saída e o caminho de volta ─────────────────────
+ok    o dossiê abre empresa arquivada (senão arquivar não tem volta)
+ok    mas a FILA continua escondendo as arquivadas
+ok    existe a tela que lista as arquivadas
+ok    e ela é alcançável pelo menu
 
 ── Massa de empresas no parser do app ──────────────────────────
 ok    lê 47 linhas
@@ -140,4 +160,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 115 verificações automáticas
+TUDO PASSOU — 131 verificações automáticas

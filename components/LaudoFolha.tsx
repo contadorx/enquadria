@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { BotaoImprimir } from "@/components/BotaoImprimir";
 import { formatarCnpj } from "@/lib/cnpj";
+import { leituraDoDinheiro } from "@/lib/roteiro";
+import { CSS_IMPRESSAO } from "@/lib/impressao";
+import { assinaturaTecnica, mostrarNomeEscrito, type Escritorio } from "@/lib/escritorio";
 import { pct, moeda } from "@/lib/motor";
 import { ROTULO_FAIXA, type Faixa } from "@/lib/triagem";
 import {
@@ -44,7 +47,7 @@ export interface DadosLaudo {
     faixa?: string;
     motivo_triagem?: string;
   } | null;
-  escritorio: { nome?: string; crc?: string; logo_url?: string } | null;
+  escritorio: Escritorio | null;
 }
 
 /**
@@ -85,7 +88,8 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
             <img src={t.logo_url} alt="" className="logo" />
           )}
           <div>
-            <div className="firm">{t?.nome ?? "Escritório"}</div>
+            {/* logo que já traz o nome escrito não ganha o nome de novo ao lado */}
+            {mostrarNomeEscrito(t) && <div className="firm">{t?.nome ?? "Escritório"}</div>}
             {t?.crc && <div className="crc">{t.crc}</div>}
           </div>
         </div>
@@ -98,7 +102,7 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
 
       <h1>
         {curto
-          ? "Laudo de enquadramento — documentação de descarte"
+          ? "Laudo de enquadramento — permanência no regime atual"
           : "Laudo de enquadramento de IBS e CBS"}
       </h1>
 
@@ -195,10 +199,8 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
         conteúdo foi congelado na emissão e não se altera por revisões posteriores da análise.
       </div>
 
-      <div className="sign">
-        {t?.nome ?? "Contador responsável"}
-        {t?.crc ? ` — ${t.crc}` : ""}
-      </div>
+      {/* peça técnica é assinada por gente com CRC, não por razão social */}
+      <div className="sign">{assinaturaTecnica(t)}</div>
     </>
   );
 
@@ -229,7 +231,7 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
             {premissas.length > 0 && (
               <table className="prem">
                 <tbody>
-                  {/* só as três que sustentam o descarte: o resto seria enchimento */}
+                  {/* só as três que sustentam a conclusão: o resto seria enchimento */}
                   {premissas.slice(0, 3).map((pr) => (
                     <tr key={pr.pergunta}>
                       <td>{pr.pergunta}</td>
@@ -250,7 +252,7 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
             <p className="txt">
               A opção por apurar IBS e CBS fora do DAS pressupõe cliente pessoa jurídica que aproveite
               o crédito integral. Sem essa contrapartida, a apuração por fora acrescenta obrigação sem
-              retorno correspondente. Este documento registra a análise e o descarte, com a mesma
+              retorno correspondente. Este documento registra a análise e a conclusão pela permanência, com a mesma
               verificação pública dos demais laudos do escritório.
             </p>
             <ul className="riscos">
@@ -378,7 +380,9 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
                     </td>
                   </tr>
                   <tr>
-                    <td>Payback</td>
+                    {/* o laudo vai para a mesa do empresário: "payback" era a
+                        única palavra que ele não tinha obrigação de conhecer */}
+                    <td>Em quanto tempo o ganho cobre esse custo</td>
                     <td className="mono">
                       {dinheiro.payback_meses != null
                         ? `${dinheiro.payback_meses.toFixed(1).replace(".", ",")} meses`
@@ -386,13 +390,20 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
                     </td>
                   </tr>
                   <tr>
-                    <td>Custo absorvido pela empresa se o repasse não for aceito</td>
+                    <td>Custo absorvido pela empresa se o cliente dela não aceitar o repasse</td>
                     <td className="mono">
                       {dinheiro.absorvido_anual != null ? moeda(dinheiro.absorvido_anual) : "—"}
                     </td>
                   </tr>
                 </tbody>
               </table>
+            )}
+
+            {/* A CONCLUSÃO EM PORTUGUÊS. O quadro entrega quatro números e
+                nenhuma leitura — e é este parágrafo que o empresário repete
+                para o sócio depois da reunião. Ver lib/roteiro. */}
+            {leituraDoDinheiro(dinheiro) && (
+              <p className="txt"><b>Em resumo.</b> {leituraDoDinheiro(dinheiro)}</p>
             )}
 
             <div className="sec">6. Análise de sensibilidade</div>
@@ -527,23 +538,14 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
         .carimbo { border: 1px dashed #CBD5E1; background: #F8FAFC; border-radius: 6px; padding: 9px 12px; font-size: 11px; color: #475569; line-height: 1.55; margin: 8px 0; }
         .verif { margin-top: 12px; border: 1px dashed #A5F3FC; background: #ECFEFF; border-radius: 6px; padding: 9px 12px; font-size: 10.5px; color: #0E7490; line-height: 1.55; }
         .sign { margin-top: 30px; padding-top: 8px; border-top: 1px solid #334155; width: 280px; font-size: 11px; color: #64748B; }
+        ${CSS_IMPRESSAO}
         @media print {
-          /* o cinza do app não é papel: sem isto o fundo sai impresso nas
-             sobras de página quando o navegador imprime cores de fundo */
-          html, body { background: #fff !important; }
-          .no-print { display: none !important; }
-          .doc { padding: 0; max-width: none; }
-          .sheet { border: none; border-radius: 0; padding: 0; font-size: 10pt; line-height: 1.5; }
+          /* o que é específico do laudo: ele é longo, e o corpo menor evita
+             uma página inteira só para o rodapé */
+          .sheet { font-size: 10pt; line-height: 1.5; }
           .sec { margin: 14px 0 5px; }
           td { padding: 4px 6px 4px 0; }
           .sign { margin-top: 24px; }
-          .quebra { page-break-before: always; }
-          /* a LINHA não parte no meio; a TABELA pode continuar na página
-             seguinte — travar a tabela inteira deixava meia página em branco */
-          tr, li { page-break-inside: avoid; }
-          thead { display: table-header-group; }
-          .sec { page-break-after: avoid; }
-          @page { margin: 18mm; }
         }
       ` }} />
     </div>

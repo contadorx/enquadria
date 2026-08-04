@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase-admin";
 import { enviarEmail } from "@/lib/email";
 import { htmlConviteIndicacao } from "@/lib/emails-cliente";
 import { limparIndicados } from "@/lib/nps";
+import { comoChamar } from "@/lib/escritorio";
 
 /**
  * MANDA OS CONVITES das indicações — uma vez cada.
@@ -42,23 +43,29 @@ export async function POST(req: Request) {
 
   const { data: perfil } = await supabase
     .from("profiles")
-    .select("tenant_id, tenants(nome)")
+    .select("tenant_id, nome, tenants(nome)")
     .eq("id", user.id)
     .maybeSingle();
   const t = perfil?.tenants as { nome?: string } | null;
   /**
-   * QUEM INDICOU — o nome do escritório, nunca o e-mail.
+   * QUEM INDICOU — a pessoa, depois o escritório, nunca o e-mail.
    *
-   * Não existe campo de nome pessoal no cadastro nem no convite de membro, e
-   * o e-mail estava vazando para dentro da mensagem: o indicado recebia
-   * "fulano@gmail.com indicou você", que parece disparo automático e expõe o
-   * endereço de quem indicou sem ele ter combinado isso.
+   * Duas correções vivem nesta linha. A primeira: o e-mail de quem indica
+   * estava vazando para dentro da mensagem ("fulano@gmail.com indicou você"),
+   * o que expõe o endereço sem ele ter combinado isso e faz a mensagem
+   * parecer disparo automático.
    *
-   * O nome do escritório é o que ele já preencheu, é o que o colega reconhece,
-   * e é o que aparece no laudo. Sem ele, um genérico honesto.
+   * A segunda: a correção anterior mandava o nome do ESCRITÓRIO nos dois
+   * campos do template, e o convite saía "Contabilidade X, do Contabilidade X,
+   * indicou você". Agora `quem` é a pessoa e `casa` é o escritório — e quando
+   * só existe um dos dois, o template não inventa o outro.
    */
-  const escritorio = t?.nome?.trim() || "Um colega contador";
-  const quemIndicou = escritorio;
+  const { quem: quemIndicou, casa } = comoChamar({
+    nome: t?.nome ?? null,
+    responsavel: (perfil?.nome as string | null) ?? null,
+  });
+  const escritorio = t?.nome?.trim() || quemIndicou;
+
   const base = process.env.NEXT_PUBLIC_SITE_URL || new URL(req.url).origin;
 
   // quem JÁ foi convidado alguma vez não recebe de novo, venha de quem vier
@@ -98,7 +105,7 @@ export async function POST(req: Request) {
       html: htmlConviteIndicacao({
         indicado: ind.nome,
         quemIndicou,
-        escritorio,
+        escritorio: casa,
         link: `${base}/?ref=indicacao`,
       }),
     });

@@ -75,6 +75,7 @@ try {
     "lib/premissas-padrao.ts", "lib/coleta.ts", "lib/csv.ts", "lib/cnpj.ts",
     "lib/plano.ts", "lib/potencial.ts", "lib/reguas.ts", "lib/janela.ts",
     "lib/emails-cliente.ts", "lib/erros-auth.ts", "lib/ajuda.ts", "lib/cobranca.ts", "lib/nps.ts",
+    "lib/escritorio.ts", "lib/roteiro.ts", "lib/abertura.ts", "lib/comparativo.ts",
   ];
   const cfg = path.join(RAIZ, "tsconfig.testes.json");
   fs.writeFileSync(cfg, JSON.stringify({
@@ -111,7 +112,7 @@ const coleta = await import(path.join(TMP, "coleta.js"));
 
 /* ============================================ 1. SUÍTES DE FUNÇÃO PURA == */
 secao("Suítes de função pura");
-for (const suite of ["cockpit", "motor", "coleta", "muro", "reguas", "janela", "cnpj", "envio", "erros-auth", "ajuda", "cobranca", "nps"]) {
+for (const suite of ["cockpit", "motor", "coleta", "muro", "reguas", "janela", "cnpj", "envio", "erros-auth", "ajuda", "cobranca", "nps", "escritorio", "roteiro", "abertura"]) {
   const arq = path.join(RAIZ, "testes", `${suite}.test.mjs`);
   if (!fs.existsSync(arq)) {
     ok(`suíte ${suite}`, false, "arquivo não encontrado");
@@ -161,13 +162,14 @@ secao("Auditoria de schema (colunas que ninguém garante que existem)");
 secao("Endereços públicos — o que chega ao cliente sem login");
 {
   /**
-   * O cliente do contador NÃO TEM CONTA e nunca vai ter. Cinco endereços
+   * O cliente do contador NÃO TEM CONTA e nunca vai ter — e no caso do estudo
+   * de abertura ele nem cliente é ainda. Seis endereços
    * existem para ele, e todos dependem de continuar fora da guarda do
    * middleware. Proteger um deles por engano não quebra build nem teste de
    * função pura: quebra em produção, como um cliente batendo em tela de login
    * para ler o laudo que pagou — e o contador só descobre quando reclamam.
    */
-  const PUBLICAS = ["assinar", "coleta", "laudo", "comparativo", "termo"];
+  const PUBLICAS = ["assinar", "coleta", "laudo", "comparativo", "termo", "abertura"];
   const mw = fs.readFileSync(path.join(RAIZ, "middleware.ts"), "utf8");
   const guarda = mw.match(/path\.startsWith\("([^"]+)"\)/g) || [];
   const prefixos = guarda.map((g) => g.match(/"([^"]+)"/)[1]);
@@ -220,6 +222,71 @@ secao("Endereços públicos — o que chega ao cliente sem login");
        aula.includes("urlDeEmbed") && !/src=\{aula\.video\}/.test(aula),
        /src=\{aula\.video\}/.test(aula) ? "iframe recebe a URL crua" : "não chama urlDeEmbed");
   }
+}
+
+
+/* ================================== 1d. OS DOCUMENTOS IMPRIMEM IGUAL ==== */
+secao("Impressão — o PDF que chega ao cliente");
+{
+  /**
+   * O CSS de impressão estava copiado em quatro folhas e já tinha divergido:
+   * laudo 18mm, termo 18/16, relatório 22. Documento com margem diferente do
+   * termo da mesma empresa parece montado em lugares diferentes — e é
+   * exatamente o que o white-label promete que não acontece. Nada disso
+   * quebra build: só aparece no papel.
+   */
+  const FOLHAS = [
+    "components/LaudoFolha.tsx",
+    "components/ComparativoFolha.tsx",
+    "components/FolhaTermo.tsx",
+    "app/doc/relatorio/page.tsx",
+  ];
+  for (const f of FOLHAS) {
+    const src = fs.readFileSync(path.join(RAIZ, f), "utf8");
+    const proprias = (src.match(/@page\s*\{/g) || []).length;
+    ok(`${f} usa o CSS de impressão comum`,
+       src.includes("CSS_IMPRESSAO") && proprias === 0,
+       proprias > 0 ? "declara @page por conta própria" : "não importa CSS_IMPRESSAO");
+  }
+
+  const comum = fs.readFileSync(path.join(RAIZ, "lib/impressao.ts"), "utf8");
+  ok("o CSS comum apaga o fundo cinza do app no papel",
+     /html,\s*body\s*\{\s*background:\s*#fff/.test(comum));
+  ok("e impede a linha de tabela partida entre páginas",
+     /tr,\s*li\s*\{\s*page-break-inside:\s*avoid/.test(comum));
+
+  /**
+   * A margem do `@page` não apaga o cabeçalho do navegador — a URL e a data
+   * no pé de cada página saem assim mesmo, num laudo com a marca do
+   * escritório. Só a caixinha do usuário apaga, e ninguém desmarca uma opção
+   * que não sabe que existe.
+   */
+  const botao = fs.readFileSync(path.join(RAIZ, "components/BotaoImprimir.tsx"), "utf8");
+  ok("o botão de PDF ensina a desmarcar cabeçalhos e rodapés",
+     /Cabeçalhos e rodapés/.test(botao) && /Salvar como PDF/.test(botao));
+}
+
+/* =========================== 1e. TIRAR EMPRESA DA FILA TEM VOLTA ======== */
+secao("Arquivar — a saída e o caminho de volta");
+{
+  /**
+   * Arquivar sem tela de arquivadas é sumiço: a única tela que sabe
+   * desarquivar é o dossiê, e o dossiê se abre a partir da fila — de onde a
+   * empresa acabou de sair.
+   */
+  const dossie = fs.readFileSync(path.join(RAIZ, "app/api/dossie/route.ts"), "utf8");
+  ok("o dossiê abre empresa arquivada (senão arquivar não tem volta)",
+     !/\.is\("arquivada_em", null\)/.test(dossie) && /arquivada_em/.test(dossie));
+
+  const fila = fs.readFileSync(path.join(RAIZ, "app/painel/page.tsx"), "utf8");
+  ok("mas a FILA continua escondendo as arquivadas",
+     /\.is\("arquivada_em", null\)/.test(fila));
+
+  ok("existe a tela que lista as arquivadas",
+     fs.existsSync(path.join(RAIZ, "app/painel/arquivadas/page.tsx")));
+
+  const nav = fs.readFileSync(path.join(RAIZ, "lib/nav.ts"), "utf8");
+  ok("e ela é alcançável pelo menu", /\/painel\/arquivadas/.test(nav));
 }
 
 /* ============================================== 2. A MASSA NO PARSER ==== */

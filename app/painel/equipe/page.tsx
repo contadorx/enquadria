@@ -36,6 +36,8 @@ export default function Equipe() {
   const [membros, setMembros] = useState<Membro[]>([]);
   const [convites, setConvites] = useState<Convite[]>([]);
   const [meuPapel, setMeuPapel] = useState<string>("membro");
+  const [meuId, setMeuId] = useState<string | null>(null);
+  const [semNome, setSemNome] = useState(false);
   const [email, setEmail] = useState("");
   const [papel, setPapel] = useState("membro");
   const [carregando, setCarregando] = useState(true);
@@ -58,6 +60,10 @@ export default function Equipe() {
     setConvites((cs ?? []) as Convite[]);
     const eu = (ms ?? []).find((m) => m.id === user?.id);
     setMeuPapel(eu?.role ?? "membro");
+    setMeuId(user?.id ?? null);
+    /* quem não preencheu o próprio nome assina os documentos como razão social
+       e aparece como "—" para os colegas — vale um empurrão, uma vez só */
+    setSemNome(!!eu && !eu.nome);
     setCarregando(false);
   }
 
@@ -145,6 +151,8 @@ export default function Equipe() {
               <option value="admin">Administrador</option>
             </select>
             <button
+              // ux-ok: o resultado aparece em `aviso`/`erro` logo abaixo. O
+              // `semNome` que a auditoria mede vem de `carregar()`, de passagem.
               onClick={convidar}
               disabled={ocupado || !email}
               className="whitespace-nowrap rounded-sm bg-ink px-4 py-2 text-[13.5px] font-semibold text-white disabled:opacity-40"
@@ -156,6 +164,17 @@ export default function Equipe() {
             Membro usa o sistema normalmente. Administrador também pode convidar outras pessoas.
           </p>
         </div>
+      )}
+
+      {semNome && (
+        <p className="mt-4 rounded-sm border border-amarelo bg-amarelowash px-3 py-2.5 text-[12.5px] leading-relaxed text-slate2">
+          Seu nome não está preenchido. Ele assina o laudo e o termo, e é ele que aparece quando
+          você indica o Enquadria a um colega —{" "}
+          <a href="/painel/config" className="font-semibold text-accentdeep underline underline-offset-2">
+            preencher agora
+          </a>
+          .
+        </p>
       )}
 
       <div className="mt-5">
@@ -180,7 +199,14 @@ export default function Equipe() {
               {membros.map((m) => (
                 <tr key={m.id}>
                   <td className="border-b border-linesoft px-2.5 py-2.5 font-semibold">
-                    {m.nome ?? "—"}
+                    {/* sem nome preenchido, mostrar o e-mail é mais útil que um
+                        traço: a lista serve para saber QUEM está no escritório */}
+                    {m.nome?.trim() || <span className="text-muted">{m.email}</span>}
+                    {m.id === meuId && (
+                      <span className="ml-2 rounded-sm bg-surface2 px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-wider text-muted">
+                        você
+                      </span>
+                    )}
                   </td>
                   <td className="border-b border-linesoft px-2.5 py-2.5 font-mono text-[12px] text-muted">
                     {m.email}
@@ -217,6 +243,9 @@ export default function Equipe() {
                     <td className="border-b border-linesoft px-2.5 py-2.5 text-right">
                       {podeConvidar && (
                         <button
+                          // ux-ok: a linha revogada some da tabela, que fica
+                          // nesta mesma altura da tela. O `semNome` que a
+                          // auditoria mede vem de `carregar()`, não daqui.
                           onClick={() => revogar(c.id)}
                           disabled={ocupado}
                           className="rounded-sm border border-line px-3 py-1.5 text-[12.5px] font-semibold text-slate2 disabled:opacity-40"

@@ -101,7 +101,7 @@ export function tplTriagemPronta(
              <td style="padding:10px 0;border-bottom:1px solid #eee;text-align:right;font-weight:700">${total}</td></tr>
          <tr><td style="padding:10px 0;border-bottom:1px solid #eee">Precisam de análise</td>
              <td style="padding:10px 0;border-bottom:1px solid #eee;text-align:right;font-weight:700;color:#b45309">${urgentes}</td></tr>
-         <tr><td style="padding:10px 0">Descartadas com critério</td>
+         <tr><td style="padding:10px 0">Resolvidas na triagem</td>
              <td style="padding:10px 0;text-align:right;font-weight:700;color:#047857">${total - urgentes}</td></tr>
        </table>
        <p>As ${urgentes} da lista de atenção são as que valem uma análise cobrada antes

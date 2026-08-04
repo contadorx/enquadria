@@ -25,7 +25,7 @@ const CAMPOS: { chave: keyof LinhaCarteira; rotulo: string; papel: string; essen
   { chave: "anexo", rotulo: "Anexo", papel: "afina o cálculo do que sai do DAS" },
   { chave: "regime", rotulo: "Regime", papel: "separa quem já está fora do Simples" },
   { chave: "porte", rotulo: "Porte", papel: "identifica MEI" },
-  { chave: "situacao", rotulo: "Situação", papel: "descarta empresas inativas" },
+  { chave: "situacao", rotulo: "Situação", papel: "separa empresas inativas" },
   { chave: "contato_nome", rotulo: "Contato", papel: "quem assina o termo pela empresa" },
   { chave: "contato_email", rotulo: "E-mail", papel: "para enviar o link de assinatura em lote" },
   { chave: "contato_telefone", rotulo: "Telefone", papel: "acompanhamento comercial" },

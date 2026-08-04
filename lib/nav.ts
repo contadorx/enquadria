@@ -62,6 +62,16 @@ export const NAV: GrupoNav[] = [
        * aviso é conteúdo não lido.
        */
       { href: "/painel/reforma", label: "Reforma", curto: "Reforma", marcador: "reforma" },
+      /**
+       * ABERTURA — o item que faz o produto sobreviver a 30 de setembro.
+       *
+       * Fica no grupo de TRABALHO e no primeiro nível, ao lado do Cockpit, e
+       * não escondido dentro da empresa: o estudo de abertura não pertence a
+       * nenhuma empresa da carteira — ele é feito para quem AINDA NÃO é
+       * cliente. Enterrá-lo num submenu seria manter o produto refém de uma
+       * janela que fecha.
+       */
+      { href: "/painel/abertura", label: "Abertura", curto: "Abertura" },
       { href: "/painel/ajuda", label: "Ajuda", curto: "Ajuda" },
       /* Planos volta a ser item próprio. Eu tinha feito isso a seu pedido e
          desfiz sem querer na reorganização: contratar é a ação que o produto
@@ -89,6 +99,9 @@ export const NAV_PLATAFORMA: GrupoNav = {
 export const ABAS_ESCRITORIO: ItemNav[] = [
   { href: "/painel/config", label: "Configurações" },
   { href: "/painel/equipe", label: "Equipe" },
+  /* administração de carteira, não trabalho da janela: quem entra aqui está
+     corrigindo cadastro. Sem esta aba, arquivar seria sumiço sem volta. */
+  { href: "/painel/arquivadas", label: "Arquivadas" },
   { href: "/painel/indique", label: "Indique um colega" },
 ];
 

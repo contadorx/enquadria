@@ -95,7 +95,7 @@ export const MODULOS: Modulo[] = [
           "Vender para consumidor final: por que não há decisão a tomar",
           "Vender para empresa: onde o crédito nasce e por que ele pressiona o preço",
           "Simples vendendo para Simples gera crédito zero — o erro que derruba a análise",
-          "A pergunta de dez segundos que descarta a maior parte da carteira",
+          "A pergunta de dez segundos que resolve a maior parte da carteira",
         ],
       },
       {
@@ -108,7 +108,7 @@ export const MODULOS: Modulo[] = [
           "Aula de fazer, não de ouvir. Ao final você tem, na sua tela, o número de clientes que precisam decidir.",
         topicos: [
           "Exportar a lista de clientes do seu sistema: as quatro colunas que bastam",
-          "Como o CNAE classifica em urgente, avaliar, baixo risco e descarte",
+          "Como o CNAE classifica em urgente, avaliar, baixo risco e permanência",
           "As quatro exceções que a triagem não pega — e como tratar cada uma",
           "O número que você tem agora e o que fazer com ele ainda hoje",
         ],
@@ -233,7 +233,7 @@ export const MATERIAIS: Material[] = [
     id: "triagem",
     nome: "Planilha de triagem da carteira",
     descricao:
-      "Cole CNPJ, razão social e CNAE. A planilha classifica em urgente, avaliar, baixo risco e descarte, e conta quantos clientes precisam decidir.",
+      "Cole CNPJ, razão social e CNAE. A planilha classifica em urgente, avaliar, baixo risco e permanência, e conta quantos clientes precisam decidir.",
     arquivo: "/curso/Enquadria_Planilha_Triagem_Carteira.xlsx",
     formato: "XLSX",
     aula: 3,

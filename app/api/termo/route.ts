@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
+import { COLUNAS_ESCRITORIO, type Escritorio } from "@/lib/escritorio";
+import { responsavelDoTenant } from "@/lib/escritorio-server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { conteudoCanonico, sha256, novoToken, CLAUSULAS_CIENCIA } from "@/lib/esign";
 import { enviarEmail, htmlConviteAssinatura } from "@/lib/email";
@@ -58,10 +60,12 @@ export async function POST(req: Request) {
 
   const { data: perfilT } = await supabase
     .from("profiles")
-    .select("tenants(nome, crc, logo_url)")
+    .select(`nome, tenants(${COLUNAS_ESCRITORIO})`)
     .eq("id", user.id)
     .maybeSingle();
-  const tt = perfilT?.tenants as { nome?: string; crc?: string; logo_url?: string } | null;
+  const tt = perfilT?.tenants as Escritorio | null;
+  /* o termo é congelado na emissão — inclusive quem assina por ele */
+  const responsavel = await responsavelDoTenant(supabase);
   const { data: janela } = analise?.janela_id
     ? await supabase.from("janelas").select("nome").eq("id", analise.janela_id).maybeSingle()
     : { data: null };
@@ -104,7 +108,7 @@ export async function POST(req: Request) {
           razao_social: empresa?.razao_social ?? corpo.empresa ?? "empresa",
           cnpj: empresa?.cnpj ?? "",
         },
-        escritorio: { nome: tt?.nome, crc: tt?.crc, logo_url: tt?.logo_url },
+        escritorio: { ...(tt ?? {}), responsavel },
         analise: { saida: analise?.saida, re: analise?.re, fc: analise?.fc },
         janela: janela?.nome ?? null,
       },
@@ -149,7 +153,7 @@ export async function POST(req: Request) {
         decisao: corpo.decisao,
       }),
       tag: "termo-convite",
-      responderPara: user.email ? { email: user.email, nome: tt?.nome } : undefined,
+      responderPara: user.email ? { email: user.email, nome: tt?.nome ?? undefined } : undefined,
     });
     enviado = envio.enviado;
     motivoEnvio = envio.enviado ? null : envio.motivo ?? "envio recusado";

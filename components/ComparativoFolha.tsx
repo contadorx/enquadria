@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { BotaoImprimir } from "@/components/BotaoImprimir";
 import { formatarCnpj } from "@/lib/cnpj";
+import { assinaturaTecnica, mostrarNomeEscrito, type Escritorio } from "@/lib/escritorio";
+import { CSS_IMPRESSAO } from "@/lib/impressao";
 import { moeda, pct } from "@/lib/motor";
 import { ROTULO_SETOR, type ResultadoComparativo, type Setor } from "@/lib/comparativo";
 
@@ -26,7 +28,7 @@ export interface DadosComparativo {
   premissas: ResultadoComparativo["premissas"];
   resultado: ResultadoComparativo;
   empresa: { razao_social?: string | null; cnpj?: string | null } | null;
-  escritorio: { nome?: string; crc?: string; logo_url?: string } | null;
+  escritorio: Escritorio | null;
 }
 
 export function ComparativoFolha({
@@ -59,7 +61,8 @@ export function ComparativoFolha({
               <img src={t.logo_url} alt="" className="logo" />
             )}
             <div>
-              <div className="firm">{t?.nome ?? "Escritório"}</div>
+              {/* logo com o nome dentro não repete o nome ao lado */}
+              {mostrarNomeEscrito(t) && <div className="firm">{t?.nome ?? "Escritório"}</div>}
               {t?.crc && <div className="crc">{t.crc}</div>}
             </div>
           </div>
@@ -152,7 +155,7 @@ export function ComparativoFolha({
           regime. Mudança de regime produz efeitos que extrapolam esta conta. A responsabilidade
           técnica é do profissional que assina.
         </div>
-        <div className="sign">Contador responsável</div>
+        <div className="sign">{assinaturaTecnica(t)}</div>
       </div>
 
       <style dangerouslySetInnerHTML={{ __html: `
@@ -182,12 +185,7 @@ export function ComparativoFolha({
         .compt { font-weight: 700; color: #0F172A; font-size: 12.5px; margin-bottom: 3px; }
         .foot { margin-top: 26px; padding-top: 12px; border-top: 1px solid #EEF2F7; font-size: 10px; color: #64748B; line-height: 1.6; }
         .sign { margin-top: 40px; padding-top: 8px; border-top: 1px solid #334155; width: 240px; font-size: 11px; color: #64748B; }
-        @media print {
-          .no-print { display: none !important; }
-          .doc { padding: 0; max-width: none; }
-          .sheet { border: none; border-radius: 0; padding: 0; }
-          @page { margin: 18mm; }
-        }
+        ${CSS_IMPRESSAO}
       ` }} />
     </div>
   );

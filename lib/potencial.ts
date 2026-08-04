@@ -24,7 +24,7 @@ export interface ContagemFaixas {
 export interface Potencial {
   /** empresas que exigem análise completa (urgente + avaliar) */
   analises: number;
-  /** empresas de laudo curto (baixo risco + descarte documentado) */
+  /** empresas de laudo curto (baixo risco + permanência documentada) */
   curtos: number;
   /** empresas fora da regra (MEI, inativas, já fora do Simples) */
   fora: number;
@@ -97,13 +97,13 @@ export const EXPLICA_FAIXA: Record<
   C: {
     titulo: "Baixo risco",
     oQueE: "Sem perfil empresarial dominante identificado no CNAE.",
-    oQueFazer: "Laudo curto confirmando o descarte. Serve de proteção e custa pouco tempo.",
+    oQueFazer: "Laudo curto confirmando a permanência. Serve de proteção e custa pouco tempo.",
     cobravel: true,
   },
   D: {
-    titulo: "Descarte documentado",
+    titulo: "Permanência documentada",
     oQueE: "Varejo, alimentação, saúde ou serviço a pessoa física — o cliente final não aproveita crédito.",
-    oQueFazer: "Laudo curto e termo de ciência. Documente o descarte e siga em frente.",
+    oQueFazer: "Laudo curto e termo de ciência. Registre a permanência e siga em frente.",
     cobravel: true,
   },
   MEI: {
@@ -124,7 +124,7 @@ export const EXPLICA_FAIXA: Record<
 export function fraseDoMapa(p: Potencial): string {
   if (p.total === 0) return "Importe a carteira para ver o mapa.";
   if (p.analises === 0)
-    return `Nenhuma empresa desta carteira exige análise completa nesta janela. Os ${p.curtos} laudos curtos ainda documentam o descarte.`;
+    return `Nenhuma empresa desta carteira exige análise completa nesta janela. Os ${p.curtos} laudos curtos ainda documentam a permanência.`;
   const horas = Math.round(p.total * 0.25);
   return `A triagem eliminou ${Math.round(p.pct_eliminado * 100)}% da carteira e apontou ${p.analises} empresas que precisam decidir até 30 de setembro. O levantamento manual levaria cerca de ${horas} horas.`;
 }

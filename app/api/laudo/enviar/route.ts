@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
+import { COLUNAS_ESCRITORIO, type Escritorio } from "@/lib/escritorio";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { enviarEmail } from "@/lib/email";
 import { htmlLaudoCliente } from "@/lib/emails-cliente";
@@ -68,10 +69,10 @@ export async function POST(req: Request) {
 
   const { data: perfil } = await supabase
     .from("profiles")
-    .select("tenant_id, tenants(nome, crc, logo_url)")
+    .select(`tenant_id, nome, tenants(${COLUNAS_ESCRITORIO})`)
     .eq("id", user.id)
     .maybeSingle();
-  const t = perfil?.tenants as { nome?: string; crc?: string; logo_url?: string } | null;
+  const t = perfil?.tenants as Escritorio | null;
   // o cabeçalho do e-mail é o mesmo do documento: logo, nome e CRC
   const escritorio = { nome: t?.nome || "Seu contador", crc: t?.crc, logo_url: t?.logo_url };
   /**
@@ -160,7 +161,7 @@ export async function POST(req: Request) {
 
     /**
      * A DECISÃO SÓ APARECE NO E-MAIL QUANDO O LAUDO A CONTÉM. Faixas C, D, MEI
-     * e FORA recebem o laudo curto, que documenta o descarte e não conclui por
+     * e FORA recebem o laudo curto, que documenta a permanência e não conclui por
      * optar ou permanecer. Anunciar uma decisão que o documento não toma seria
      * o e-mail prometendo mais do que o anexo entrega.
      */

@@ -181,7 +181,7 @@ export function decisaoSugerida(a: AnaliseGravada): "optar" | "permanecer" {
  * e prova que se recalcula sozinha quando o motor muda não é prova.
  * ========================================================================== */
 
-/** Faixas C e D recebem laudo curto: documentar o descarte, não simular a decisão. */
+/** Faixas C e D recebem laudo curto: documentar a permanência, não simular a decisão. */
 export function ehLaudoCurto(faixa?: string | null): boolean {
   return faixa === "C" || faixa === "D" || faixa === "MEI" || faixa === "FORA";
 }

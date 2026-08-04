@@ -115,7 +115,7 @@ export function triar(e: EmpresaBruta): Triagem {
   }
   return {
     faixa: "C",
-    motivo: "CNAE sem perfil dominante identificado. Análise rápida para confirmar o descarte.",
+    motivo: "CNAE sem perfil dominante identificado. Análise rápida para confirmar a permanência.",
     prioridade_maxima: false,
   };
 }
@@ -126,7 +126,7 @@ export const ROTULO_FAIXA: Record<Faixa, string> = {
   A: "Urgente",
   B: "Avaliar",
   C: "Baixo risco",
-  D: "Descarte documentado",
+  D: "Permanência documentada",
 };
 
 export function resumir(triagens: Triagem[]) {
