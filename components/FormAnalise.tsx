@@ -24,6 +24,7 @@ import {
   type DetalheCred,
   type Segmento,
 } from "@/lib/motor";
+import { projetarRBT12, decidirComProjecao } from "@/lib/projecao";
 import { anexoPorCnae } from "@/lib/triagem";
 import { leituraDoDinheiro } from "@/lib/roteiro";
 import { parseValorBRL } from "@/lib/csv";
@@ -185,6 +186,10 @@ export function FormAnalise({
     detalhesIniciais?.cred ?? { insumos: inicial.cred, servicos: 0, outros: 0 }
   );
   const [rbt12, setRbt12] = useState(rbt12Inicial != null ? String(rbt12Inicial) : "");
+  /* C6 — a RBT12 dos DOZE MESES ANTERIORES. Sai do mesmo relatório de onde
+     saiu a RBT12: é medição, não expectativa, e por isso é o campo pedido em
+     vez de um "% de crescimento esperado". */
+  const [rbt12Ant, setRbt12Ant] = useState("");
   const [custo, setCusto] = useState(custoInicial != null ? String(custoInicial) : "");
   const [anexoSel, setAnexoSel] = useState<number>(anexo ?? anexoPorCnae(cnae) ?? 1);
   const [anexoConfirmado, setAnexoConfirmado] = useState(false);
@@ -252,6 +257,12 @@ export function FormAnalise({
   const saida = SAIDAS[res.saida];
   const dois = cenarios(respostas, base);
   const dinheiro = emReais(res, rbt12Num, custoNum);
+  const rbt12AntNum = parseValorBRL(rbt12Ant) ?? null;
+  const projecao =
+    rbt12Num != null && rbt12AntNum != null
+      ? projetarRBT12({ rbt12: rbt12Num, rbt12_anterior: rbt12AntNum, anexo: ddas.anexo })
+      : null;
+  const comProjecao = projecao ? decidirComProjecao(respostas, base, projecao) : null;
   const sens = sensibilidade(respostas, base, dinheiro);
   const alerta = alertaFatorR(anexoSel, r.folha);
 
@@ -269,6 +280,7 @@ export function FormAnalise({
           empresa_id: empresaId,
           respostas,
           rbt12: rbt12Num,
+          rbt12_anterior: rbt12AntNum,
           custo_apuracao_anual: custoNum,
           detalhes: { qual: dq, cred: dc },
           origens,
@@ -346,6 +358,74 @@ export function FormAnalise({
               a decisão vai para o empresário com os dois cenários à vista.
             </p>
           )}
+
+          {/**
+            * C6 — A RBT12 DOS DOZE MESES ANTERIORES.
+            *
+            * A opção se exerce em setembro de 2026 e vale de janeiro a junho de
+            * 2027. Com a RBT12 de hoje só, o laudo afirma um número para um
+            * período em que ele pode já não valer: empresa que cresce muda de
+            * faixa dentro do efeito, e a parcela que sai do DAS muda com ela.
+            *
+            * Pedimos a RBT12 ANTERIOR e não um "% esperado" de propósito: o
+            * primeiro é medição e sai do mesmo relatório; o segundo é opinião
+            * sobre o futuro, e opinião não sustenta laudo.
+            *
+            * Opcional. Sem ela nada é projetado, e o laudo não ganha a seção —
+            * melhor do que ganhar uma seção construída sobre um chute.
+            */}
+          <div className="mt-3">
+            <div className="text-[12.5px] font-semibold">
+              Receita dos 12 meses ANTERIORES a esses{" "}
+              <span className="font-normal text-muted">· opcional</span>
+            </div>
+            <p className="mb-2 mt-0.5 max-w-[70ch] text-[12px] text-muted">
+              Com ela o laudo projeta a RBT12 até junho de 2027 — o fim do período em que a opção
+              produz efeito — e confere se a decisão continua a mesma. Sem ela, o laudo usa apenas a
+              foto de hoje.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center rounded-sm border border-line px-2.5 focus-within:border-accent">
+                <span className="font-mono text-[12px] text-muted">R$</span>
+                <input
+                  value={rbt12Ant}
+                  onChange={(e) => setRbt12Ant(e.target.value)}
+                  inputMode="decimal"
+                  placeholder="ex.: 384.000"
+                  className="w-36 bg-transparent px-2 py-1.5 font-mono text-[13px] outline-none"
+                />
+              </div>
+              {projecao && (
+                <span className="rounded-sm bg-accentwash px-2 py-1 font-mono text-[11px] text-accentdeep">
+                  {(projecao.crescimento * 100).toFixed(1).replace(".", ",")}% a.a. →{" "}
+                  {moeda(projecao.rbt12_projetado)} em jun/27
+                  {projecao.muda_faixa
+                    ? ` · faixa ${projecao.faixa}→${projecao.faixa_projetada}`
+                    : " · mesma faixa"}
+                </span>
+              )}
+            </div>
+            {comProjecao?.divergem && (
+              <p className="mt-2 rounded-sm bg-amarelowash px-2.5 py-2 text-[12px] text-slate2">
+                <b>As duas contas discordam.</b> Com a RBT12 de hoje, {comProjecao.hoje.saida}; com a
+                projetada, {comProjecao.projetado.saida}. A decisão passa a depender do faturamento
+                de 2027 — vai ao empresário com os dois cenários.
+              </p>
+            )}
+            {projecao?.cruza_teto && (
+              <p className="mt-2 rounded-sm bg-vermelhowash px-2.5 py-2 text-[12px] text-vermelho">
+                A projeção ultrapassa o teto do Simples ({moeda(4800000)}) dentro do período de
+                efeito: se confirmar, a empresa apura pelo regime regular de qualquer forma e a opção
+                perde objeto.
+              </p>
+            )}
+            {projecao?.cruza_sublimite && (
+              <p className="mt-2 rounded-sm bg-amarelowash px-2.5 py-2 text-[12px] text-slate2">
+                A projeção ultrapassa o sublimite ({moeda(3600000)}) dentro do período de efeito:
+                ICMS e ISS saem do documento único no meio do exercício.
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="mb-3.5 border-b border-linesoft pb-3.5">

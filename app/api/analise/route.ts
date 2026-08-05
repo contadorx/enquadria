@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
+import { projetarRBT12, decidirComProjecao } from "@/lib/projecao";
 import {
   decidir,
   dDASefetivo,
@@ -50,6 +51,8 @@ export async function POST(req: Request) {
     janela_id?: string;
     respostas: Respostas;
     rbt12?: number | null;
+    /** C6 — RBT12 dos doze meses anteriores; habilita a projeção */
+    rbt12_anterior?: number | null;
     /** premissa declarada pelo contador; sem ela o laudo não calcula payback */
     custo_apuracao_anual?: number | null;
     detalhes?: { qual?: DetalheQual; cred?: DetalheCred };
@@ -145,6 +148,24 @@ export async function POST(req: Request) {
 
   const agora = new Date().toISOString();
   const r = decidir(corpo.respostas, base);
+
+  /**
+   * C6 — A PROJEÇÃO. Só existe quando o contador informou a RBT12 anterior:
+   * sem medição não se projeta, e a ausência da seção é a resposta certa.
+   *
+   * `decidirComProjecao` NÃO substitui `r`. Ela devolve as duas contas e a
+   * saída que sobrevive às duas — e é essa que vale, porque uma decisão que
+   * muda de sinal dentro do período de efeito não é uma decisão.
+   */
+  const rbt12Anterior =
+    corpo.rbt12_anterior != null && Number(corpo.rbt12_anterior) > 0
+      ? Number(corpo.rbt12_anterior)
+      : null;
+  const projecao =
+    rbt12Efetivo != null && rbt12Anterior != null
+      ? projetarRBT12({ rbt12: rbt12Efetivo, rbt12_anterior: rbt12Anterior, anexo: anexoEfetivo })
+      : null;
+  const comProjecao = projecao ? decidirComProjecao(corpo.respostas, base, projecao) : null;
   const doisCenarios = cenarios(corpo.respostas, base);
   const custo =
     corpo.custo_apuracao_anual != null && Number(corpo.custo_apuracao_anual) > 0
@@ -171,6 +192,11 @@ export async function POST(req: Request) {
     fronteiraMax: base.fronteiraMax,
     sublimite: base.sublimite,
     bandaSublimite: base.bandaSublimite,
+    /* CONGELADOS porque o laudo BRANCHEIA neles. `rqMin` e `absorcaoMax`
+       ficavam de fora e o laudo caía no padrão: mudar a convenção amanhã
+       reescreveria em silêncio o que um documento assinado ontem afirma. */
+    rqMin: base.rqMin,
+    absorcaoMax: base.absorcaoMax,
     rbt12: rbt12Efetivo,
     anexo: ddas.anexo,
     /**
@@ -184,8 +210,13 @@ export async function POST(req: Request) {
     ddas,
     partilha,
     // por que esta saída, congelado com o resto: a seção 7 do laudo imprime isto
-    motivo: r.motivo,
+    motivo: comProjecao?.divergem ? comProjecao.motivo : r.motivo,
     banda_sublimite: !!r.banda_sublimite,
+    /* C6 — congelada com o resto: o laudo imprime a projeção que foi usada */
+    projecao: comProjecao
+      ? { ...projecao, divergem: comProjecao.divergem, saida_hoje: comProjecao.hoje.saida,
+          saida_projetada: comProjecao.projetado.saida, linhas: comProjecao.linhas }
+      : null,
     carimbo: carimboAliquota(aliquota, agora),
     cenarios: doisCenarios,
     dinheiro,
@@ -208,7 +239,18 @@ export async function POST(req: Request) {
     cl: r.cl,
     re: isFinite(r.re) ? r.re : null,
     fc: r.fc,
-    saida: r.saida,
+    /**
+     * C6 — A SAÍDA GRAVADA É A QUE SOBREVIVE ÀS DUAS CONTAS.
+     *
+     * Quando a RBT12 de hoje e a projetada para junho de 2027 levam a saídas
+     * diferentes, grava-se S3: a decisão passa a depender do faturamento de
+     * 2027, que este documento não conhece. Gravar a de hoje seria afirmar num
+     * laudo um resultado que o próprio laudo mostra que pode virar dentro do
+     * período de efeito.
+     *
+     * Quando as duas concordam — o caso comum — vale `r.saida`, intacta.
+     */
+    saida: comProjecao?.divergem ? comProjecao.saida : r.saida,
     prioridade: r.prioridade,
     parametros,
     calculado_em: agora,

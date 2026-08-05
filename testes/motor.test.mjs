@@ -100,8 +100,18 @@ ok(alertaFatorR(1, 0.12) === null, "Anexo I não entra no fator R");
 
 // ------------------------------------------------- partilha por exercício
 ok(sharePCDe(1, 3, 2027).valor === 0.155, "partilha de 2027 existe");
-ok(sharePCDe(1, 3, 2030).valor === null, "2030 recusa calcular em vez de projetar");
-ok(sharePCDe(1, 3, 2030).motivo.includes("não está parametrizada"), "e diz por quê");
+/**
+ * MUDOU EM 05/08/2026 — e a mudança é o motivo do teste, não um remendo nele.
+ *
+ * 2030 recusava calcular porque a partilha do ano não estava parametrizada. As
+ * tabelas dos Anexos XVIII a XXII da LC 214/2025 foram extraídas do texto
+ * compilado e conferidas (soma 100% em cada linha; 2027-28 batendo com a tabela
+ * já validada), então 2027 a 2033 passaram a responder. Fora desse intervalo a
+ * recusa continua — e continua sendo a resposta certa.
+ */
+ok(sharePCDe(1, 3, 2030).valor === 0.222, "2030 agora responde: 15,50% CBS + 6,70% IBS", sharePCDe(1, 3, 2030).valor);
+ok(sharePCDe(1, 3, 2034).valor === null, "2034 recusa calcular em vez de projetar — a lei acaba em 2033");
+ok(sharePCDe(1, 3, 2034).motivo.includes("não está parametrizada"), "e diz por quê");
 
 // --------------------------------------------------------- derivações
 ok(Math.abs(derivarQual({ fora_simples: 0.65, sem_aproveitamento: 0.2 }) - 0.52) < 1e-9, "qual = fora × (1 − sem aproveitamento)");

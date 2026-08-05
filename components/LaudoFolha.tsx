@@ -13,6 +13,7 @@ import {
   condicoesDeValidade,
   riscosELimites,
   pressaoDoLaudo,
+  absorcaoDoLaudo,
   FRONTEIRA_CONTA_NEGOCIACAO,
   tabelaDoAnexo,
   recomendacao,
@@ -74,6 +75,7 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
   const premissas = premissasComOrigem(a);
   const memoria = memoriaDeCalculo(a);
   const pressao = pressaoDoLaudo(a);
+  const absorcao = absorcaoDoLaudo(a);
   const quadro = quadroComparativo(a);
   const condicoes = condicoesDeValidade(a);
   const riscos = riscosELimites(a);
@@ -536,6 +538,46 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
                   </p>
                 ))}
                 <p className="fronteira">{FRONTEIRA_CONTA_NEGOCIACAO}</p>
+              </>
+            )}
+
+            {/**
+              * O CENÁRIO DE ABSORÇÃO — para quem declarou que não renegocia.
+              *
+              * Vem DEPOIS da pressão de propósito: a faixa de negociação acima
+              * é a conta completa, e este bloco diz que, nesta empresa, ela
+              * provavelmente não será usada. Sem ele o laudo fala em "negociar
+              * 4,2%" com quem respondeu que o mercado define o preço — e um
+              * documento que ignora a resposta que o próprio cliente deu é lido
+              * uma vez e nunca mais.
+              *
+              * A saída é S3 e não S4 por causa da última linha: o motor conhece
+              * a receita e não conhece a margem.
+              */}
+            {absorcao && (
+              <>
+                <div className="sec">
+                  {pressao ? "8b" : "8"}. Se o preço não puder ser renegociado
+                </div>
+                <table className="quadro">
+                  <tbody>
+                    <tr>
+                      <td>Custo que a empresa absorve, sem repassar nada</td>
+                      <td className="mono res">
+                        {absorcao.custo}
+                        {absorcao.custo_reais ? ` · ${absorcao.custo_reais}/ano` : ""}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td>Crédito que o comprador passa a receber, sem aumento de preço</td>
+                      <td className="mono">{absorcao.entrega}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                {absorcao.linhas.map((l, i) => (
+                  <p key={i} className="txt">{l}</p>
+                ))}
+                <p className="aviso">{absorcao.pergunta}</p>
               </>
             )}
 

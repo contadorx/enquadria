@@ -132,6 +132,11 @@ export async function POST(req: Request) {
       fronteiraMax: base.fronteiraMax,
       sublimite: base.sublimite,
       bandaSublimite: base.bandaSublimite,
+      /* CONGELADOS porque o laudo BRANCHEIA neles. `rqMin` e `absorcaoMax`
+         ficavam de fora e o laudo caía no padrão: mudar a convenção amanhã
+         reescreveria em silêncio o que um documento assinado ontem afirma. */
+      rqMin: base.rqMin,
+      absorcaoMax: base.absorcaoMax,
       rbt12,
       anexo,
       ddas,

@@ -56,6 +56,32 @@ export interface AnaliseGravada {
     fronteiraMax?: number;
     /** piso de receita qualificada congelado na análise (padrão 0,30) */
     rqMin?: number;
+    /** teto de absorção congelado na análise (padrão 0,01 = 1 ponto da receita) */
+    absorcaoMax?: number;
+    /**
+     * C6 — a projeção da RBT12 até o fim do período de efeito, congelada.
+     * Ausente quando o contador não informou a RBT12 dos doze meses anteriores:
+     * sem medição não se projeta, e o laudo simplesmente não ganha a seção.
+     */
+    projecao?: {
+      rbt12: number;
+      rbt12_projetado: number;
+      crescimento: number;
+      origem: "medido" | "informado";
+      meses: number;
+      faixa: number | null;
+      faixa_projetada: number | null;
+      das: number;
+      das_projetado: number;
+      muda_faixa: boolean;
+      cruza_sublimite: boolean;
+      cruza_teto: boolean;
+      acima_do_teto_hoje: boolean;
+      divergem: boolean;
+      saida_hoje: Saida;
+      saida_projetada: Saida;
+      linhas: string[];
+    } | null;
     partilha?: { valor: number | null; motivo: string };
     carimbo?: CarimboAliquota;
     cenarios?: Cenario[];
@@ -278,6 +304,79 @@ export function pressaoDoLaudo(a: AnaliseGravada): BlocoPressao | null {
     absorve: pct(cl),
     absorve_reais: dinheiro != null ? moeda(dinheiro) : null,
     avisos,
+  };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * A ABSORÇÃO — quando o repasse simplesmente não vai acontecer.
+ *
+ * Até 05/08/2026, `preco <= 1` mandava tudo para S2: "não optar nesta janela".
+ * Em 3,7% da grade isso significava mandar a empresa esperar seis meses para
+ * não pagar meio ponto da receita — e perder, nesse meio tempo, a única forma
+ * de entregar crédito integral ao cliente SEM aumentar preço nenhum.
+ *
+ * Agora esses casos vão para S3, e este bloco é o que o laudo diz neles. Ele
+ * troca a unidade do documento: falar em "negociar 4,2%" com quem declarou que
+ * não negocia é escrever para ninguém.
+ *
+ * O QUE ESTE BLOCO É OBRIGADO A DIZER, e é a razão de a saída ser S3 e não S4:
+ * o motor conhece a RECEITA e não conhece a MARGEM. Meio ponto de receita numa
+ * empresa de 3% de margem é um sexto do lucro. Recomendar absorver seria
+ * recomendar com um número que o sistema não tem.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+export interface BlocoAbsorcao {
+  /** o custo líquido, em % da receita */
+  custo: string;
+  custo_reais: string | null;
+  /** o crédito que o comprador passa a receber sem aumento de preço */
+  entrega: string;
+  /** a pergunta que devolve a decisão a quem tem o número */
+  pergunta: string;
+  linhas: string[];
+}
+
+export function absorcaoDoLaudo(a: AnaliseGravada): BlocoAbsorcao | null {
+  const p = a.parametros ?? {};
+  const preco = a.respostas?.preco;
+  if (preco == null || Number(preco) > 1) return null;
+  if (a.cl == null || a.fc == null || a.rq == null) return null;
+  const cl = Number(a.cl), fc = Number(a.fc), rq = Number(a.rq);
+  if (!(cl > 0) || !(fc > 0)) return null;
+  /**
+   * O PISO DE RECEITA QUALIFICADA VALE AQUI TAMBÉM.
+   *
+   * A primeira versão esquecia dele e o teste de concordância acusou 8 casos
+   * (de 1.152) em que o motor dizia S1 — "não há a quem transferir crédito em
+   * volume que justifique" — e o laudo, na mesma página, oferecia absorver o
+   * custo para entregar crédito. Documento em contradição consigo mesmo, e o
+   * tipo de erro que ninguém encontra lendo: os dois trechos estão certos
+   * separadamente.
+   */
+  if (rq < (typeof p.rqMin === "number" ? p.rqMin : 0.3)) return null;
+  const teto = typeof p.absorcaoMax === "number" ? p.absorcaoMax : 0.01;
+  if (cl > teto) return null;
+
+  const reais = p.dinheiro?.absorvido_anual;
+  return {
+    custo: pct(cl, 2),
+    custo_reais: reais != null ? moeda(reais) : null,
+    entrega: pct(fc),
+    pergunta:
+      `${pct(cl, 2)} da receita cabe na margem desta empresa? Este laudo conhece a receita e não ` +
+      "conhece a margem — a resposta é do empresário, e é ela que decide.",
+    linhas: [
+      "A empresa declarou não ter poder de renegociar preço. O cenário realista, então, não é o " +
+        "repasse calculado acima: é a ABSORÇÃO do custo líquido.",
+      `Absorvendo, a empresa passa a arcar com ${pct(cl, 2)} da receita` +
+        (reais != null ? ` — ${moeda(reais)} no ano` : "") +
+        `, e o comprador passa a receber ${pct(fc)} de crédito sem nenhum aumento de preço.`,
+      "É a única situação em que a opção entrega vantagem comercial sem depender de conversa " +
+        "difícil. Também é a única em que o custo é integralmente da empresa.",
+      "Se em algum momento o preço puder ser renegociado, o repasse calculado acima volta a valer " +
+        "e a absorção deixa de ser necessária — mas o crédito já terá sido entregue, e a conversa " +
+        "acontecerá sem nada para trocar.",
+    ],
   };
 }
 

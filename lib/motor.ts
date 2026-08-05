@@ -86,6 +86,12 @@ export interface Parametros {
   sublimite?: number;
   /** largura da banda em torno do sublimite, em fração (0,05 = ±5%) */
   bandaSublimite?: number;
+  /**
+   * ABSORÇÃO QUE CABE SEM NEGOCIAR — teto do custo líquido, em fração da
+   * receita, abaixo do qual a empresa travada em preço ainda tem uma decisão a
+   * tomar. Ver o bloco `preco <= 1` em `decidir()`. Convenção: 0,01 (1 ponto).
+   */
+  absorcaoMax?: number;
 }
 
 export interface Resultado {
@@ -135,6 +141,14 @@ export interface Resultado {
   motivo: string;
   /** true quando a banda do sublimite empurrou a decisão para o empresário */
   banda_sublimite?: boolean;
+  /**
+   * true quando a saída é S3 porque a empresa está TRAVADA em preço e o custo
+   * de absorver cabe no teto — cenário em que o repasse `re` não vai acontecer
+   * e o número que importa é o `cl`. O laudo troca de texto por causa disto:
+   * falar de "negociar 4,2%" com quem declarou que não negocia é o tipo de
+   * documento que o cliente lê uma vez e não leva a sério de novo.
+   */
+  absorcao_cabe?: boolean;
 }
 
 export const PARAMETROS_2027: Parametros = {
@@ -145,6 +159,7 @@ export const PARAMETROS_2027: Parametros = {
   rqMin: 0.3,
   sublimite: 3600000,
   bandaSublimite: 0.05,
+  absorcaoMax: 0.01,
 };
 
 /**
@@ -388,6 +403,14 @@ export interface DDAS {
    * Quem consome precisa avisar em vez de calcular.
    */
   acimaDoTeto?: boolean;
+  /** exercício cuja tabela de partilha foi usada */
+  exercicio?: number;
+  /**
+   * o teto de 5% do ISS MORDERIA aqui, mas a nota de rodapé do exercício não
+   * está parametrizada (2029 em diante). O `das` devolvido é o SEM teto — menor,
+   * portanto conservador contra optar — e o laudo precisa dizer isso.
+   */
+  teto_iss_indefinido?: boolean;
   /**
    * Preenchido quando o teto de 5% do ISS mordeu. Vai para o laudo: a memória
    * de cálculo não pode mostrar um `sharePC` diferente do da tabela sem
@@ -412,9 +435,9 @@ export interface DDAS {
  * Então `das` deixa de ser `efetiva × sharePC` e passa a ser
  * `(efetiva − 0,05) × sharePCredistribuido`.
  */
-function aplicarTetoISS(anexo: number, faixa: number, efetiva: number, sharePCtabela: number) {
+function aplicarTetoISS(anexo: number, faixa: number, efetiva: number, sharePCtabela: number, exercicio = 2027) {
   const regra = TETO_ISS[anexo];
-  const shareISS = ANEXOS_SIMPLES[anexo]?.[faixa - 1]?.shareISS;
+  const shareISS = anexoNoExercicio(anexo, exercicio)?.[faixa - 1]?.shareISS;
   /**
    * `regra.faixa !== faixa` é REDUNDANTE hoje, e fica de propósito.
    *
@@ -444,6 +467,124 @@ function aplicarTetoISS(anexo: number, faixa: number, efetiva: number, sharePCta
   };
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+ * OS EXERCÍCIOS DE 2029 A 2033 — a transição em degraus.
+ *
+ * O QUE MUDA, e não é pouco. Em 2027 e 2028 a coluna IBS da partilha do DAS é
+ * SIMBÓLICA: 0,17% no Anexo I contra 15,33% da CBS — 1,1% do que sai. A partir
+ * de 2029 o ICMS e o ISS migram para o IBS em degraus anuais, e a fatia que
+ * deixa o DAS quando a empresa opta cresce ANO A ANO até 2033:
+ *
+ *   Anexo I, faixas 1–2:  15,50% (2027-28) → 18,90% → 22,30% → 25,70% →
+ *                         29,10% → 49,50% (2033)
+ *
+ * Ou seja: o `das` de 2033 é mais de TRÊS VEZES o de 2027 na mesma faixa, e a
+ * conta de optar muda de sinal em muitos casos. Um motor que respondesse 2031
+ * com a tabela de 2027 estaria errado por um fator de 3.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * DE ONDE VIERAM ESTES NÚMEROS, porque isso é o que sustenta o laudo.
+ *
+ * Do texto compilado da LC 214/2025 no Planalto — Anexos XVIII a XXII, tabelas
+ * "Partilha do Simples Nacional" de cada ano-calendário, já com a redação da
+ * LC 227/2026 onde ela existe (quando o texto traz duas versões do mesmo ano, a
+ * da LC 227 é a que vale, e é a que está aqui).
+ *
+ * Não foram digitados: foram EXTRAÍDOS do PDF por `ferramentas/extrair-partilha.py`
+ * e conferidos por duas travas independentes —
+ *   · cada linha de partilha soma exatamente 100% (30 linhas por ano);
+ *   · a tabela de 2027–2028 assim extraída bate, casa a casa, com a que já
+ *     estava no motor e foi conferida antes (30 de 30).
+ * A segunda trava é a que importa: se o extrator lesse a coluna errada, ele
+ * erraria também o ano que já sabíamos, e a conferência acusaria.
+ *
+ * `sharePC` = CBS + IBS. Na 6ª faixa não há coluna de IBS (acima do sublimite
+ * o ICMS/ISS já está fora do DAS), então lá `sharePC` = CBS apenas.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+interface PartilhaAno { sharePC: number; shareISS?: number }
+
+/** nominal da 6ª faixa a partir de 2029 — sobe 0,10 p.p. e não volta a mudar */
+const NOMINAL_6A_DE_2029: Record<number, number> = { 1: 0.19, 2: 0.3, 3: 0.33, 4: 0.33, 5: 0.305 };
+
+const PARTILHA_POR_EXERCICIO: Record<number, Record<number, PartilhaAno[]>> = {
+  2029: {
+    1: [{ sharePC: 0.189 }, { sharePC: 0.189 }, { sharePC: 0.1885 }, { sharePC: 0.1885 }, { sharePC: 0.1885 }, { sharePC: 0.344 }],
+    2: [{ sharePC: 0.172 }, { sharePC: 0.172 }, { sharePC: 0.172 }, { sharePC: 0.172 }, { sharePC: 0.172 }, { sharePC: 0.255 }],
+    3: [{ sharePC: 0.1895, shareISS: 0.3015 }, { sharePC: 0.203, shareISS: 0.288 }, { sharePC: 0.1985, shareISS: 0.2925 }, { sharePC: 0.1985, shareISS: 0.2925 }, { sharePC: 0.1895, shareISS: 0.3015 }, { sharePC: 0.195 }],
+    4: [{ sharePC: 0.2595, shareISS: 0.4005 }, { sharePC: 0.29, shareISS: 0.36 }, { sharePC: 0.28, shareISS: 0.36 }, { sharePC: 0.27, shareISS: 0.36 }, { sharePC: 0.26, shareISS: 0.36 }, { sharePC: 0.25 }],
+    5: [{ sharePC: 0.1855, shareISS: 0.126 }, { sharePC: 0.1885, shareISS: 0.153 }, { sharePC: 0.2005, shareISS: 0.171 }, { sharePC: 0.2125, shareISS: 0.189 }, { sharePC: 0.195, shareISS: 0.2115 }, { sharePC: 0.2 }],
+  },
+  2030: {
+    1: [{ sharePC: 0.223 }, { sharePC: 0.223 }, { sharePC: 0.222 }, { sharePC: 0.222 }, { sharePC: 0.222 }, { sharePC: 0.344 }],
+    2: [{ sharePC: 0.204 }, { sharePC: 0.204 }, { sharePC: 0.204 }, { sharePC: 0.204 }, { sharePC: 0.204 }, { sharePC: 0.255 }],
+    3: [{ sharePC: 0.223, shareISS: 0.268 }, { sharePC: 0.235, shareISS: 0.256 }, { sharePC: 0.231, shareISS: 0.26 }, { sharePC: 0.231, shareISS: 0.26 }, { sharePC: 0.223, shareISS: 0.268 }, { sharePC: 0.195 }],
+    4: [{ sharePC: 0.304, shareISS: 0.356 }, { sharePC: 0.33, shareISS: 0.32 }, { sharePC: 0.32, shareISS: 0.32 }, { sharePC: 0.31, shareISS: 0.32 }, { sharePC: 0.3, shareISS: 0.32 }, { sharePC: 0.25 }],
+    5: [{ sharePC: 0.1995, shareISS: 0.112 }, { sharePC: 0.2055, shareISS: 0.136 }, { sharePC: 0.2195, shareISS: 0.152 }, { sharePC: 0.2335, shareISS: 0.168 }, { sharePC: 0.2185, shareISS: 0.188 }, { sharePC: 0.2 }],
+  },
+  2031: {
+    1: [{ sharePC: 0.257 }, { sharePC: 0.257 }, { sharePC: 0.2555 }, { sharePC: 0.2555 }, { sharePC: 0.2555 }, { sharePC: 0.344 }],
+    2: [{ sharePC: 0.236 }, { sharePC: 0.236 }, { sharePC: 0.236 }, { sharePC: 0.236 }, { sharePC: 0.236 }, { sharePC: 0.255 }],
+    3: [{ sharePC: 0.2565, shareISS: 0.2345 }, { sharePC: 0.267, shareISS: 0.224 }, { sharePC: 0.2635, shareISS: 0.2275 }, { sharePC: 0.2635, shareISS: 0.2275 }, { sharePC: 0.2565, shareISS: 0.2345 }, { sharePC: 0.195 }],
+    4: [{ sharePC: 0.3485, shareISS: 0.3115 }, { sharePC: 0.37, shareISS: 0.28 }, { sharePC: 0.36, shareISS: 0.28 }, { sharePC: 0.35, shareISS: 0.28 }, { sharePC: 0.34, shareISS: 0.28 }, { sharePC: 0.25 }],
+    5: [{ sharePC: 0.2135, shareISS: 0.098 }, { sharePC: 0.2225, shareISS: 0.119 }, { sharePC: 0.2385, shareISS: 0.133 }, { sharePC: 0.2545, shareISS: 0.147 }, { sharePC: 0.242, shareISS: 0.1645 }, { sharePC: 0.2 }],
+  },
+  2032: {
+    1: [{ sharePC: 0.291 }, { sharePC: 0.291 }, { sharePC: 0.289 }, { sharePC: 0.289 }, { sharePC: 0.289 }, { sharePC: 0.344 }],
+    2: [{ sharePC: 0.268 }, { sharePC: 0.268 }, { sharePC: 0.268 }, { sharePC: 0.268 }, { sharePC: 0.268 }, { sharePC: 0.255 }],
+    3: [{ sharePC: 0.29, shareISS: 0.201 }, { sharePC: 0.299, shareISS: 0.192 }, { sharePC: 0.296, shareISS: 0.195 }, { sharePC: 0.296, shareISS: 0.195 }, { sharePC: 0.29, shareISS: 0.201 }, { sharePC: 0.195 }],
+    4: [{ sharePC: 0.393, shareISS: 0.267 }, { sharePC: 0.41, shareISS: 0.24 }, { sharePC: 0.4, shareISS: 0.24 }, { sharePC: 0.39, shareISS: 0.24 }, { sharePC: 0.38, shareISS: 0.24 }, { sharePC: 0.25 }],
+    5: [{ sharePC: 0.2275, shareISS: 0.084 }, { sharePC: 0.2395, shareISS: 0.102 }, { sharePC: 0.2575, shareISS: 0.114 }, { sharePC: 0.2755, shareISS: 0.126 }, { sharePC: 0.2655, shareISS: 0.141 }, { sharePC: 0.2 }],
+  },
+  2033: {
+    1: [{ sharePC: 0.495 }, { sharePC: 0.495 }, { sharePC: 0.49 }, { sharePC: 0.49 }, { sharePC: 0.49 }, { sharePC: 0.344 }],
+    2: [{ sharePC: 0.46 }, { sharePC: 0.46 }, { sharePC: 0.46 }, { sharePC: 0.46 }, { sharePC: 0.46 }, { sharePC: 0.255 }],
+    3: [{ sharePC: 0.491 }, { sharePC: 0.491 }, { sharePC: 0.491 }, { sharePC: 0.491 }, { sharePC: 0.491 }, { sharePC: 0.195 }],
+    4: [{ sharePC: 0.66 }, { sharePC: 0.65 }, { sharePC: 0.64 }, { sharePC: 0.63 }, { sharePC: 0.62 }, { sharePC: 0.25 }],
+    5: [{ sharePC: 0.3115 }, { sharePC: 0.3415 }, { sharePC: 0.3715 }, { sharePC: 0.4015 }, { sharePC: 0.4065 }, { sharePC: 0.2 }],
+  },
+};
+
+/**
+ * A tabela do anexo NO EXERCÍCIO pedido. 2027 e 2028 devolvem `ANEXOS_SIMPLES`
+ * intacta — o caminho de produção de hoje não passa por nenhuma linha nova.
+ */
+export function anexoNoExercicio(anexo: number | null | undefined, exercicio = 2027): FaixaSimples[] {
+  const a = anexoValido(anexo);
+  const base = ANEXOS_SIMPLES[a];
+  const ajuste = PARTILHA_POR_EXERCICIO[exercicio];
+  if (!ajuste) return base;
+  const linhas = ajuste[a];
+  return base.map((f, i) => ({
+    ...f,
+    nominal: i === 5 ? (NOMINAL_6A_DE_2029[a] ?? f.nominal) : f.nominal,
+    sharePC: linhas[i].sharePC,
+    shareISS: linhas[i].shareISS,
+  }));
+}
+
+/**
+ * O TETO DE 5% DO ISS NÃO ESTÁ PARAMETRIZADO DE 2029 EM DIANTE — de propósito.
+ *
+ * A nota de rodapé dos Anexos XX e XXI muda de ESTRUTURA a cada ano: o piso do
+ * ISS desce em degraus (5% → 4,5% → 4% → 3,5% → 3%) e a parcela que sobra passa
+ * a ser dividida entre um ISS fixo e um IBS fixo, com fatores próprios. Pior: o
+ * texto compilado traz DUAS redações para os mesmos anos (a original e a da LC
+ * 227/2026), com fatores diferentes.
+ *
+ * Duas consultas normativas já foram reprovadas neste projeto por inventarem
+ * exatamente este tipo de número. Aqui a resposta é: o motor calcula o `das`
+ * SEM o teto — que é o valor MENOR, portanto o viés é contra optar — e MARCA a
+ * análise como tendo teto de ISS indefinido, para o laudo dizer.
+ *
+ * Vale só onde o teto morderia: Anexos III e IV, 5ª faixa, acima do gatilho.
+ */
+export function tetoISSIndefinido(anexo: number, faixa: number, efetiva: number, exercicio: number): boolean {
+  if (exercicio < 2029) return false;
+  const regra = TETO_ISS[anexo];
+  return !!regra && regra.faixa === faixa && efetiva > regra.gatilho;
+}
+
 /**
  * dDAS EFETIVO por empresa — o número que entra no motor como `das`.
  *
@@ -456,21 +597,27 @@ function aplicarTetoISS(anexo: number, faixa: number, efetiva: number, sharePCta
 export function dDASefetivo(
   anexo?: number | null,
   rbt12?: number | null,
-  faixaFallback?: number | null
+  faixaFallback?: number | null,
+  /* o exercício da tabela. 2027 por padrão: o caminho de produção de hoje não
+     muda de comportamento por causa do desbloqueio de 2029+. */
+  exercicio = 2027
 ): DDAS {
   const a = anexoValido(anexo);
-  const tabela = ANEXOS_SIMPLES[a];
+  const tabela = anexoNoExercicio(a, exercicio);
 
   if (rbt12 && rbt12 > 0) {
     const f = faixaDe(a, rbt12) as number;
     const faixa = tabela[f - 1];
     const efetiva = Math.max((rbt12 * faixa.nominal - faixa.deduzir) / rbt12, 0);
     const acimaDoTeto = rbt12 > tabela[tabela.length - 1].teto;
-    const teto = aplicarTetoISS(a, f, efetiva, faixa.sharePC);
+    const indefinido = tetoISSIndefinido(a, f, efetiva, exercicio);
+    const teto = indefinido ? null : aplicarTetoISS(a, f, efetiva, faixa.sharePC, exercicio);
     return {
       das: teto ? teto.das : efetiva * faixa.sharePC,
       faixa: f,
       anexo: a,
+      exercicio,
+      ...(indefinido ? { teto_iss_indefinido: true } : {}),
       aliquota: efetiva,
       /* o sharePC devolvido é o EFETIVAMENTE usado: quem imprime o laudo não
          pode receber um número e ver outro na conta */
@@ -490,7 +637,7 @@ export function dDASefetivo(
   // o maior `cl`, portanto o viés contra optar. Melhor ainda é exigir a RBT12.
   const f = faixaFallback && tabela[faixaFallback - 1] ? faixaFallback : 1;
   const faixa = tabela[f - 1];
-  return { das: faixa.nominal * faixa.sharePC, faixa: f, anexo: a, aliquota: faixa.nominal, sharePC: faixa.sharePC, rbt12: null, fonte: "conservador" };
+  return { das: faixa.nominal * faixa.sharePC, faixa: f, anexo: a, exercicio, aliquota: faixa.nominal, sharePC: faixa.sharePC, rbt12: null, fonte: "conservador" };
 }
 
 /* ==========================================================================
@@ -697,6 +844,7 @@ export function decidir(r: Respostas, p: Parametros = PARAMETROS_2027): Resultad
   const fMin = p.fronteiraMin ?? 0.8;
   const fMax = p.fronteiraMax ?? 1.2;
   const rqMin = p.rqMin ?? 0.3;
+  const absorcaoMax = p.absorcaoMax ?? 0.01;
 
   const rq = r.b2b * r.qual;
   const ch = p.aliquota * (1 - r.cred);
@@ -742,6 +890,7 @@ export function decidir(r: Respostas, p: Parametros = PARAMETROS_2027): Resultad
 
   let saida: Saida;
   let motivo: string;
+  let absorcaoCabe = false;
 
   if (rq < rqMin) {
     // Sem receita qualificada não há a quem transferir crédito. Vale inclusive
@@ -766,10 +915,50 @@ export function decidir(r: Respostas, p: Parametros = PARAMETROS_2027): Resultad
       `Repasse necessário de ${pct(re)} no preço. Descontado o crédito que o próprio reajuste gera ` +
       `para o comprador, ele sente ${pct(reLiquido)} — ainda acima do ganho de ${pct(fc)} que teria. ` +
       "A conta não fecha para nenhum dos dois lados.";
-  } else if (r.preco <= 1) {
-    // A conta fecha, a negociação não. Preparar a janela seguinte.
+  } else if (r.preco <= 1 && cl > absorcaoMax) {
+    // A conta fecha, a negociação não, e o custo de simplesmente engolir é
+    // grande demais. Preparar a janela seguinte.
     saida = "S2";
-    motivo = "A conta fecha, a negociação não: sem poder de renegociar preço, o repasse não acontece a tempo desta janela.";
+    motivo =
+      `Sem poder de renegociar preço, o cenário realista é absorver ${pct(cl, 2)} da receita — ` +
+      `acima do teto de ${pct(absorcaoMax, 2)} que este laudo trata como absorvível. ` +
+      "A conta fecha, a negociação não acontece a tempo desta janela.";
+  } else if (r.preco <= 1) {
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * C8 — O VETO DO `preco` DEIXOU DE SER ABSOLUTO (05/08/2026).
+     *
+     * O QUE ESTAVA ERRADO. `preco <= 1` mandava tudo para S2 — "não optar
+     * nesta janela, preparar março" — inclusive quando o custo de não negociar
+     * NADA era de três décimos de ponto da receita. Medido na grade: S2 era
+     * 31,7% dos casos, e em 682 deles a absorção mediana era 0,371% e a máxima
+     * 0,981%. O laudo mandava esperar seis meses para não pagar 0,4%.
+     *
+     * E o que se perdia esperando não era pequeno: ao optar, o comprador passa
+     * a receber ${fc} de crédito SEM aumento de preço nenhum. É o único
+     * cenário do produto em que a empresa entrega vantagem comercial sem
+     * precisar de conversa difícil.
+     *
+     * O QUE MUDOU. Quando a absorção cabe no teto, a saída passa a ser S3 —
+     * "Zona de fronteira, decisão do empresário" —, NÃO S4. O motor não
+     * recomenda absorver custo: ele não conhece a margem. Um ponto da RECEITA
+     * pode ser um terço do LUCRO, e essa conta é do empresário.
+     *
+     * POR QUE UM PISO ABSOLUTO E NÃO O `parte_minima` DA PRESSÃO. O
+     * `parte_minima` mede quanto da faixa de negociação a empresa precisa — é
+     * a pergunta certa para quem VAI negociar. Quem se declarou travado não
+     * vai. A pergunta dele é outra e é absoluta: "cabe na minha margem?". Por
+     * isso o corte é em pontos de receita, e por isso o laudo é obrigado a
+     * dizer que não conhece a margem.
+     * ═══════════════════════════════════════════════════════════════════════
+     */
+    saida = "S3";
+    absorcaoCabe = true;
+    motivo =
+      `Sem poder de renegociar preço, o cenário realista é ABSORVER ${pct(cl, 2)} da receita — ` +
+      `dentro do teto de ${pct(absorcaoMax, 2)} deste laudo. Em troca, o comprador passa a receber ` +
+      `${pct(fc)} de crédito sem nenhum aumento de preço. Quanto ${pct(cl, 2)} da receita pesa na ` +
+      "margem é conta que este laudo não faz: a decisão é do empresário.";
   } else if (reLiquido >= fc * fMin) {
     // Cabe, mas por pouco: o motor não decide, o empresário decide.
     saida = "S3";
@@ -832,6 +1021,7 @@ export function decidir(r: Respostas, p: Parametros = PARAMETROS_2027): Resultad
     re_unico: reUnico,
     saida, prioridade, motivo,
     banda_sublimite: bandaSublimite,
+    absorcao_cabe: absorcaoCabe,
   };
 }
 
@@ -1170,23 +1360,23 @@ export function sensibilidade(
  * RECUSA calcular em vez de projetar: número inventado em documento assinado
  * por contador não tem conserto.
  */
-export const EXERCICIOS_PARAMETRIZADOS = [2027, 2028];
+export const EXERCICIOS_PARAMETRIZADOS = [2027, 2028, 2029, 2030, 2031, 2032, 2033];
 
 export function sharePCDe(
   anexo: number | null | undefined,
   faixa: number,
   exercicio = 2027
 ): { valor: number | null; motivo: string } {
-  const tabela = ANEXOS_SIMPLES[anexoValido(anexo)];
+  const tabela = anexoNoExercicio(anexo, exercicio);
   const f = tabela[faixa - 1];
   if (!f) return { valor: null, motivo: `Faixa ${faixa} inexistente no Anexo ${anexoValido(anexo)}.` };
   if (!EXERCICIOS_PARAMETRIZADOS.includes(exercicio)) {
     return {
       valor: null,
       motivo:
-        `A partilha do DAS do exercício ${exercicio} não está parametrizada. ` +
-        "De 2029 em diante ICMS e ISS saem do DAS em degraus anuais e a fatia que migra para a " +
-        "CBS deixa de ser a de 2027 — o valor precisa vir de norma, não de projeção.",
+        `A partilha do DAS do exercício ${exercicio} não está parametrizada. As tabelas dos ` +
+        "Anexos XVIII a XXII da LC 214/2025 vão de 2027 a 2033; fora desse intervalo o valor " +
+        "precisa vir de norma, não de projeção.",
     };
   }
   return { valor: f.sharePC, motivo: `Partilha PIS/Cofins da faixa ${faixa} do Anexo ${anexoValido(anexo)}, vigente em ${exercicio}.` };
