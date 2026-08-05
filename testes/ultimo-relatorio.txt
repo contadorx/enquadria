@@ -37,7 +37,7 @@ ok    suíte reguas-indicacao (40 asserções)
 ok    suíte repasse (26 asserções)
 ok    suíte roteiro (24 asserções)
 ok    suíte tabela-2027 (82 asserções)
-ok    suíte termo (53 asserções)
+ok    suíte termo (60 asserções)
 
 ── Auditoria de UX (percepção, não estética) ───────────────────
 ok    auditoria de UX (6 regras limpas)
@@ -47,6 +47,9 @@ ok    auditoria de schema (25 tabelas com proveniência)
 
 ── Auditoria de upsert (o onConflict que o Postgres não consegue inferir) 
 ok    auditoria de upsert (12 conferidos)
+
+── Cópias silenciosas do texto do documento ────────────────────
+ok    um texto, um dono (4 conferências, com sabotagem)
 
 ── Fronteira servidor ↔ cliente (o proxy que compila e cai no ar) 
 ok    fronteira servidor ↔ cliente (6 conferências, com sabotagem)
@@ -303,4 +306,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 264 verificações automáticas
+TUDO PASSOU — 265 verificações automáticas

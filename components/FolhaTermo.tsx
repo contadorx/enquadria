@@ -2,7 +2,7 @@ import { formatarCnpj } from "@/lib/cnpj";
 import { assinaturaTecnica, mostrarNomeEscrito, type Escritorio } from "@/lib/escritorio";
 import { CSS_IMPRESSAO } from "@/lib/impressao";
 import {
-  CIENCIA_DOS_EFEITOS, ROTULO_TIPO, fraseDaDecisao,
+  CIENCIA_DOS_EFEITOS, ROTULO_TIPO, fraseDaDecisao, nomeCorrompido, AVISO_NOME_CORROMPIDO,
   type Recomendacao, type TipoDecisao,
 } from "@/lib/termo";
 
@@ -93,6 +93,15 @@ export function FolhaTermo({
           {empresa?.razao_social} · {empresa?.cnpj ? formatarCnpj(empresa.cnpj) : ""} · prazo legal:
           1 a 30 de setembro de 2026 · efeito a partir de 2027
         </div>
+
+        {/* O nome entra no conteúdo que é HASHEADO. Sair assinado com acento
+            corrompido é documento devolvido — e a assinatura não conserta, ela
+            só garante que ninguém mexeu depois. */}
+        {nomeCorrompido(empresa?.razao_social) && (
+          <div className="box">
+            <b>Atenção antes de assinar.</b> {AVISO_NOME_CORROMPIDO}
+          </div>
+        )}
 
         <p className="lead">
           A empresa declara que recebeu a análise de enquadramento, compreendeu os cenários

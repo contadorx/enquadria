@@ -199,6 +199,25 @@ secao("Auditoria de upsert (o onConflict que o Postgres não consegue inferir)")
      r.status === 0 ? undefined : saida.split("\n").filter((l) => l.startsWith("QUEBRADO")).slice(0, 8));
 }
 
+/* ==================== 1b5. UM TEXTO, UM DONO =========================== */
+secao("Cópias silenciosas do texto do documento");
+{
+  /**
+   * As cláusulas de ciência do termo existiam em DOIS arquivos; quando o
+   * cadeado do art. 41 § 5º entrou, ele entrou numa TERCEIRA cópia nova. O
+   * termo que o cliente abre pelo link de assinatura continuou mostrando a
+   * lista antiga — e é essa a lista que vira hash, que é a que ele assina.
+   *
+   * Nada quebrou: compilou, buildou, os testes passaram. O sinal só aparece
+   * comparando duas telas, e ninguém compara duas telas toda semana.
+   */
+  const r = spawnSync("node", [path.join(RAIZ, "ferramentas", "auditar-copias.mjs"), "--autoteste"], { encoding: "utf8" });
+  const saida = (r.stdout || "") + (r.stderr || "");
+  const regras = (saida.match(/^ok: /gm) || []).length;
+  ok(`um texto, um dono (${regras} conferências, com sabotagem)`, r.status === 0,
+     r.status === 0 ? undefined : saida.split("\n").filter((l) => /FALHOU|CÓPIA/.test(l)).slice(0, 8));
+}
+
 /* ======================== 1b4. A FRONTEIRA SERVIDOR ↔ CLIENTE =========== */
 secao("Fronteira servidor ↔ cliente (o proxy que compila e cai no ar)");
 {

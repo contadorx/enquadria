@@ -22,6 +22,7 @@
 import {
   recomendacaoDoTermo, pontosAObservar, resolverDecisao, validarDecisao,
   fraseDaDecisao, CIENCIA_DOS_EFEITOS, ROTULO_TIPO,
+  nomeCorrompido, AVISO_NOME_CORROMPIDO,
 } from "./termo.js";
 import { PARAMETROS_2027, ehOptar } from "./motor.js";
 
@@ -191,6 +192,24 @@ ok(validarDecisao({ tipo: "divergir", decisao: "permanecer",
      "análise sem nada devolve recomendação conservadora e lista vazia, sem lançar");
   ok(Array.isArray(pontosAObservar(velha)), "e os pontos também");
 }
+
+/* ═══════════ 9 · o nome corrompido ════════════════════════════════════
+ * Encontrado em produção: 6 de 95 empresas com "Ribeir\uFFFDo" no lugar de
+ * "Ribeirão". O nome entra no conteúdo que é HASHEADO e assinado — a assinatura
+ * garante que ninguém mexeu depois, não que estava certo.
+ * ══════════════════════════════════════════════════════════════════════════ */
+ok(nomeCorrompido("Cabos e Condutores Ribeir\uFFFDo Ltda"), "pega o caractere de substituição");
+ok(nomeCorrompido("Gr\u00C3\u00A1fica Ipiranga"), "e o UTF-8 lido como latin-1 (Ã seguido de alto)");
+ok(!nomeCorrompido("Cabos e Condutores Ribeirão Ltda"), "acento CORRETO não é acusado — falso positivo aqui seria pior");
+ok(!nomeCorrompido("Padaria Pão da Vila Ltda") && !nomeCorrompido("Gráfica Ipiranga Indústria Ltda"),
+   "nem ã, á, ú, ç — a empresa brasileira tem acento e isso é normal");
+ok(!nomeCorrompido("") && !nomeCorrompido(null) && !nomeCorrompido(undefined),
+   "vazio e nulo não são corrupção");
+ok(/entra no conteúdo que é\s+assinado/.test(AVISO_NOME_CORROMPIDO.replace(/\s+/g, " ")) ||
+   /entra no conteúdo que é assinado/.test(AVISO_NOME_CORROMPIDO),
+   "o aviso diz POR QUE importa — sem isso vira mais um alerta ignorado");
+ok(/não que ele estava certo/.test(AVISO_NOME_CORROMPIDO),
+   "e desfaz a ilusão de que a assinatura conserta o conteúdo");
 
 console.log(f === 0 ? "\nOK" : `\n${f} FALHA(S)`);
 process.exit(f === 0 ? 0 : 1);

@@ -54,13 +54,29 @@ export function conteudoCanonico(d: {
   ].join("\n");
 }
 
-/** cláusulas padrão de ciência (também exibidas na página de assinatura) */
-export const CLAUSULAS_CIENCIA = [
-  "A opção vale por semestre e não pode ser alterada dentro do período.",
-  "Quem não optar dentro do prazo permanece no regime tradicional.",
-  "A decisão afeta preço, crédito ao cliente e competitividade.",
-  "A análise é estimativa de cenário; a responsabilidade técnica é do contador que assina.",
-];
+/**
+ * AS CLÁUSULAS DE CIÊNCIA — uma lista só, e esta é a correção de 05/08/2026.
+ *
+ * Havia DUAS cópias: esta e a de `components/FolhaTermo.tsx`. Depois viraram
+ * três, quando `lib/termo.ts` nasceu com a versão nova (com o cadeado do
+ * art. 41 § 5º). Resultado imediato: o termo que o cliente abre pelo link de
+ * assinatura mostrava a lista ANTIGA — e é essa a lista que entra no conteúdo
+ * canônico, que é a que vira hash.
+ *
+ * Ou seja: a lista que a pessoa lê e assina não era a lista que a gente tinha
+ * corrigido. Uma cópia por superfície é exatamente como isso acontece.
+ *
+ * A lista mora em `lib/termo.ts` porque é conteúdo jurídico, não mecânica de
+ * assinatura. Aqui fica o apelido, para não quebrar quem já importa daqui.
+ *
+ * ATENÇÃO AO HASH, e isto foi conferido antes de mexer: `conteudoCanonico()` é
+ * calculado UMA VEZ na emissão e o resultado é GRAVADO em `hash_documento`.
+ * Nada recomputa a partir desta constante na verificação. Mudar a lista afeta
+ * apenas termos NOVOS; as assinaturas existentes continuam válidas com o texto
+ * que foi assinado. Se a verificação recalculasse, mudar uma vírgula aqui
+ * invalidaria todas as assinaturas já colhidas.
+ */
+export { CIENCIA_DOS_EFEITOS as CLAUSULAS_CIENCIA } from "./termo";
 
 /* ------------------------------------------------------------------ OTP ---- */
 

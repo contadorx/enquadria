@@ -306,3 +306,36 @@ export function fraseDaDecisao(d: DecisaoDoTermo, rec: Recomendacao): string {
     "permanece como emitida."
   );
 }
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * O NOME DA EMPRESA CHEGOU CORROMPIDO?
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Encontrado em produção em 05/08/2026: 6 de 95 empresas com o caractere de
+ * substituição no lugar do acento — "Cabos e Condutores Ribeir�o Ltda". Todas
+ * de importações de 03/08, anteriores à detecção de codificação que hoje existe
+ * em `lib/csv.ts`.
+ *
+ * POR QUE ISSO NÃO É COSMÉTICO AQUI. O nome da empresa entra no `conteudoCanonico()`
+ * — a string que é hasheada e assinada. Um termo assinado com a razão social
+ * errada é um documento que o cliente devolve, e a assinatura não conserta: ela
+ * garante que ninguém alterou o texto DEPOIS, não que o texto estava certo.
+ *
+ * O ESTRAGO NÃO TEM VOLTA AUTOMÁTICA. O byte original foi substituído por
+ * U+FFFD na decodificação; "�" pode ter sido ã, á, â ou ç. Adivinhar pelo
+ * contexto seria escrever no documento do cliente um palpite nosso. O que dá
+ * para fazer é DETECTAR e IMPEDIR que saia assinado assim.
+ */
+export function nomeCorrompido(nome?: string | null): boolean {
+  if (!nome) return false;
+  /* U+FFFD é o resultado de decodificação falha. As sequências Ã/Â seguidas de
+     caractere alto são UTF-8 lido como latin-1 — nenhuma delas aparece em
+     português escrito corretamente. */
+  return /\uFFFD|\u00C3[\u00A0-\u00BF]|\u00C2[\u00A0-\u00BF]/.test(nome);
+}
+
+export const AVISO_NOME_CORROMPIDO =
+  "A razão social desta empresa contém caractere corrompido — provavelmente um acento perdido na " +
+  "importação. Corrija o cadastro ANTES de colher a assinatura: o nome entra no conteúdo que é " +
+  "assinado, e a assinatura garante que o texto não mudou depois, não que ele estava certo.";
