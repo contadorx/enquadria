@@ -17,6 +17,7 @@ import {
   rotuloOrigem,
   ehLaudoCurto,
   BASE_LEGAL,
+  NOTA_PARAMETROS,
   type AnaliseGravada,
 } from "@/lib/laudo";
 
@@ -313,6 +314,9 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
               </tbody>
             </table>
 
+            {/* de onde vêm os cortes do método — ver NOTA_PARAMETROS em lib/laudo */}
+            <p className="notaparam">{NOTA_PARAMETROS}</p>
+
             <div className="sec">5. Quadro comparativo</div>
             <table className="quadro">
               <thead>
@@ -397,6 +401,28 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
                   </tr>
                 </tbody>
               </table>
+            )}
+
+            {/**
+              * O GANHO É BRUTO, e o quadro não dizia isso.
+              *
+              * As duas linhas do meio já mostram "não informado" e "não
+              * calculado" quando o custo de apurar não vem. Mas quem lê um
+              * quadro lê a primeira linha — o ganho em reais, sempre presente —
+              * e as duas de baixo passam como detalhe técnico.
+              *
+              * O resultado é uma assimetria de desenho: o benefício aparece por
+              * padrão, o custo só quando alguém digita. Não é má-fé, e o efeito
+              * é o mesmo. Uma linha resolve, e ela fica ao lado do número, não
+              * no rodapé.
+              */}
+            {dinheiro?.receita != null && dinheiro.custo_anual == null && dinheiro.ganho_anual != null && dinheiro.ganho_anual > 0 && (
+              <p className="aviso">
+                O ganho acima é <b>bruto</b>: o custo de apurar IBS e CBS fora do DAS não foi
+                informado e <b>não está descontado</b>. Apurar por fora exige escrituração,
+                obrigação acessória e controle de crédito próprios — informe esse custo para que o
+                laudo mostre em quanto tempo o ganho o cobre.
+              </p>
             )}
 
             {/* A CONCLUSÃO EM PORTUGUÊS. O quadro entrega quatro números e
@@ -535,6 +561,10 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
         .box { border: 1px solid; background: #F8FAFC; border-radius: 6px; padding: 11px 13px; font-size: 13px; margin-bottom: 8px; }
         .motivo { margin-top: 7px; padding-top: 7px; border-top: 1px solid #E2E8F0; font-size: 12px; color: #475569; }
         .prio { border-left: 3px solid #DC2626; background: #FEF2F2; color: #A32D2D; padding: 7px 10px; font-size: 11.5px; margin-top: 8px; }
+        /* ressalva ao lado de um número, não no rodapé: âmbar, porque vermelho
+           no laudo é reservado a prioridade e a "não optar" */
+        .aviso { border-left: 3px solid #D97706; background: #FFFBEB; color: #78350F; padding: 7px 10px; font-size: 11.5px; margin: 6px 0 0; line-height: 1.5; }
+        .notaparam { font-size: 10.5px; color: #64748B; line-height: 1.5; margin: 7px 0 0; }
         .carimbo { border: 1px dashed #CBD5E1; background: #F8FAFC; border-radius: 6px; padding: 9px 12px; font-size: 11px; color: #475569; line-height: 1.55; margin: 8px 0; }
         .verif { margin-top: 12px; border: 1px dashed #A5F3FC; background: #ECFEFF; border-radius: 6px; padding: 9px 12px; font-size: 10.5px; color: #0E7490; line-height: 1.55; }
         .sign { margin-top: 30px; padding-top: 8px; border-top: 1px solid #334155; width: 280px; font-size: 11px; color: #64748B; }

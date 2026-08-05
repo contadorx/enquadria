@@ -157,13 +157,48 @@ export function baseDeCalculo(a: AnaliseGravada): string[] {
         `estimativa conservadora usada por falta de RBT12 informada (tende a superestimar o custo).`
     );
   }
+  /**
+   * A REDAÇÃO MUDOU EM 05/08/2026, e o número não.
+   *
+   * O laudo dizia "parcela PIS/Cofins que migra para a CBS". Isso descreve 2026.
+   * A partir de 01/01/2027 vale o art. 519 da LC 214/2025: os Anexos I a V da
+   * LC 123 são substituídos pelos Anexos XVIII a XXII, e as colunas "Cofins" e
+   * "PIS/Pasep" DEIXAM DE EXISTIR — no lugar entram "CBS" e "IBS".
+   *
+   * A soma é idêntica nas faixas 1 a 5 (Anexo I: 12,74 + 2,76 = 15,50 = CBS
+   * 15,33 + IBS 0,17), então nenhuma conta muda. O que muda é a fundamentação
+   * de um documento assinado por contador — e citar coluna que a lei extinguiu
+   * é o tipo de erro que só aparece quando alguém contesta.
+   */
   linhas.push(
-    `Parcela PIS/Cofins que migra para a CBS e sai do DAS: ${pct(d.sharePC)} da carga do Simples = ${pct(
-      d.das
-    )} da receita.`
+    `Parcela que sai do DAS ao optar: ${pct(d.sharePC)} da carga do Simples = ${pct(d.das)} da receita.`
+  );
+  linhas.push(
+    "Essa parcela corresponde às colunas de CBS e IBS da partilha do anexo (Anexos XVIII a XXII da " +
+      "Lei Complementar nº 214/2025, art. 519, com efeitos a partir de 1º/01/2027), de soma idêntica " +
+      "à antiga partilha de Cofins e PIS/Pasep dos Anexos I a V da Lei Complementar nº 123/2006."
   );
   return linhas;
 }
+
+/**
+ * OS CORTES DO MÉTODO — o que é norma e o que é convenção.
+ *
+ * O laudo já imprime as bandas dentro do motivo da saída ("dentro da banda de
+ * fronteira, 0,8× a 1,2× o ganho do comprador"). O que faltava era dizer de
+ * onde esses números vêm: não vêm de lugar nenhum na lei. São convenção do
+ * método, e um número sem origem num documento técnico tira autoridade dele.
+ *
+ * A sensibilidade foi medida em 64.800 combinações — está aqui porque
+ * "escolhemos 0,30" é fraco, e "escolhemos 0,30, e 0,25 ou 0,35 mudariam menos
+ * de 3% dos casos" é verificável.
+ */
+export const NOTA_PARAMETROS =
+  "Os cortes usados na recomendação — receita qualificada mínima de 30%, banda de fronteira de 0,8 a " +
+  "1,2 vez o ganho do comprador e banda de 5% em torno do sublimite — são convenções deste método, " +
+  "não decorrem de norma. Foram testados: adotar 25% ou 35% de receita qualificada mínima altera menos " +
+  "de 3% das recomendações, e estreitar a banda de fronteira para 0,9–1,1 altera 3,6%. Os valores de " +
+  "entrada e a memória de cálculo acima permitem refazer a conta com outros cortes.";
 
 /** true quando a base do dDAS foi estimada (sem RBT12) — dispara o aviso no laudo */
 export function dDASestimado(a: AnaliseGravada): boolean {
@@ -513,7 +548,26 @@ export function riscosELimites(a: AnaliseGravada): string[] {
     "A alíquota de referência de IBS e CBS ainda não foi fixada. A Resolução do Senado Federal tem prazo até 31 de outubro de 2026 — depois do encerramento da janela de opção. As duas contas deste laudo existem por causa disso.",
     "Os valores partem de premissas declaradas, não de apuração com dados fiscais efetivos. A conferência dos percentuais informados é responsabilidade do contador que assina.",
     "O cálculo trata a base como “por dentro”. A discussão sobre base por fora, ligada ao art. 516 da LC 214/2025, depende de posição jurídica e não foi aplicada aqui; se aplicada, deslocaria o resultado na direção de optar.",
-    "A opção produz efeito por semestre e é cancelável até o último dia de novembro de 2026. A decisão de agora não encerra o assunto: a janela seguinte reabre a pergunta.",
+    /**
+     * ESTA LINHA ESTAVA INCOMPLETA, e a parte que faltava é a que responsabiliza.
+     *
+     * Ela dizia que a opção é semestral e cancelável, ponto — o que é verdade
+     * para quase todo mundo e MENTIRA para exatamente o perfil que este laudo
+     * mais recomenda: empresa com muito crédito de entrada, que acumula saldo e
+     * pede ressarcimento.
+     *
+     * LC 214/2025, art. 41, § 5º: "É vedado ao contribuinte do Simples Nacional
+     * [...] retirar-se do regime regular do IBS e da CBS caso tenha recebido
+     * ressarcimento de créditos desses tributos no ano-calendário corrente ou
+     * anterior, nos termos do art. 39."
+     *
+     * Ou seja: a reversibilidade que o documento promete some no dia em que a
+     * empresa usa um mecanismo que o próprio regime oferece. Enquanto o
+     * questionário não perguntar isso, o aviso vai incondicional — errar para o
+     * lado de avisar demais é o único erro barato aqui.
+     */
+    "A opção produz efeito por semestre e é cancelável até o último dia de novembro de 2026. A decisão de agora não encerra o assunto: a janela seguinte reabre a pergunta, em março, na data que a Resolução do CGSN daquele ano fixar.",
+    "A reversibilidade tem uma exceção, e ela alcança justamente quem acumula crédito: o art. 41, § 5º, da Lei Complementar nº 214/2025 veda a saída do regime regular ao contribuinte que tenha recebido ressarcimento de créditos de IBS ou CBS no ano-calendário corrente ou no anterior. Se a empresa pretende pedir ressarcimento do saldo credor, a decisão desta janela deixa de ser semestral e passa a ser de mão única — confirme esse ponto antes de assinar.",
   ];
   if (p.ddas?.fonte === "conservador") {
     riscos.push(
@@ -570,7 +624,27 @@ export const BASE_LEGAL: { norma: string; papel: string }[] = [
   {
     norma: "Lei Complementar nº 214/2025",
     papel:
-      "regulamentou o IBS e a CBS e disciplinou a apuração pelo optante do Simples, dentro ou fora do documento único de arrecadação.",
+      "regulamentou o IBS e a CBS e disciplinou a apuração pelo optante do Simples, dentro ou fora do documento único de arrecadação. O art. 41, § 3º cria a faculdade de apurar pelo regime regular; o § 5º veda a saída a quem recebeu ressarcimento de créditos.",
+  },
+  {
+    norma: "Lei Complementar nº 214/2025, art. 519",
+    papel:
+      "substituiu os Anexos I a V da Lei Complementar nº 123/2006 pelos Anexos XVIII a XXII, com efeitos a partir de 1º/01/2027. É deles que sai a parcela usada neste laudo: as colunas de Cofins e PIS/Pasep dão lugar às de CBS e IBS, de soma idêntica nas cinco primeiras faixas.",
+  },
+  {
+    norma: "Lei Complementar nº 214/2025, arts. 344 e 347",
+    papel:
+      "fixaram, para 2027 e 2028, o IBS em 0,05% estadual mais 0,05% municipal e a CBS na alíquota de referência reduzida em 0,1 ponto percentual. São a origem da alíquota usada no cenário principal.",
+  },
+  {
+    norma: "Lei Complementar nº 214/2025, art. 47, § 9º, II",
+    papel:
+      "é o que sustenta a conta do outro lado do balcão: o adquirente sujeito ao regime regular credita, na compra de optante do Simples, montante equivalente ao devido por meio desse regime. Quando o fornecedor opta, o crédito passa a ser o do regime regular — e a diferença entre os dois é o ganho do comprador calculado aqui.",
+  },
+  {
+    norma: "Lei Complementar nº 123/2006, art. 13, §§ 9º e 10",
+    papel:
+      "é o dispositivo operativo: faculta ao optante apurar IBS e CBS pelo regime regular, hipótese em que as parcelas relativas a eles não são cobradas pelo regime único, e fixa a opção como semestral e irretratável, exercida em setembro e em março. Redação dada pela Lei Complementar nº 227/2026.",
   },
   {
     norma: "Lei Complementar nº 227/2026",

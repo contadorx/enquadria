@@ -5,15 +5,37 @@
  * Toda regra fica aqui e é pura: sem I/O, sem Supabase, sem React.
  * Assim a mesma função roda no servidor, no cliente e no teste.
  *
- * PREMISSA CENTRAL, EM 2027-2028:
- *   CBS = alíquota de referência reduzida em 0,1 p.p. · IBS = 0,1% simbólico
+ * PREMISSA CENTRAL, EM 2027-2028 — confirmada:
+ *   CBS = alíquota de referência reduzida em 0,1 p.p. (LC 214/2025, art. 347)
+ *   IBS = 0,05% estadual + 0,05% municipal (art. 344)
  *   → total efetivo ~8,8%, NÃO os 26,5% do regime pleno.
  *
- * PARÂMETRO A CONFIRMAR NA NORMA (art. 516 LC 214/2025 + Res. CGSN 186/2026):
- *   quanto efetivamente sai do DAS no híbrido durante 2027-2028. A hipótese de
- *   trabalho é que sai só a fatia federal que virou CBS, permanecendo ICMS/ISS
- *   dentro do DAS até 2029. Se estiver errado, todo o resultado se desloca —
- *   por isso o valor vive em `parametros_exercicio`, nunca no código.
+ * QUANTO SAI DO DAS — ERA "A CONFIRMAR"; foi confirmado em 05/08/2026, e por um
+ * caminho diferente do que este comentário supunha.
+ *
+ *   LC 214/2025, art. 519: os Anexos I a V da LC 123/2006 são SUBSTITUÍDOS pelos
+ *   Anexos XVIII a XXII, com efeitos em 1º/01/2027. Nas tabelas novas as colunas
+ *   "Cofins" e "PIS/Pasep" deixam de existir e entram "CBS" e "IBS" — com soma
+ *   idêntica nas faixas 1 a 5 (Anexo I: 12,74 + 2,76 = 15,50 = 15,33 + 0,17;
+ *   Anexo II: 11,51 + 2,49 = 14,00 = 13,85 + 0,15).
+ *
+ *   O dispositivo operativo é a LC 123/2006, art. 13, § 9º (redação da
+ *   LC 227/2026): "as parcelas a eles relativas não serão cobradas pelo regime
+ *   único". ICMS e ISS PERMANECEM no DAS em 2027-2028 — a saída em degraus
+ *   começa em 2029 e a revogação plena é de 2033 (art. 543). Por isso eles não
+ *   entram em `cl`: são pagos igual, optando ou não.
+ *
+ *   Consequência: `sharePC` está certo, e continua certo em 2027. O que mudou
+ *   foi a fundamentação impressa no laudo — corrigida em lib/laudo.
+ *
+ * O QUE CONTINUA ABERTO — não implementar antes da resposta normativa:
+ *   · faixas 6 dos Anexos XVIII-XXII: indício de renormalização (Anexo I com
+ *     CBS 34,02% contra os 34,40% de hoje), fonte única e conta que não fecha;
+ *   · teto de 5% do ISS (LC 123, art. 18, § 16): o excedente é redistribuído aos
+ *     tributos federais, o que ELEVA a fatia que sai do DAS em serviço acima de
+ *     ~1,9 mi de RBT12. Erro medido de até 16% no `das` (Anexo IV, faixa 5,
+ *     RBT12 3,33 mi: 3,6258% → 4,2097%), com 2,7% das saídas trocando. Falta
+ *     saber se a regra sobrevive aos Anexos novos e se alcança a coluna CBS.
  */
 
 export type Saida = "S1" | "S2" | "S3" | "S4" | "S5";

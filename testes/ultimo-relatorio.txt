@@ -3,7 +3,7 @@
 ok    compila sem erro
 
 ── Suítes de função pura ───────────────────────────────────────
-ok    20 suítes encontradas na pasta
+ok    21 suítes encontradas na pasta
 ok    suíte abertura (34 asserções)
 ok    suíte ajuda (41 asserções)
 ok    suíte assinatura (36 asserções)
@@ -18,6 +18,7 @@ ok    suíte erros-auth (20 asserções)
 ok    suíte escritorio (12 asserções)
 ok    suíte faturas (35 asserções)
 ok    suíte janela (20 asserções)
+ok    suíte laudo-fundamentacao (35 asserções)
 ok    suíte motor (79 asserções)
 ok    suíte muro (11 asserções)
 ok    suíte negocio (20 asserções)
@@ -281,4 +282,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 244 verificações automáticas
+TUDO PASSOU — 245 verificações automáticas
