@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ROTULO_TIPO, fraseDaDecisao, type Recomendacao, type TipoDecisao } from "@/lib/termo";
 
 interface Props {
   token: string;
@@ -9,12 +10,27 @@ interface Props {
   decisao: "optar" | "permanecer";
   clausulas: string[];
   hash: string;
+  /**
+   * A RECOMENDAÇÃO E O MOTIVO ENTRAM NO HASH — logo, aparecem aqui.
+   *
+   * Ausentes nos termos emitidos antes de 05/08/2026; nesses o cartão sai como
+   * saía. Termo antigo é prova do que foi assinado, não rascunho para
+   * completar com o que a gente sabe hoje.
+   */
+  recomendacao?: Recomendacao | null;
+  tipoDecisao?: TipoDecisao | null;
+  motivo?: string | null;
+  pontos?: string[];
   /** link público do laudo que embasa esta decisão (null se não houver) */
   linkLaudo?: string | null;
   numeroLaudo?: number | null;
 }
 
-export function Assinatura({ token, empresa, cnpj, decisao, clausulas, hash, linkLaudo, numeroLaudo }: Props) {
+export function Assinatura({
+  token, empresa, cnpj, decisao, clausulas, hash,
+  recomendacao, tipoDecisao, motivo, pontos = [],
+  linkLaudo, numeroLaudo,
+}: Props) {
   const [etapa, setEtapa] = useState<"form" | "confirmar" | "ok">("form");
   const [metodo, setMetodo] = useState<"simples" | "avancada">("simples");
   const [nome, setNome] = useState("");
@@ -124,8 +140,69 @@ export function Assinatura({ token, empresa, cnpj, decisao, clausulas, hash, lin
         <div className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-accentdeep">Termo de ciência e decisão · IBS/CBS</div>
         <div className="mt-1 text-[15px] font-bold text-ink">{empresa}</div>
         <div className="font-mono text-[11.5px] text-muted">{cnpj}</div>
+        {/* A RECOMENDAÇÃO VEM ANTES DA DECISÃO, e em corpo menor. O documento é
+            o termo da decisão da EMPRESA; se a recomendação virar o destaque, o
+            papel passa a parecer que quem decidiu foi o contador. */}
+        {recomendacao && (
+          <div className="mt-3 rounded-sm border border-line bg-surface px-3 py-2.5 text-[12.5px] text-slate2">
+            <div className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-accentdeep">
+              Recomendação técnica
+            </div>
+            <p className="mt-1">
+              A análise recomenda{" "}
+              <b className="text-ink">
+                {recomendacao.decisao === "optar"
+                  ? "OPTAR pelo regime híbrido"
+                  : "PERMANECER no regime tradicional"}
+              </b>{" "}
+              — {recomendacao.titulo}.
+            </p>
+            {!!recomendacao.baseado_em.length && (
+              <ul className="mt-1.5 list-disc pl-4">
+                {recomendacao.baseado_em.map((b, i) => (
+                  <li key={i} className="mb-0.5">{b}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {!!pontos.length && (
+          <div className="mt-3 rounded-sm border border-line bg-surface px-3 py-2.5 text-[12.5px] text-slate2">
+            <div className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-accentdeep">
+              Pontos a observar
+            </div>
+            <p className="mt-1">
+              A recomendação vale enquanto os pontos abaixo se mantiverem. Se algum deles mudar, a
+              conta muda.
+            </p>
+            <ul className="mt-1.5 list-disc pl-4">
+              {pontos.map((p, i) => (
+                <li key={i} className="mb-0.5">{p}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <div className="mt-3 rounded-sm bg-surface px-3 py-2 text-[13px]">
           Decisão: <b className="text-ink">{optou ? "Optar pelo regime híbrido (fora do DAS) a partir de 2027" : "Permanecer no regime tradicional"}</b>
+          {tipoDecisao && recomendacao && (
+            <span className="mt-1 block text-[12.5px] text-slate2">
+              <b>{ROTULO_TIPO[tipoDecisao]}.</b>{" "}
+              {fraseDaDecisao({ tipo: tipoDecisao, decisao, motivo }, recomendacao)}
+            </span>
+          )}
+          {/* O motivo é do EMPRESÁRIO e entra no hash. Ele precisa lê-lo antes
+              de assinar — inclusive para dizer "não foi isso que eu falei". */}
+          {tipoDecisao === "divergir" && (
+            <span className="mt-1.5 block rounded-sm border border-amarelo bg-amarelowash px-2.5 py-2 text-[12.5px] text-slate2">
+              <b>Motivo registrado como sendo da empresa:</b> {motivo || "—"}
+              <br />
+              <span className="text-[11.5px] text-muted">
+                Se esta não for a sua razão, fale com o seu contador antes de assinar.
+              </span>
+            </span>
+          )}
         </div>
         <ul className="mt-3 list-disc pl-5 text-[12.5px] text-slate2">
           {clausulas.map((c, i) => (

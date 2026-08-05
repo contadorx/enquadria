@@ -197,6 +197,17 @@ export function PainelEmpresa({
   const [nomeSig, setNomeSig] = useState("");
   const [emailSig, setEmailSig] = useState("");
   /**
+   * O TIPO DA DECISÃO — e é ele, não a recomendação, que o termo registra.
+   *
+   * Antes o termo gravava só "Decisão: permanecer", o que fazia o caso em que
+   * todo mundo concordou produzir o MESMO papel do caso em que o contador
+   * recomendou optar e o empresário decidiu o contrário. A divergência ciente é
+   * a única coisa que um termo de ciência precisa capturar, e era justamente a
+   * que não aparecia.
+   */
+  const [tipoDecisao, setTipoDecisao] = useState<"seguir" | "divergir" | "adiar">("seguir");
+  const [motivoDiv, setMotivoDiv] = useState("");
+  /**
    * O QUE VEIO DA EMPRESA, ainda não salvo. Fica separado da análise gravada de
    * propósito: a resposta do cliente ALIMENTA o formulário, não o substitui. O
    * contador vê os valores já preenchidos, ajusta o que a escrituração
@@ -422,6 +433,15 @@ export function PainelEmpresa({
 
   async function gerarTermo() {
     if (!a || !nomeSig || !emailSig) return;
+    /* a mesma regra do servidor, dita antes da ida — erro de rede não é o
+       lugar de descobrir que faltava escrever o motivo */
+    if (tipoDecisao === "divergir" && motivoDiv.trim().length < 15) {
+      setBloqueio(
+        "A empresa decidiu diferente do recomendado. Escreva o motivo com as palavras de quem " +
+          "decidiu — é a única linha que explica a divergência depois."
+      );
+      return;
+    }
     setOcupado("termo");
     setBloqueio(null);
     try {
@@ -430,7 +450,11 @@ export function PainelEmpresa({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           analise_id: a.id,
-          decisao: ehOptar(a.saida) ? "optar" : "permanecer",
+          /* a decisão é DERIVADA no servidor a partir do tipo — mandar o
+             resultado pronto era o que permitia gravar o contrário da
+             recomendação sem nada registrando que houve divergência */
+          tipo_decisao: tipoDecisao,
+          motivo_divergencia: motivoDiv.trim() || null,
           nome: nomeSig,
           email: emailSig,
           empresa: e.razao_social,
@@ -659,6 +683,71 @@ export function PainelEmpresa({
 
               <div className="mt-4 border-t border-linesoft pt-4">
                 <div className="mb-2 text-[12.5px] font-semibold">Termo de ciência</div>
+
+                {/**
+                  * A DECISÃO DA EMPRESA, EM TRÊS ESTADOS — e o terceiro é o que
+                  * mais faltava. "Adiar" é o desfecho mais comum de reunião e o
+                  * que menos deixava rastro: quem não opta por omissão fica no
+                  * tradicional, e nada distinguia "decidi ficar" de "esqueci".
+                  */}
+                {a && (
+                  <div className="mb-3 rounded-sm border border-line bg-surface2 p-3">
+                    <p className="text-[12px] text-slate2">
+                      A análise recomenda{" "}
+                      <b className="text-ink">
+                        {ehOptar(a.saida) ? "OPTAR pelo regime híbrido" : "PERMANECER no regime tradicional"}
+                      </b>
+                      . O que a empresa decidiu?
+                    </p>
+                    <div className="mt-2 flex flex-col gap-1.5">
+                      {(
+                        [
+                          ["seguir", "Seguir a recomendação"],
+                          ["divergir", "Decidir diferente da recomendação"],
+                          ["adiar", "Não decidir nesta janela"],
+                        ] as const
+                      ).map(([v, rot]) => (
+                        <label key={v} className="flex items-center gap-2 text-[12.5px] text-slate2">
+                          <input
+                            type="radio"
+                            name="tipo-decisao"
+                            checked={tipoDecisao === v}
+                            onChange={() => setTipoDecisao(v)}
+                          />
+                          <span>{rot}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {tipoDecisao !== "seguir" && (
+                      <div className="mt-2">
+                        <label className="mb-1 block text-[11.5px] font-semibold text-slate2">
+                          {tipoDecisao === "divergir"
+                            ? "Motivo da empresa (obrigatório)"
+                            : "Observação da empresa (opcional)"}
+                        </label>
+                        <textarea
+                          value={motivoDiv}
+                          onChange={(ev) => setMotivoDiv(ev.target.value)}
+                          rows={2}
+                          placeholder={
+                            tipoDecisao === "divergir"
+                              ? "Ex.: a empresa está em negociação de venda e não quer mudar o regime agora."
+                              : "Ex.: vamos reavaliar em março, depois do fechamento do trimestre."
+                          }
+                          className="w-full rounded-sm border border-line px-3 py-2 text-[12.5px] outline-none focus:border-accent"
+                        />
+                        {/* Se o contador escreve "o cliente preferiu não optar
+                            por razões comerciais", é ELE caracterizando a razão
+                            do cliente — e é essa frase que se contesta depois. */}
+                        <p className="mt-1 text-[11px] text-muted">
+                          Escreva com as palavras de quem decidiu. O texto sai no termo declarado como
+                          razão da empresa e entra no documento que ela assina.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <input
                     value={nomeSig}

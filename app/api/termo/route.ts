@@ -5,6 +5,8 @@ import { responsavelDoTenant } from "@/lib/escritorio-server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { conteudoCanonico, sha256, novoToken, CLAUSULAS_CIENCIA } from "@/lib/esign";
 import { enviarEmail, htmlConviteAssinatura } from "@/lib/email";
+import { blocoDoTermo, ehTipoDecisao, validarDecisao } from "@/lib/termo";
+import type { AnaliseGravada } from "@/lib/laudo";
 
 /**
  * Registra o termo de ciência e prepara a ASSINATURA PRÓPRIA (sem ZapSign):
@@ -32,7 +34,16 @@ export async function POST(req: Request) {
 
   let corpo: {
     analise_id: string;
-    decisao: "optar" | "permanecer";
+    /**
+     * LEGADO. A decisão passou a ser DERIVADA do tipo (`seguir` segue a
+     * recomendação, `divergir` inverte, `adiar` fica no tradicional). Receber
+     * o resultado pronto era o que permitia gravar "permanecer" num caso em
+     * que a análise recomendava optar, sem nada no papel registrando que houve
+     * divergência. Só é usado quando `tipo_decisao` não vem.
+     */
+    decisao?: "optar" | "permanecer";
+    tipo_decisao?: string;
+    motivo_divergencia?: string;
     nome: string;
     email: string;
     empresa?: string;
@@ -48,12 +59,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ erro: "analise_id, nome e email obrigatórios" }, { status: 400 });
   }
 
-  // empresa da análise — alimenta o conteúdo canônico que será "assinado"
+  /**
+   * A ANÁLISE INTEIRA, não só a saída.
+   *
+   * Antes vinham cinco colunas, porque o termo só imprimia "Decisão: X". Agora
+   * ele imprime a RECOMENDAÇÃO e os PONTOS A OBSERVAR, e os dois saem dos
+   * números congelados na análise — `respostas` e `parametros` inclusive. Sem
+   * eles a recomendação sairia sem o "baseado em", que é a parte que sustenta o
+   * documento.
+   */
   const { data: analise } = await supabase
     .from("analises")
-    .select("empresa_id, saida, re, fc, janela_id")
+    .select(
+      "id, empresa_id, saida, rq, ch, cl, re, fc, prioridade, respostas, calculado_em, parametros, janela_id"
+    )
     .eq("id", corpo.analise_id)
     .maybeSingle();
+  if (!analise) return NextResponse.json({ erro: "análise não encontrada" }, { status: 404 });
   const { data: empresa } = analise
     ? await supabase.from("empresas").select("razao_social, cnpj").eq("id", analise.empresa_id).maybeSingle()
     : { data: null };
@@ -70,12 +92,52 @@ export async function POST(req: Request) {
     ? await supabase.from("janelas").select("nome").eq("id", analise.janela_id).maybeSingle()
     : { data: null };
 
+  /**
+   * ═════════════════════════════════════════════════════════════════════════
+   * O BLOCO CONGELADO — recomendação, pontos, tipo e o que a decisão resolve.
+   * ═════════════════════════════════════════════════════════════════════════
+   *
+   * `blocoDoTermo()` é a ÚNICA fonte: a rota não decide nada, só passa o tipo
+   * que o contador escolheu na tela. A decisão vem DERIVADA — receber
+   * "permanecer" pronto era o que permitia gravar o contrário da recomendação
+   * sem que o papel registrasse que houve divergência.
+   *
+   * O `corpo.decisao` legado ainda serve de rede: sem `tipo_decisao`, o tipo é
+   * inferido comparando com a recomendação. Quem manda a decisão contrária sem
+   * dizer o motivo cai na validação abaixo, e é assim que deve ser.
+   */
+  const bruta = analise as unknown as AnaliseGravada;
+  const tipoPedido = ehTipoDecisao(corpo.tipo_decisao) ? corpo.tipo_decisao : null;
+  const provisorio = blocoDoTermo(bruta, "seguir");
+  const tipo =
+    tipoPedido ??
+    (corpo.decisao && corpo.decisao !== provisorio.recomendacao.decisao ? "divergir" : "seguir");
+
+  const bloco = blocoDoTermo(bruta, tipo, corpo.motivo_divergencia);
+  const valida = validarDecisao({
+    tipo: bloco.tipo_decisao,
+    decisao: bloco.decisao,
+    motivo: bloco.motivo_divergencia,
+  });
+  if (!valida.ok) return NextResponse.json({ erro: valida.erro }, { status: 400 });
+
+  /* o laudo que embasa — o termo cita o número e linka a memória de cálculo */
+  // schema-ok: laudos.token é criado pela migration 0028 (alter dinâmico)
+  const { data: laudo } = await supabase
+    .from("laudos")
+    .select("token, numero")
+    .eq("analise_id", corpo.analise_id)
+    .maybeSingle();
+
   const hash = sha256(
     conteudoCanonico({
       empresa: empresa?.razao_social ?? corpo.empresa ?? "empresa",
       cnpj: empresa?.cnpj ?? "",
-      decisao: corpo.decisao,
+      decisao: bloco.decisao,
       clausulas: CLAUSULAS_CIENCIA,
+      recomendacao: bloco.recomendacao.decisao,
+      tipo_decisao: bloco.tipo_decisao,
+      motivo: bloco.motivo_divergencia,
     })
   );
   const token = novoToken();
@@ -83,7 +145,7 @@ export async function POST(req: Request) {
   // cria a linha base pela RPC existente (tenant/numeração), sem assinatura externa
   const { data: termoId, error } = await supabase.rpc("registrar_termo", {
     p_analise: corpo.analise_id,
-    p_decisao: corpo.decisao,
+    p_decisao: bloco.decisao,
     p_nome: corpo.nome,
     p_email: corpo.email,
     p_assinatura_url: null,
@@ -99,11 +161,25 @@ export async function POST(req: Request) {
       hash_documento: hash,
       assinatura_status: "pendente",
       assinante_email: corpo.email,
+      /* as colunas da 0052 — consultáveis (a fila de divergentes de março sai
+         de um índice, não de varredura em JSON) */
+      tipo_decisao: bloco.tipo_decisao,
+      motivo_divergencia: bloco.motivo_divergencia,
+      recomendacao: bloco.recomendacao.decisao,
+      recomendacao_saida: bloco.recomendacao.saida,
       // congela a apresentação: o documento não muda se a análise for revisada
       snapshot: {
         congelado_em: new Date().toISOString(),
-        decisao: corpo.decisao,
+        decisao: bloco.decisao,
         clausulas: CLAUSULAS_CIENCIA,
+        /* o texto inteiro da recomendação e dos pontos, como saiu HOJE. Guardar
+           só a saída obrigaria a página a recalcular na hora de imprimir — e aí
+           o termo de agosto mudaria de conteúdo quando o motor mudasse. */
+        recomendacao: bloco.recomendacao,
+        pontos: bloco.pontos,
+        tipo_decisao: bloco.tipo_decisao,
+        motivo_divergencia: bloco.motivo_divergencia,
+        laudo: laudo?.token ? { token: laudo.token, numero: laudo.numero } : null,
         empresa: {
           razao_social: empresa?.razao_social ?? corpo.empresa ?? "empresa",
           cnpj: empresa?.cnpj ?? "",
@@ -150,7 +226,8 @@ export async function POST(req: Request) {
         empresa: empresa?.razao_social ?? corpo.empresa ?? "sua empresa",
         escritorio,
         link: `${base}/assinar/${token}`,
-        decisao: corpo.decisao,
+        /* o convite anuncia o que está no papel, não o que foi pedido */
+        decisao: bloco.decisao,
       }),
       tag: "termo-convite",
       responderPara: user.email ? { email: user.email, nome: tt?.nome ?? undefined } : undefined,

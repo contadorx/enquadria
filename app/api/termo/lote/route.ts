@@ -1,5 +1,6 @@
-import { ehOptar } from "@/lib/motor";
 import { COLUNAS_ESCRITORIO, type Escritorio } from "@/lib/escritorio";
+import { blocoDoTermo } from "@/lib/termo";
+import type { AnaliseGravada } from "@/lib/laudo";
 import { responsavelDoTenant } from "@/lib/escritorio-server";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
@@ -14,7 +15,11 @@ import { enviarEmail, htmlConviteAssinatura } from "@/lib/email";
  * assinatura direto para cada um. Sem a chave de e-mail, os termos são criados
  * do mesmo jeito e o contador copia os links na tela de entrega.
  *
- * A decisão registrada segue a saída do motor: S4 = optar, demais = permanecer.
+ * A DECISÃO REGISTRADA SEGUE A RECOMENDAÇÃO — e no lote não pode ser outra
+ * coisa. Divergir exige o motivo escrito pelo empresário, e não existe motivo
+ * do empresário num lote de duzentos termos gerados de uma vez. Quem decide
+ * diferente muda o termo na tela da empresa, um a um, que é onde a conversa
+ * aconteceu.
  */
 export async function POST(req: Request) {
   const supabase = createClient();
@@ -50,7 +55,12 @@ export async function POST(req: Request) {
   /* o termo é congelado na emissão — inclusive quem assina por ele */
   const responsavel = await responsavelDoTenant(supabase);
 
-  let q = supabase.from("analises").select("id, empresa_id, saida, re, fc");
+  /* a análise inteira: a recomendação e os pontos saem dos números congelados */
+  let q = supabase
+    .from("analises")
+    .select(
+      "id, empresa_id, saida, rq, ch, cl, re, fc, prioridade, respostas, calculado_em, parametros"
+    );
   if (corpo.analise_ids?.length) q = q.in("id", corpo.analise_ids);
   const { data: analises, error: errA } = await q.limit(1000);
   if (errA) return NextResponse.json({ erro: errA.message }, { status: 500 });
@@ -59,8 +69,14 @@ export async function POST(req: Request) {
   }
 
   const ids = analises.map((a) => a.id);
-  const { data: laudos } = await supabase.from("laudos").select("analise_id").in("analise_id", ids);
+  // schema-ok: laudos.token é criado pela migration 0028 (alter dinâmico)
+  const { data: laudos } = await supabase
+    .from("laudos")
+    .select("analise_id, token, numero")
+    .in("analise_id", ids);
   const comLaudo = new Set((laudos ?? []).map((l) => l.analise_id));
+  /* o termo cita o laudo pelo número e linka a memória de cálculo */
+  const mapaLaudo = new Map((laudos ?? []).map((l) => [l.analise_id, l]));
 
   const { data: termosExistentes } = await supabase
     .from("termos")
@@ -96,13 +112,18 @@ export async function POST(req: Request) {
       continue;
     }
 
-    const decisao: "optar" | "permanecer" = ehOptar(a.saida) ? "optar" : "permanecer";
+    /* mesma função da rota individual — uma fonte só para o mesmo papel */
+    const bloco = blocoDoTermo(a as unknown as AnaliseGravada, "seguir");
+    const decisao = bloco.decisao;
+    const laudoDela = mapaLaudo.get(a.id);
     const hash = sha256(
       conteudoCanonico({
         empresa: e.razao_social,
         cnpj: e.cnpj,
         decisao,
         clausulas: CLAUSULAS_CIENCIA,
+        recomendacao: bloco.recomendacao.decisao,
+        tipo_decisao: bloco.tipo_decisao,
       })
     );
     const token = novoToken();
@@ -127,10 +148,20 @@ export async function POST(req: Request) {
         hash_documento: hash,
         assinatura_status: "pendente",
         assinante_email: e.contato_email,
+        tipo_decisao: bloco.tipo_decisao,
+        recomendacao: bloco.recomendacao.decisao,
+        recomendacao_saida: bloco.recomendacao.saida,
         snapshot: {
           congelado_em: new Date().toISOString(),
           decisao,
           clausulas: CLAUSULAS_CIENCIA,
+          recomendacao: bloco.recomendacao,
+          pontos: bloco.pontos,
+          tipo_decisao: bloco.tipo_decisao,
+          motivo_divergencia: null,
+          laudo: laudoDela?.token
+            ? { token: laudoDela.token, numero: laudoDela.numero }
+            : null,
           empresa: { razao_social: e.razao_social, cnpj: e.cnpj },
           escritorio: { ...(tt ?? {}), responsavel },
           analise: { saida: a.saida, re: a.re, fc: a.fc },

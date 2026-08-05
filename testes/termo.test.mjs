@@ -23,8 +23,12 @@ import {
   recomendacaoDoTermo, pontosAObservar, resolverDecisao, validarDecisao,
   fraseDaDecisao, CIENCIA_DOS_EFEITOS, ROTULO_TIPO,
   nomeCorrompido, AVISO_NOME_CORROMPIDO,
+  blocoDoTermo, ehTipoDecisao, decisaoDoSnapshot,
 } from "./termo.js";
 import { PARAMETROS_2027, ehOptar } from "./motor.js";
+/* o conteúdo canônico é o que vira hash e vira assinatura — testar o termo sem
+   testar o texto assinado é testar a metade que não é prova */
+import { conteudoCanonico, sha256 } from "./esign.js";
 
 let f = 0;
 const ok = (c, m, e) => {
@@ -210,6 +214,146 @@ ok(/entra no conteúdo que é\s+assinado/.test(AVISO_NOME_CORROMPIDO.replace(/\s
    "o aviso diz POR QUE importa — sem isso vira mais um alerta ignorado");
 ok(/não que ele estava certo/.test(AVISO_NOME_CORROMPIDO),
    "e desfaz a ilusão de que a assinatura conserta o conteúdo");
+
+
+/* ═══════════ 10 · O BLOCO CONGELADO — a ligação que faltava ═══════════════
+ *
+ * As funções deste módulo existiam e NÃO CHEGAVAM AO PAPEL: `FolhaTermo`
+ * aceitava `recomendacao`, `pontos`, `tipo_decisao` e `motivo_divergencia`, e
+ * nenhuma das três páginas passava. A rota nunca gravou as colunas. Deploy do
+ * jeito que estava mostraria só a lista de ciência crescendo de 4 para 7 itens.
+ *
+ * O que quebrou não foi o cálculo — foi o FIO. Esta seção guarda o fio.
+ * ══════════════════════════════════════════════════════════════════════════ */
+{
+  const optar = analise({ saida: "S4" });
+
+  ok(ehTipoDecisao("seguir") && ehTipoDecisao("divergir") && ehTipoDecisao("adiar"),
+     "os três estados são aceitos");
+  ok(!ehTipoDecisao("optar") && !ehTipoDecisao("") && !ehTipoDecisao(null) && !ehTipoDecisao(undefined),
+     "e nada mais é — corpo de requisição não é fonte confiável de tipo");
+
+  const seguir = blocoDoTermo(optar);
+  ok(seguir.tipo_decisao === "seguir" && seguir.decisao === "optar",
+     "sem tipo, o padrão é seguir a recomendação");
+  ok(seguir.recomendacao.decisao === "optar" && seguir.recomendacao.baseado_em.length > 0,
+     "e o bloco traz a recomendação inteira, com o baseado em");
+  ok(seguir.pontos.length > 0, "e os pontos a observar vêm junto");
+
+  const div = blocoDoTermo(optar, "divergir", "A empresa está em negociação de venda.");
+  ok(div.decisao === "permanecer" && div.recomendacao.decisao === "optar",
+     "divergir INVERTE a decisão sem mexer na recomendação — é esse par que o termo precisa registrar");
+  ok(div.motivo_divergencia === "A empresa está em negociação de venda.", "e guarda o motivo");
+
+  const adiar = blocoDoTermo(optar, "adiar");
+  ok(adiar.decisao === "permanecer" && adiar.tipo_decisao === "adiar",
+     "adiar resolve para permanecer (é o que a lei faz com quem não opta) e o TIPO sobrevive");
+  ok(blocoDoTermo(optar, "adiar", "   ").motivo_divergencia === null,
+     "motivo só de espaço vira nulo — string em branco no banco finge que houve razão");
+
+  /* a decisão NUNCA é recebida pronta: derivar é o que impede gravar o
+     contrário da recomendação sem registrar que houve divergência */
+  const permanecer = analise({ saida: "S1" });
+  ok(blocoDoTermo(permanecer, "divergir", "quero entregar crédito ao cliente grande").decisao === "optar",
+     "e a inversão vale nos dois sentidos — divergir de 'permanecer' é optar");
+}
+
+/* ═══════════ 11 · LER O SNAPSHOT — uma função, três páginas ═══════════════
+ * O dossiê do contador, a via do cliente e a tela de assinatura leem o MESMO
+ * snapshot. Se cada uma ler do seu jeito, o cliente lê uma coisa e assina
+ * outra — que foi exatamente o estrago da lista de ciência duplicada.
+ * ══════════════════════════════════════════════════════════════════════════ */
+{
+  const bloco = blocoDoTermo(analise({ saida: "S5" }), "divergir", "o sócio quer esperar o balanço");
+  const snap = {
+    congelado_em: "2026-08-05T12:00:00Z",
+    decisao: bloco.decisao,
+    recomendacao: bloco.recomendacao,
+    pontos: bloco.pontos,
+    tipo_decisao: bloco.tipo_decisao,
+    motivo_divergencia: bloco.motivo_divergencia,
+    laudo: { token: "abc-123", numero: 4 },
+  };
+  const lido = decisaoDoSnapshot(snap);
+  ok(lido.recomendacao?.decisao === "optar" && lido.tipo_decisao === "divergir",
+     "o que foi congelado é o que volta");
+  ok(lido.motivo_divergencia === "o sócio quer esperar o balanço", "inclusive o motivo");
+  ok(lido.pontos.length === bloco.pontos.length, "e os pontos, na mesma quantidade");
+  ok(lido.laudo_url === "/laudo/abc-123" && lido.laudo_numero === 4,
+     "o laudo vira link — o termo sem a memória de cálculo é opinião");
+
+  /* TERMO ANTIGO: emitido antes de 05/08, sem nada disso. Ele NÃO pode ser
+     completado com o que sabemos hoje — é prova do que foi assinado. */
+  const velho = decisaoDoSnapshot({ decisao: "permanecer", clausulas: ["x"], empresa: {} });
+  ok(velho.recomendacao === null && velho.tipo_decisao === null && velho.pontos.length === 0,
+     "termo anterior volta vazio, e a folha sai como saía — sem inventar recomendação");
+  ok(decisaoDoSnapshot(null).recomendacao === null && decisaoDoSnapshot(undefined).pontos.length === 0,
+     "snapshot ausente não derruba a página");
+
+  /* meia recomendação no papel é PIOR que nenhuma, porque parece completa */
+  ok(decisaoDoSnapshot({ recomendacao: { decisao: "optar" } }).recomendacao === null,
+     "recomendação sem o baseado_em é recusada inteira");
+  ok(decisaoDoSnapshot({ recomendacao: "optar" }).recomendacao === null,
+     "e string no lugar do objeto também");
+  ok(decisaoDoSnapshot({ tipo_decisao: "qualquer", pontos: [1, "vale", null] }).tipo_decisao === null &&
+     decisaoDoSnapshot({ pontos: [1, "vale", null] }).pontos.length === 1,
+     "tipo inválido vira nulo e só texto sobrevive na lista de pontos");
+  ok(decisaoDoSnapshot({ laudo: { numero: 7 } }).laudo_url === null,
+     "laudo sem token não vira link quebrado");
+}
+
+/* ═══════════ 12 · O MOTIVO ENTRA NO HASH ═════════════════════════════════
+ *
+ * É o ponto do documento novo. Um termo que registra "decidiu diferente do
+ * recomendado" com a razão FORA do conteúdo assinado deixa de fora justamente
+ * a linha contestável: o empresário assina a decisão e não assina o motivo.
+ * Seis meses depois, o motivo é o único trecho que alguém questiona.
+ * ══════════════════════════════════════════════════════════════════════════ */
+{
+  const base = { empresa: "Padaria Pão da Vila Ltda", cnpj: "11222333000181", clausulas: ["um", "dois"] };
+
+  /* O GABARITO ESCRITO À MÃO, conferido de fora. Sem ele, um refactor do
+     construtor passaria despercebido — e ele produz o texto que vira assinatura. */
+  const esperado = [
+    "TERMO DE CIÊNCIA E DECISÃO — IBS/CBS",
+    "EMPRESA: Padaria Pão da Vila Ltda",
+    "CNPJ: 11222333000181",
+    "DECISÃO: PERMANECER no regime tradicional do Simples Nacional",
+    "CIÊNCIA:",
+    "1. um",
+    "2. dois",
+  ].join("\n");
+  ok(conteudoCanonico({ ...base, decisao: "permanecer" }) === esperado,
+     "sem os campos novos, a string sai byte a byte como saía antes de 05/08 — assinatura antiga continua fechando");
+
+  const semMotivo = conteudoCanonico({
+    ...base, decisao: "permanecer", recomendacao: "optar", tipo_decisao: "divergir",
+  });
+  const comA = conteudoCanonico({
+    ...base, decisao: "permanecer", recomendacao: "optar", tipo_decisao: "divergir",
+    motivo: "a empresa está em negociação de venda",
+  });
+  const comB = conteudoCanonico({
+    ...base, decisao: "permanecer", recomendacao: "optar", tipo_decisao: "divergir",
+    motivo: "o banco exige o regime atual até o fim do covenant",
+  });
+
+  ok(semMotivo.includes("RECOMENDAÇÃO TÉCNICA: OPTAR") && semMotivo.includes("TIPO DA DECISÃO: divergir"),
+     "a recomendação e o tipo entram no texto assinado");
+  ok(semMotivo.indexOf("RECOMENDAÇÃO") < semMotivo.indexOf("DECISÃO:"),
+     "e a recomendação vem ANTES da decisão — é a ordem de leitura do papel");
+  ok(sha256(comA) !== sha256(comB),
+     "motivos diferentes produzem hashes diferentes — trocar a razão depois quebra a assinatura");
+  ok(sha256(comA) !== sha256(semMotivo), "e acrescentar o motivo também muda o hash");
+  ok(sha256(comA) === sha256(conteudoCanonico({
+       ...base, decisao: "permanecer", recomendacao: "optar", tipo_decisao: "divergir",
+       motivo: "  a empresa está em negociação de venda  ",
+     })),
+     "espaço nas pontas não muda o documento — o mesmo termo não pode ter dois hashes");
+  ok(sha256(conteudoCanonico({ ...base, decisao: "permanecer" })) ===
+     sha256(conteudoCanonico({ ...base, decisao: "permanecer", motivo: "   ", tipo_decisao: null })),
+     "motivo em branco e tipo nulo não vazam para o texto");
+}
 
 console.log(f === 0 ? "\nOK" : `\n${f} FALHA(S)`);
 process.exit(f === 0 ? 0 : 1);

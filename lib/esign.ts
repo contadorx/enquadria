@@ -39,19 +39,39 @@ export function conteudoCanonico(d: {
   cnpj: string;
   decisao: "optar" | "permanecer";
   clausulas: string[];
+  /**
+   * A RECOMENDAÇÃO, O TIPO DA DECISÃO E O MOTIVO ENTRAM NO HASH — é o ponto do
+   * documento novo.
+   *
+   * Um termo que registra "decidiu diferente do recomendado" deixando a razão
+   * FORA do conteúdo assinado deixa de fora justamente a linha contestável: o
+   * empresário assina a decisão e não assina o motivo dela. Seis meses depois,
+   * o motivo é o único trecho que alguém questiona.
+   *
+   * Os campos são OPCIONAIS de propósito. Sem eles a string sai byte a byte
+   * como saía antes de 05/08/2026 — o que já foi assinado continua fechando o
+   * mesmo hash se alguém recalcular um dia.
+   */
+  recomendacao?: "optar" | "permanecer" | null;
+  tipo_decisao?: "seguir" | "divergir" | "adiar" | null;
+  motivo?: string | null;
 }): string {
-  const decisao =
-    d.decisao === "optar"
+  const nome = (x: "optar" | "permanecer") =>
+    x === "optar"
       ? "OPTAR pelo regime híbrido — recolhimento de IBS/CBS fora do DAS a partir de 2027"
       : "PERMANECER no regime tradicional do Simples Nacional";
-  return [
+
+  const linhas = [
     "TERMO DE CIÊNCIA E DECISÃO — IBS/CBS",
     `EMPRESA: ${d.empresa}`,
     `CNPJ: ${d.cnpj}`,
-    `DECISÃO: ${decisao}`,
-    "CIÊNCIA:",
-    ...d.clausulas.map((c, i) => `${i + 1}. ${c}`),
-  ].join("\n");
+  ];
+  if (d.recomendacao) linhas.push(`RECOMENDAÇÃO TÉCNICA: ${nome(d.recomendacao)}`);
+  linhas.push(`DECISÃO: ${nome(d.decisao)}`);
+  if (d.tipo_decisao) linhas.push(`TIPO DA DECISÃO: ${d.tipo_decisao}`);
+  if (d.motivo?.trim()) linhas.push(`MOTIVO DECLARADO PELA EMPRESA: ${d.motivo.trim()}`);
+  linhas.push("CIÊNCIA:", ...d.clausulas.map((c, i) => `${i + 1}. ${c}`));
+  return linhas.join("\n");
 }
 
 /**

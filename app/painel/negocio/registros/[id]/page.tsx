@@ -202,9 +202,25 @@ export default async function ContaDoCliente({ params }: { params: { id: string 
                   </td>
                   <td className="px-3 py-2.5 text-[11.5px]">
                     {l ? (
-                      <Link href={`/doc/laudo/${l.id}`} className="text-accentdeep hover:underline">
+                      /**
+                       * NÃO vai para `/doc/laudo/[id]`: aquela página lê com o
+                       * cliente da SESSÃO, e a RLS de `laudos` é
+                       * `tenant_id = tenant_atual()`. O laudo de outro
+                       * escritório APARECE nesta lista (aqui a leitura é por
+                       * função security definer) e devolvia 404 ao clicar — a
+                       * tela mostrava o documento e se recusava a abri-lo.
+                       *
+                       * A rota abaixo confere quem pede, REGISTRA o acesso e
+                       * redireciona para o endereço público que o laudo já tem.
+                       */
+                      <a
+                        href={`/painel/negocio/registros/abrir?tipo=laudo&id=${l.id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-accentdeep hover:underline"
+                      >
                         nº {String(l.numero).padStart(4, "0")}
-                      </Link>
+                      </a>
                     ) : (
                       <span className="text-muted">—</span>
                     )}

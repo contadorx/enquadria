@@ -239,6 +239,11 @@ export interface Validacao {
   erro?: string;
 }
 
+/** aceita só os três estados — corpo de requisição não é fonte confiável de tipo */
+export function ehTipoDecisao(x: unknown): x is TipoDecisao {
+  return x === "seguir" || x === "divergir" || x === "adiar";
+}
+
 /**
  * O MOTIVO É OBRIGATÓRIO NA DIVERGÊNCIA — e essa é a regra que dá sentido ao
  * documento inteiro.
@@ -305,6 +310,94 @@ export function fraseDaDecisao(d: DecisaoDoTermo, rec: Recomendacao): string {
     `${nome(valeu)}. O motivo é da empresa e está registrado abaixo; a análise técnica ` +
     "permanece como emitida."
   );
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * O BLOCO CONGELADO — uma função só monta o termo inteiro.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * DUAS ROTAS EMITEM O MESMO PAPEL: `/api/termo` (uma empresa, o contador digita
+ * o signatário) e `/api/termo/lote` (a esteira). Já aconteceu de as duas
+ * divergirem — uma mandava o convite por e-mail e a outra não, e o MESMO
+ * artefato chegava ou não ao cliente dependendo de qual botão o contador tinha
+ * clicado. Duas rotas para o mesmo ato produzem duas regras.
+ *
+ * Aqui o bloco nasce UMA vez: a recomendação, os pontos, o tipo da decisão e o
+ * que ela resolve. Quem emite só escolhe o tipo; nada mais é decidido na rota.
+ *
+ * E ele é CONGELADO no snapshot. Se o motor mudar em outubro, o termo assinado
+ * em agosto continua dizendo o que foi recomendado em agosto — que é a única
+ * coisa que ele pode afirmar com honestidade.
+ */
+export interface BlocoTermo {
+  recomendacao: Recomendacao;
+  pontos: string[];
+  tipo_decisao: TipoDecisao;
+  motivo_divergencia: string | null;
+  /** o que efetivamente vale — derivado do tipo, nunca recebido pronto */
+  decisao: "optar" | "permanecer";
+}
+
+export function blocoDoTermo(
+  a: AnaliseGravada,
+  tipo: TipoDecisao = "seguir",
+  motivo?: string | null
+): BlocoTermo {
+  const recomendacao = recomendacaoDoTermo(a);
+  return {
+    recomendacao,
+    pontos: pontosAObservar(a),
+    tipo_decisao: tipo,
+    motivo_divergencia: (motivo ?? "").trim() || null,
+    decisao: resolverDecisao(tipo, recomendacao),
+  };
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * LENDO O SNAPSHOT — uma função, três páginas.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * O mesmo papel sai por TRÊS portas: o dossiê do contador (`/doc/termo/[id]`),
+ * a via do cliente (`/termo/[token]`) e a tela de assinatura (`/assinar/[token]`).
+ * Se cada uma ler o snapshot do seu jeito, elas divergem — e a divergência
+ * aparece do pior jeito possível: o cliente lendo uma coisa e assinando outra.
+ * Foi exatamente isso que a lista de ciência duplicada causou em 05/08.
+ *
+ * Termos anteriores a esta data não têm o bloco no snapshot. Eles voltam com
+ * tudo nulo, e a folha sai como saía. Termo antigo é PROVA do que foi assinado,
+ * não rascunho para completar com o que a gente sabe hoje.
+ */
+export interface ParteDecisaoDoTermo {
+  recomendacao: Recomendacao | null;
+  tipo_decisao: TipoDecisao | null;
+  motivo_divergencia: string | null;
+  pontos: string[];
+  laudo_url: string | null;
+  laudo_numero: number | null;
+}
+
+export function decisaoDoSnapshot(snapshot: unknown): ParteDecisaoDoTermo {
+  const s = (snapshot ?? {}) as {
+    recomendacao?: Recomendacao | null;
+    pontos?: unknown;
+    tipo_decisao?: unknown;
+    motivo_divergencia?: unknown;
+    laudo?: { token?: string | null; numero?: number | null } | null;
+  };
+  const rec = s.recomendacao;
+  return {
+    /* só aceita a recomendação inteira: meia recomendação no papel é pior que
+       nenhuma, porque parece completa */
+    recomendacao:
+      rec && typeof rec === "object" && rec.decisao && Array.isArray(rec.baseado_em) ? rec : null,
+    tipo_decisao: ehTipoDecisao(s.tipo_decisao) ? s.tipo_decisao : null,
+    motivo_divergencia: typeof s.motivo_divergencia === "string" ? s.motivo_divergencia : null,
+    pontos: Array.isArray(s.pontos) ? s.pontos.filter((x): x is string => typeof x === "string") : [],
+    laudo_url: s.laudo?.token ? `/laudo/${s.laudo.token}` : null,
+    laudo_numero: typeof s.laudo?.numero === "number" ? s.laudo.numero : null,
+  };
 }
 
 /**

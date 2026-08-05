@@ -71,7 +71,9 @@ try {
   // `await import("@/lib/email")` e o alias "@/" só existe com baseUrl+paths.
   // Sem isto o compilador para na primeira linha e nenhuma suíte roda.
   const ARQUIVOS = [
-    "lib/motor.ts", "lib/laudo.ts", "lib/termo.ts", "lib/triagem.ts", "lib/cockpit.ts",
+    // esign entra aqui porque `conteudoCanonico()` é o que vira HASH e vira
+    // assinatura: se ele mudar de forma sem querer, o dano é silencioso
+    "lib/motor.ts", "lib/laudo.ts", "lib/termo.ts", "lib/esign.ts", "lib/triagem.ts", "lib/cockpit.ts",
     "lib/premissas-padrao.ts", "lib/coleta.ts", "lib/csv.ts", "lib/cnpj.ts",
     "lib/plano.ts", "lib/potencial.ts", "lib/reguas.ts", "lib/reguas-indicacao.ts", "lib/janela.ts",
     "lib/emails-cliente.ts", "lib/erros-auth.ts", "lib/ajuda.ts", "lib/cobranca.ts", "lib/nps.ts",
@@ -304,6 +306,69 @@ secao("Segurança do dado — o que a tela promete no momento da fricção");
      `${(imp.match(/<SegurancaDoDado/g) || []).length} aparições · fora da guarda: ${/<SegurancaDoDado/.test(semGuarda)}`);
 }
 
+/* ============================ 1b2. LER POR UMA PORTA, NAVEGAR POR OUTRA == */
+secao("Painel da plataforma — o link que a RLS derruba");
+{
+  /**
+   * O CASO REAL, 05/08/2026: abrir um laudo de uma conta gratuita não funcionava.
+   *
+   * A tela de registros por conta lê por `plataforma_conta()`, que é
+   * `security definer` e enxerga o banco inteiro — então o laudo de QUALQUER
+   * escritório aparece na lista. O link ia para `/doc/laudo/[id]`, que lê
+   * `laudos` com o cliente da SESSÃO, e a RLS de `laudos` é
+   * `tenant_id = tenant_atual()`. Nenhuma linha volta, `notFound()`, 404.
+   *
+   * O resultado é a pior forma dessa falha: a tela mostra que o documento
+   * existe e se recusa a abri-lo. Não quebra build, não quebra teste de função
+   * pura, e só aparece quando alguém clica na conta de outra pessoa — o que,
+   * num painel de dono de plataforma, pode demorar semanas.
+   *
+   * A REGRA: tela que lê por função security definer não navega para página
+   * que lê pela sessão. Ou passa pela rota que confere e registra, ou vai para
+   * o endereço público por token.
+   */
+  const RLS_DA_SESSAO = ["/doc/laudo/", "/doc/termo/", "/doc/comparativo/"];
+  const telas = [];
+  (function anda(d) {
+    for (const n of fs.readdirSync(d)) {
+      const p = path.join(d, n);
+      if (fs.statSync(p).isDirectory()) anda(p);
+      else if (/\.tsx?$/.test(n)) telas.push(p);
+    }
+  })(path.join(RAIZ, "app/painel/negocio"));
+
+  /* comentário que EXPLICA a armadilha não é a armadilha — e proibir a
+     explicação seria trocar a regra pelo silêncio sobre ela */
+  const semComentario = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+  const infratores = [];
+  for (const p of telas) {
+    const src = semComentario(fs.readFileSync(p, "utf8"));
+    for (const rota of RLS_DA_SESSAO) {
+      if (src.includes(rota)) infratores.push(`${path.relative(RAIZ, p)} → ${rota}`);
+    }
+  }
+  ok("o painel da plataforma não linka para página protegida por RLS de sessão",
+     infratores.length === 0,
+     infratores.join(" · ") + " — use /painel/negocio/registros/abrir, que confere e registra");
+
+  /* e a rota que abre precisa CONFERIR e REGISTRAR, não só redirecionar:
+     atalho de suporte sem rastro é o começo de todo acesso que ninguém explica */
+  const abrir = path.join(RAIZ, "app/painel/negocio/registros/abrir/route.ts");
+  const src = fs.existsSync(abrir) ? fs.readFileSync(abrir, "utf8") : "";
+  ok("a rota de abrir documento existe e passa pela função que registra o acesso",
+     src.includes("plataforma_documento_token"),
+     src === "" ? "rota não encontrada" : "não chama plataforma_documento_token");
+  ok("...e não usa o cliente admin para furar a RLS por conta própria",
+     src !== "" && !src.includes("createAdminClient"),
+     "importa createAdminClient — o acesso deixaria de passar pela conferência do banco");
+
+  const mig = fs.readFileSync(path.join(RAIZ, "supabase/migrations/0053_abrir_documento_da_conta.sql"), "utf8");
+  ok("...e a função confere e_plataforma() antes de devolver o token",
+     mig.includes("e_plataforma()") && mig.includes("acessos_plataforma"),
+     "a migration não confere quem pede ou não registra o acesso");
+}
+
 /* ======================================= 1c. O QUE O CLIENTE ALCANÇA ==== */
 secao("Endereços públicos — o que chega ao cliente sem login");
 {
@@ -339,6 +404,52 @@ secao("Endereços públicos — o que chega ao cliente sem login");
     ok(`/${rota}/[token] lê por token, não por sessão`,
        src.includes("createAdminClient") && !/from "@\/lib\/supabase-server"/.test(src),
        src.includes("supabase-server") ? "importa o cliente de sessão" : "não usa createAdminClient");
+  }
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * O FIO DO TERMO — a peça pronta que não chegava ao papel.
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * O CASO REAL, 05/08/2026. `components/FolhaTermo.tsx` ganhou os campos
+   * `recomendacao`, `pontos`, `tipo_decisao` e `motivo_divergencia`. As funções
+   * que os produzem foram escritas e testadas — 60 asserções passando. E
+   * NENHUMA das três páginas passava as props; a rota nunca gravava as colunas.
+   *
+   * Compilava, buildava, a suíte inteira ficava verde. Deploy mostraria só a
+   * lista de ciência crescendo de 4 para 7 itens, e o resto — a recomendação,
+   * os pontos, a divergência — invisível, com todo o código no lugar.
+   *
+   * Teste de função pura não pega isso: a função está certa, ninguém a chama.
+   * O que pega é olhar o FIO — quem produz, quem grava, quem imprime.
+   */
+  {
+    const FIO = [
+      ["app/doc/termo/[id]/page.tsx", ["recomendacao=", "pontos=", "tipo_decisao=", "laudo_url="],
+       "o dossiê do contador"],
+      ["app/termo/[token]/page.tsx", ["recomendacao=", "pontos=", "tipo_decisao=", "laudo_url="],
+       "a via do cliente"],
+      ["app/assinar/[token]/page.tsx", ["recomendacao=", "pontos=", "tipoDecisao="],
+       "a tela onde ele assina"],
+      ["app/api/termo/route.ts", ["tipo_decisao:", "motivo_divergencia:", "recomendacao:", "blocoDoTermo"],
+       "a rota que emite"],
+      ["app/api/termo/lote/route.ts", ["tipo_decisao:", "recomendacao:", "blocoDoTermo"],
+       "a rota de lote"],
+    ];
+    for (const [arq, exigidos, oque] of FIO) {
+      const src = fs.existsSync(path.join(RAIZ, arq)) ? fs.readFileSync(path.join(RAIZ, arq), "utf8") : "";
+      const faltando = exigidos.filter((e) => !src.includes(e));
+      ok(`${oque} passa a recomendação adiante`, src !== "" && faltando.length === 0,
+         src === "" ? "arquivo não encontrado" : `faltando: ${faltando.join(", ")}`);
+    }
+
+    /* e as três superfícies leem o snapshot pela MESMA função — cada uma lendo
+       do seu jeito é como o cliente acaba lendo uma coisa e assinando outra */
+    for (const arq of ["app/doc/termo/[id]/page.tsx", "app/termo/[token]/page.tsx", "app/assinar/[token]/page.tsx"]) {
+      const src = fs.readFileSync(path.join(RAIZ, arq), "utf8");
+      ok(`${arq.split("/").slice(0, 3).join("/")} lê o snapshot pela função comum`,
+         src.includes("decisaoDoSnapshot"), "não importa decisaoDoSnapshot de lib/termo");
+    }
   }
 
   /**

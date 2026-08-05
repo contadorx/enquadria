@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase-admin";
 import { BotaoImprimir } from "@/components/BotaoImprimir";
 import { FolhaTermo } from "@/components/FolhaTermo";
 import { trilhaEmTexto } from "@/lib/esign";
+import { decisaoDoSnapshot } from "@/lib/termo";
 
 /**
  * O TERMO ASSINADO NO ENDEREÇO DO CLIENTE.
@@ -86,6 +87,10 @@ export default async function TermoPublico({ params }: { params: { token: string
     }
   }
 
+  /* a via do cliente lê o MESMO snapshot que o dossiê do contador — duas partes
+     lendo folhas diferentes seria pior que folha nenhuma */
+  const parte = decisaoDoSnapshot(termo.snapshot);
+
   const trilha = trilhaEmTexto({
     assinante_nome: termo.assinante_nome,
     assinante_cpf: termo.assinante_cpf,
@@ -111,6 +116,12 @@ export default async function TermoPublico({ params }: { params: { token: string
         empresa={empresa}
         escritorio={escritorio}
         decisao={(snap?.decisao ?? termo.decisao ?? "permanecer") as "optar" | "permanecer"}
+        recomendacao={parte.recomendacao}
+        tipo_decisao={parte.tipo_decisao}
+        motivo_divergencia={parte.motivo_divergencia}
+        pontos={parte.pontos}
+        laudo_url={parte.laudo_url}
+        laudo_numero={parte.laudo_numero}
         assinado
         assinante_nome={termo.assinante_nome}
         assinado_em={termo.assinado_em}
