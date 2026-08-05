@@ -1,6 +1,9 @@
 import { carregarNegocio } from "@/lib/negocio";
-import { ContaLinha, comoMetrica } from "@/components/ContaLinha";
-import { calcularMetricas, divergencias, moedaBR } from "@/lib/cobranca";
+/* `comoMetrica` vem de `lib/`, NÃO de ContaLinha: função exportada por módulo
+   `"use client"` chega ao servidor como PROXY, e chamá-la derruba a página.
+   Foi exatamente assim que esta tela quebrou em produção. */
+import { ContaLinha } from "@/components/ContaLinha";
+import { calcularMetricas, comoMetrica, divergencias, moedaBR } from "@/lib/cobranca";
 import { mesBr } from "@/lib/negocio-calc";
 
 /**

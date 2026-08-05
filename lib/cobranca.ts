@@ -203,3 +203,50 @@ export function calcularMetricas(contas: ContaMetrica[], mesAtual: string): Metr
     ignoradasTeste,
   };
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * O ADAPTADOR ENTRE A LINHA DA RPC E A MÉTRICA.
+ *
+ * MORA AQUI POR UM MOTIVO CARO. Ele nasceu dentro de `components/ContaLinha.tsx`,
+ * que é `"use client"`. O arquivo compila, o TypeScript aprova, o build passa —
+ * e a tela de Contas explodia em produção com "server-side exception", porque
+ * TODO export de um módulo cliente vira um PROXY quando importado pelo
+ * servidor. `comoMetrica(e)` num Server Component não é uma função: é uma
+ * referência para o cliente, e chamá-la lança.
+ *
+ * A regra que ficou: da fronteira só atravessa COMPONENTE. Função pura mora em
+ * `lib/`, onde os dois lados podem chamá-la. `ferramentas/auditar-fronteira.mjs`
+ * vigia isso — é a trava, porque nem o compilador nem o build pegam.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/** os campos da RPC `negocio_escritorios()` que a métrica consome */
+export interface LinhaDeConta {
+  status_conta?: string | null;
+  is_teste?: boolean | null;
+  acesso_cortesia?: boolean | null;
+  t_valor_mensal?: number | null;
+  t_ultimo_pagamento?: string | null;
+  t_ultimo_pagamento_valor?: number | null;
+  t_ciclo?: string | null;
+  plano_ciclo?: string | null;
+  cancelado_em?: string | null;
+  pago_em?: string | null;
+  pago_valor_centavos?: number | null;
+  valor_centavos?: number | null;
+}
+
+export function comoMetrica(e: LinhaDeConta): ContaMetrica {
+  return {
+    status: e.status_conta ?? "ativa",
+    is_teste: !!e.is_teste,
+    acesso_cortesia: !!e.acesso_cortesia,
+    valor_mensal: e.t_valor_mensal ?? null,
+    ultimo_pagamento: e.t_ultimo_pagamento ?? null,
+    ultimo_pagamento_valor: e.t_ultimo_pagamento_valor ?? null,
+    ciclo_cobranca: e.t_ciclo ?? e.plano_ciclo ?? "mensal",
+    cancelado_em: e.cancelado_em ?? null,
+    pago_em: e.pago_em ?? null,
+    pago_valor_centavos: e.pago_valor_centavos ?? null,
+    contrato_centavos: e.valor_centavos ?? null,
+  };
+}

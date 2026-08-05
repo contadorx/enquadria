@@ -39,6 +39,9 @@ ok    auditoria de schema (24 tabelas com proveniência)
 ── Auditoria de upsert (o onConflict que o Postgres não consegue inferir) 
 ok    auditoria de upsert (12 conferidos)
 
+── Fronteira servidor ↔ cliente (o proxy que compila e cai no ar) 
+ok    fronteira servidor ↔ cliente (6 conferências, com sabotagem)
+
 ── Segurança do dado — o que a tela promete no momento da fricção 
 ok    a tela promete "separação no banco, não filtro de tela" e o documento sustenta
 ok    a tela promete "não treina modelo com o conteúdo da conta" e o documento sustenta
@@ -291,4 +294,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 254 verificações automáticas
+TUDO PASSOU — 255 verificações automáticas

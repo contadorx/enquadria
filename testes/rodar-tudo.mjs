@@ -199,6 +199,30 @@ secao("Auditoria de upsert (o onConflict que o Postgres não consegue inferir)")
      r.status === 0 ? undefined : saida.split("\n").filter((l) => l.startsWith("QUEBRADO")).slice(0, 8));
 }
 
+/* ======================== 1b4. A FRONTEIRA SERVIDOR ↔ CLIENTE =========== */
+secao("Fronteira servidor ↔ cliente (o proxy que compila e cai no ar)");
+{
+  /**
+   * A tela de Contas devolveu "Application error: a server-side exception has
+   * occurred" em produção com TUDO verde aqui: TypeScript aprovou, `next build`
+   * passou, 254 verificações passaram. `comoMetrica()` morava dentro de um
+   * módulo `"use client"` e era chamada por um Server Component — do lado do
+   * servidor, todo export de módulo cliente é um PROXY, e chamá-lo lança.
+   *
+   * Nenhum teste de função pura alcança isso: em Node a função é uma função. É
+   * uma regra do framework, e por isso precisa de um auditor próprio.
+   *
+   * Rodamos com `--autoteste`: além de varrer o código, ele reintroduz o bug
+   * original e confere que a varredura o pega. Auditor que só sabe dizer "ok"
+   * não é trava.
+   */
+  const r = spawnSync("node", [path.join(RAIZ, "ferramentas", "auditar-fronteira.mjs"), "--autoteste"], { encoding: "utf8" });
+  const saida = (r.stdout || "") + (r.stderr || "");
+  const regras = (saida.match(/^ok: /gm) || []).length;
+  ok(`fronteira servidor ↔ cliente (${regras} conferências, com sabotagem)`, r.status === 0,
+     r.status === 0 ? undefined : saida.split("\n").filter((l) => /FALHOU|FRONTEIRA/.test(l)).slice(0, 8));
+}
+
 /* ============== 1b4. A PROMESSA DE SEGURANÇA TEM QUE TER LASTRO ========= */
 secao("Segurança do dado — o que a tela promete no momento da fricção");
 {

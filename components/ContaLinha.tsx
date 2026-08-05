@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { ExcluirConta } from "@/components/ExcluirConta";
-import { divergencias, moedaBR, origemDoValor, valorReal, ehPagante, type ContaMetrica } from "@/lib/cobranca";
+import { divergencias, moedaBR, origemDoValor, valorReal, ehPagante, comoMetrica } from "@/lib/cobranca";
 import type { Escritorio, Plano } from "@/lib/negocio-calc";
 
 /**
@@ -39,22 +39,17 @@ const STATUS_CONTA = ["ativa", "trial", "cortesia", "inadimplente", "cancelada",
 const dataBR = (d?: string | null) => (d ? d.slice(0, 10).split("-").reverse().join("/") : "—");
 const brl = (c?: number | null) => (c == null ? "—" : moedaBR(c / 100));
 
-/** o adaptador entre a linha da RPC e o que as métricas esperam */
-export function comoMetrica(e: Escritorio): ContaMetrica {
-  return {
-    status: e.status_conta ?? "ativa",
-    is_teste: !!e.is_teste,
-    acesso_cortesia: !!e.acesso_cortesia,
-    valor_mensal: e.t_valor_mensal ?? null,
-    ultimo_pagamento: e.t_ultimo_pagamento ?? null,
-    ultimo_pagamento_valor: e.t_ultimo_pagamento_valor ?? null,
-    ciclo_cobranca: e.t_ciclo ?? e.plano_ciclo ?? "mensal",
-    cancelado_em: e.cancelado_em ?? null,
-    pago_em: e.pago_em ?? null,
-    pago_valor_centavos: e.pago_valor_centavos ?? null,
-    contrato_centavos: e.valor_centavos ?? null,
-  };
-}
+/**
+ * O ADAPTADOR `comoMetrica` MORAVA AQUI, e este arquivo é `"use client"`.
+ *
+ * A tela de Contas (Server Component) o importava daqui. Compilava, o build
+ * passava, e a página respondia com "Application error: a server-side
+ * exception has occurred" — porque todo export de um módulo cliente vira um
+ * PROXY do lado do servidor. Chamar o proxy lança.
+ *
+ * Ele foi para `lib/cobranca.ts`, junto das métricas que alimenta, e a
+ * fronteira agora tem trava: `ferramentas/auditar-fronteira.mjs`.
+ */
 
 async function acao(corpo: Record<string, unknown>): Promise<Record<string, unknown>> {
   const r = await fetch("/api/negocio", {
