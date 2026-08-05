@@ -12,6 +12,8 @@ import {
   quadroComparativo,
   condicoesDeValidade,
   riscosELimites,
+  pressaoDoLaudo,
+  FRONTEIRA_CONTA_NEGOCIACAO,
   tabelaDoAnexo,
   recomendacao,
   rotuloOrigem,
@@ -71,6 +73,7 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
 
   const premissas = premissasComOrigem(a);
   const memoria = memoriaDeCalculo(a);
+  const pressao = pressaoDoLaudo(a);
   const quadro = quadroComparativo(a);
   const condicoes = condicoesDeValidade(a);
   const riscos = riscosELimites(a);
@@ -186,7 +189,7 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
 
   const Rodape = (
     <>
-      <div className="sec">{curto ? "5. Conclusão e responsabilidade técnica" : "9. Conclusão e responsabilidade técnica"}</div>
+      <div className="sec">{curto ? "5. Conclusão e responsabilidade técnica" : "11. Conclusão e responsabilidade técnica"}</div>
       <p className="txt">
         A análise foi conduzida com as premissas declaradas na seção {curto ? "3" : "3"} e com os
         parâmetros congelados na data de emissão. Os valores apresentados são estimativa de cenário e
@@ -481,7 +484,62 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
               ))}
             </ul>
 
-            <div className="sec">8. Riscos e limites</div>
+            {/**
+              * A SEÇÃO 8 É NOVA, e ela existe por um pedido que veio da prática:
+              * separar o que é conta do que é negociação.
+              *
+              * O laudo respondia "a conta fecha?" e parava — e quem lê conclui
+              * que o difícil acabou. O difícil começa ali: a opção transfere o
+              * crédito ao comprador no ATO de exercer, e o preço se negocia
+              * depois, quando não há mais nada para trocar.
+              *
+              * Nenhum número desta seção muda a recomendação. Ela é a mesma
+              * conta lida em unidade de negociação, para a decisão comercial ser
+              * do empresário de fato — e não por omissão do documento.
+              */}
+            {pressao && (
+              <>
+                <div className="sec">8. Pressão comercial — onde a conta acaba</div>
+                <table className="quadro">
+                  <tbody>
+                    <tr>
+                      <td>Faixa de negociação do reajuste</td>
+                      <td className="mono res">{pressao.faixa}</td>
+                    </tr>
+                    <tr>
+                      <td>
+                        O que está em disputa entre a empresa e o cliente
+                        <div className="comp">
+                          Abaixo do piso a empresa absorve; acima do teto o crédito do cliente deixa
+                          de cobrir o aumento e ele recusa.
+                        </div>
+                      </td>
+                      <td className="mono">{pressao.excedente}</td>
+                    </tr>
+                    <tr>
+                      <td>Parte dessa faixa que a empresa precisa só para não perder</td>
+                      <td className="mono">{pressao.posicao}</td>
+                    </tr>
+                    <tr>
+                      <td>Se o repasse não acontecer, a empresa absorve</td>
+                      <td className="mono">
+                        {pressao.absorve}
+                        {pressao.absorve_reais ? ` · ${pressao.absorve_reais}/ano` : ""}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+                <p className="txt">{pressao.leitura}</p>
+                {pressao.avisos.map((av, i) => (
+                  <p key={i} className={i === 0 ? "aviso" : "txt"}>
+                    {av}
+                  </p>
+                ))}
+                <p className="fronteira">{FRONTEIRA_CONTA_NEGOCIACAO}</p>
+              </>
+            )}
+
+            <div className="sec">9. Riscos e limites</div>
             <ul className="riscos">
               {riscos.map((r, i) => (
                 <li key={i}>{r}</li>
@@ -565,6 +623,9 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
            no laudo é reservado a prioridade e a "não optar" */
         .aviso { border-left: 3px solid #D97706; background: #FFFBEB; color: #78350F; padding: 7px 10px; font-size: 11.5px; margin: 6px 0 0; line-height: 1.5; }
         .notaparam { font-size: 10.5px; color: #64748B; line-height: 1.5; margin: 7px 0 0; }
+        /* a fronteira entre a conta e a negociação: sóbria, sem cor de alarme —
+           não é risco, é divisão de responsabilidade */
+        .fronteira { border-top: 1px solid #CBD5E1; margin-top: 10px; padding-top: 8px; font-size: 11px; color: #475569; line-height: 1.55; }
         .carimbo { border: 1px dashed #CBD5E1; background: #F8FAFC; border-radius: 6px; padding: 9px 12px; font-size: 11px; color: #475569; line-height: 1.55; margin: 8px 0; }
         .verif { margin-top: 12px; border: 1px dashed #A5F3FC; background: #ECFEFF; border-radius: 6px; padding: 9px 12px; font-size: 10.5px; color: #0E7490; line-height: 1.55; }
         .sign { margin-top: 30px; padding-top: 8px; border-top: 1px solid #334155; width: 280px; font-size: 11px; color: #64748B; }

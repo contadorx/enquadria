@@ -141,7 +141,11 @@ const analise = {
 };
 
 const mem = memoriaDeCalculo(analise);
-ok(mem.length === 8, `memória de cálculo com 8 passos (veio ${mem.length})`);
+/* 8 → 10 em 05/08/2026: entraram o passo 8 (o reajuste como o comprador
+   sente, depois do crédito que ele gera) e o passo 10 (o cenário de tabela
+   única). Os dois existem para o leitor conseguir refazer a conta: sem o 8, a
+   folga impressa não sai de nenhuma linha da memória. */
+ok(mem.length === 10, `memória de cálculo com 10 passos (veio ${mem.length})`);
 ok(mem.every((x) => x.formula && x.substituicao && x.resultado), "todo passo tem fórmula, substituição e resultado");
 ok(mem[0].substituicao.includes("R$"), "o passo 1 substitui a RBT12 real");
 ok(quadroComparativo(analise).length === 4, "quadro comparativo com quatro linhas");

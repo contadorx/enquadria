@@ -3,7 +3,7 @@
 ok    compila sem erro
 
 ── Suítes de função pura ───────────────────────────────────────
-ok    23 suítes encontradas na pasta
+ok    25 suítes encontradas na pasta
 ok    suíte abertura (34 asserções)
 ok    suíte ajuda (41 asserções)
 ok    suíte assinatura (36 asserções)
@@ -24,7 +24,9 @@ ok    suíte motor (79 asserções)
 ok    suíte muro (11 asserções)
 ok    suíte negocio (20 asserções)
 ok    suíte nps (40 asserções)
+ok    suíte pressao (29 asserções)
 ok    suíte reguas (52 asserções)
+ok    suíte repasse (26 asserções)
 ok    suíte roteiro (24 asserções)
 ok    suíte tabela-2027 (82 asserções)
 
@@ -226,7 +228,7 @@ ok    C03 → S1
 ok    C04 → S1
 ok    C05 → S3
 ok    C06 → S5
-ok    C07 → S1
+ok    C07 → S3
 ok    C08 → S4
 ok    C09 → S1
 ok    C10 → S1
@@ -245,20 +247,22 @@ ok    G02 saída segregada S4 · pelo cadastro S4
 ok    G03 dDAS ponderado = 2.510%
 ok    G03 saída segregada S4 · pelo cadastro S4
 ok    G04 dDAS ponderado = 2.510%
-ok    G04 saída segregada S4 · pelo cadastro S3
+ok    G04 saída segregada S4 · pelo cadastro S4
 ok    G05 dDAS ponderado = 2.916%
-ok    G05 saída segregada S3 · pelo cadastro S3
+ok    G05 saída segregada S4 · pelo cadastro S3
 ok    G06 dDAS ponderado = 3.379%
 ok    G06 saída segregada S4 · pelo cadastro S4
 ok    G07 dDAS ponderado = 2.077%
 ok    G07 saída segregada S4 · pelo cadastro S4
 ok    G08 dDAS ponderado = 2.510%
-ok    G08 saída segregada S4 · pelo cadastro S3
+ok    G08 saída segregada S4 · pelo cadastro S4
 ok    G09 dDAS ponderado = 2.282%
 ok    G09 saída segregada S3 · pelo cadastro S3
 ok    G10 dDAS ponderado = 1.368%
-ok    G10 saída segregada S3 · pelo cadastro S3
-ok    G04 e G08 são os únicos que MUDAM a decisão
+ok    G10 saída segregada S4 · pelo cadastro S4
+ok    G11 dDAS ponderado = 2.510%
+ok    G11 saída segregada S3 · pelo cadastro S1
+ok    tratar pelo anexo do cadastro TROCA a decisão em 2 cenário(s)
 ok    G10 (um anexo a 100%) devolve o mesmo do caminho antigo
 
 ── Memória de cálculo do laudo com receita segregada ───────────
@@ -287,4 +291,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 250 verificações automáticas
+TUDO PASSOU — 254 verificações automáticas

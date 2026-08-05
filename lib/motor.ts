@@ -97,10 +97,38 @@ export interface Resultado {
   cl: number;
   /** REPASSE DE EQUILÍBRIO — o número */
   re: number;
+  /**
+   * O REPASSE COMO O COMPRADOR SENTE — `re × (1 − alíquota)`.
+   *
+   * Quando o preço sobe, o IBS/CBS incide sobre o preço MAIOR, e o comprador
+   * credita esse valor maior. Ou seja: ele não sente o reajuste inteiro — parte
+   * volta como crédito. É este número, e não o `re` bruto, que se compara com o
+   * ganho dele.
+   *
+   * A conta fecha para o comprador quando `a(1 + re) − das ≥ re`, o que é o
+   * mesmo que `re(1 − a) ≤ fc`. Nenhuma iteração: a correção é uma constante,
+   * porque a alíquota é constante.
+   */
+  re_liquido: number;
   /** folga do comprador */
   fc: number;
-  /** folga da negociação, em pontos */
+  /** folga da negociação, em pontos — medida sobre o repasse LÍQUIDO */
   folga: number;
+  /**
+   * O REPASSE SE A EMPRESA TIVER UMA TABELA SÓ — é o próprio `cl`.
+   *
+   * `re = cl / rq` supõe preço diferenciado: sobe para quem credita, mantém
+   * para quem não credita. Nem toda empresa consegue (tabela pública, contrato
+   * com cláusula de reajuste, varejo). Com preço único o custo se espalha por
+   * toda a receita, e o reajuste necessário passa a ser o próprio `cl` — SEMPRE
+   * menor, porque `rq < 1`.
+   *
+   * Não entra na decisão de propósito: o motor decide pelo cenário mais
+   * difícil. Entra no laudo, porque em boa parte dos casos recusados pelo
+   * repasse diferenciado a tabela única fecharia — e essa é uma conversa que o
+   * empresário precisa ter, não uma que o motor deva encerrar sozinho.
+   */
+  re_unico: number;
   saida: Saida;
   prioridade: boolean;
   /** por que esta saída, em uma frase — vai para a seção 7 do laudo */
@@ -676,6 +704,42 @@ export function decidir(r: Respostas, p: Parametros = PARAMETROS_2027): Resultad
   const re = rq > 0 ? cl / rq : Number.POSITIVE_INFINITY;
   const fc = p.aliquota - p.das;
 
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * O REPASSE COMO O COMPRADOR SENTE — corrigido em 05/08/2026.
+   *
+   * A comparação era `re` contra `fc`, e ela ignorava um fato simples: quando
+   * o preço sobe, o IBS/CBS incide sobre o preço MAIOR, e o comprador credita
+   * esse valor maior. Parte do reajuste volta para ele como crédito — ele não
+   * sente o aumento inteiro.
+   *
+   * A conta do comprador, escrita por extenso: ele paga `re` a mais e ganha
+   * `a(1 + re) − das` de crédito adicional. Fecha quando
+   *
+   *     a(1 + re) − das  ≥  re      ⟺      re(1 − a)  ≤  a − das  =  fc
+   *
+   * Ou seja: basta comparar `re × (1 − a)` com `fc`. Não há iteração e não há
+   * número novo — a correção é uma constante, porque a alíquota é constante.
+   * Com a de 8,8%, dá 9,65% de folga a mais em toda a árvore.
+   *
+   * As bandas continuam sendo 0,8 e 1,2 vez o ganho do comprador, e o `re`
+   * impresso no laudo continua sendo o reajuste de preço que a empresa precisa
+   * negociar. O que mudou foi COM O QUE ele é comparado.
+   * ═══════════════════════════════════════════════════════════════════════
+   */
+  const reLiquido = isFinite(re) ? re * (1 - p.aliquota) : re;
+
+  /**
+   * O REPASSE COM TABELA ÚNICA — é o próprio `cl`.
+   *
+   * `re = cl / rq` supõe preço diferenciado. Com uma tabela só, o custo se
+   * espalha por toda a receita e o reajuste necessário passa a ser `cl` —
+   * sempre menor, porque `rq < 1`. Não entra na decisão: o motor decide pelo
+   * cenário mais difícil. Vai para o laudo, porque em boa parte dos casos
+   * recusados pelo repasse diferenciado a tabela única fecharia.
+   */
+  const reUnico = cl;
+
   let saida: Saida;
   let motivo: string;
 
@@ -695,21 +759,30 @@ export function decidir(r: Respostas, p: Parametros = PARAMETROS_2027): Resultad
     // o comprador não ganha crédito extra e as bandas de fronteira se invertem.
     saida = "S1";
     motivo = "O que sai do DAS alcança a alíquota do regime regular: o comprador não teria crédito adicional a ganhar.";
-  } else if (re > fc * fMax) {
+  } else if (reLiquido > fc * fMax) {
     // O repasse necessário estoura o ganho do comprador. Não fecha para ninguém.
     saida = "S1";
-    motivo = `Repasse necessário de ${pct(re)} contra ganho de ${pct(fc)} do comprador: a conta não fecha para nenhum dos dois lados.`;
+    motivo =
+      `Repasse necessário de ${pct(re)} no preço. Descontado o crédito que o próprio reajuste gera ` +
+      `para o comprador, ele sente ${pct(reLiquido)} — ainda acima do ganho de ${pct(fc)} que teria. ` +
+      "A conta não fecha para nenhum dos dois lados.";
   } else if (r.preco <= 1) {
     // A conta fecha, a negociação não. Preparar a janela seguinte.
     saida = "S2";
     motivo = "A conta fecha, a negociação não: sem poder de renegociar preço, o repasse não acontece a tempo desta janela.";
-  } else if (re >= fc * fMin) {
+  } else if (reLiquido >= fc * fMin) {
     // Cabe, mas por pouco: o motor não decide, o empresário decide.
     saida = "S3";
-    motivo = `Repasse de ${pct(re)} contra ganho de ${pct(fc)}: dentro da banda de fronteira (${fMin}× a ${fMax}× o ganho do comprador). A conta cabe, mas por pouco.`;
+    motivo =
+      `Repasse de ${pct(re)} no preço — ${pct(reLiquido)} depois de descontado o crédito que ele ` +
+      `gera para o comprador, contra ganho de ${pct(fc)}. Fica dentro da banda de fronteira ` +
+      `(${fMin}× a ${fMax}× o ganho do comprador): a conta cabe, mas por pouco.`;
   } else {
     saida = "S4";
-    motivo = `Repasse de ${pct(re)} bem abaixo do ganho de ${pct(fc)} do comprador: sobra folga de ${((fc - re) * 100).toFixed(1).replace(".", ",")} pontos para a negociação.`;
+    motivo =
+      `Repasse de ${pct(re)} no preço, que o comprador sente como ${pct(reLiquido)} porque parte volta ` +
+      `como crédito. Contra ganho de ${pct(fc)}, sobra folga de ` +
+      `${((fc - reLiquido) * 100).toFixed(1).replace(".", ",")} pontos para a negociação.`;
   }
 
   /**
@@ -748,7 +821,150 @@ export function decidir(r: Respostas, p: Parametros = PARAMETROS_2027): Resultad
   // e ainda assim receber "não optar". Descoberta da validação de 22/07.
   const prioridade = r.exig === 1 || (r.conc === 1 && rq > 0.7);
 
-  return { rq, ch, cl, re, fc, folga: fc - re, saida, prioridade, motivo, banda_sublimite: bandaSublimite };
+  /* a folga é medida na MESMA escala da decisão: sobre o repasse líquido. É ela
+     que vira `ganho_anual` em reais, e o ganho real inclui o crédito que o
+     reajuste gera. */
+  return {
+    rq, ch, cl, re,
+    re_liquido: reLiquido,
+    fc,
+    folga: fc - reLiquido,
+    re_unico: reUnico,
+    saida, prioridade, motivo,
+    banda_sublimite: bandaSublimite,
+  };
+}
+
+/**
+ * A TABELA ÚNICA FECHARIA ONDE A DIFERENCIADA NÃO FECHA?
+ *
+ * Medido em 1.694 combinações: em 636 delas sim, e em NENHUMA o inverso —
+ * porque `re_unico = cl = re × rq` e `rq < 1`, então o repasse com tabela única
+ * é sempre menor. O motor decide pelo cenário difícil de propósito; esta função
+ * existe para o laudo poder dizer quando o outro caminho existe.
+ *
+ * O QUE ELA NÃO DIZ, e o laudo precisa dizer: com tabela única quem não credita
+ * paga o aumento sem receber nada em troca. O ganho aparece na conta do
+ * comprador PJ; a perda aparece na demanda do consumidor final, que nenhuma
+ * fórmula deste motor enxerga. É decisão do empresário, com os dois números à
+ * vista — não é conclusão do sistema.
+ */
+export function fechaComPrecoUnico(res: Resultado, p: Parametros = PARAMETROS_2027): boolean {
+  const fMax = p.fronteiraMax ?? 1.2;
+  /**
+   * O PISO DE RECEITA QUALIFICADA VALE AQUI TAMBÉM — e a primeira versão desta
+   * função esquecia disso.
+   *
+   * Com `rq` de 10%, a tabela única "fecha" na aritmética: o reajuste é 4,2% e
+   * o comprador ganha 7,3%. Só que 90% da receita paga o aumento sem receber
+   * nada, e o motor já recusou o caso por VOLUME, não por preço. Oferecer no
+   * laudo um caminho que a árvore descartou é fazer o documento contradizer a
+   * própria recomendação — pego pelo teste, não pela leitura.
+   */
+  if (res.rq < (p.rqMin ?? 0.3)) return false;
+  if (res.cl <= 0 || res.fc <= 0) return false;
+  /* o comprador sente o reajuste único descontado do crédito que ele gera —
+     a mesma correção do repasse diferenciado */
+  return res.re_unico * (1 - p.aliquota) <= res.fc * fMax;
+}
+
+/* ==========================================================================
+ * PRESSÃO COMERCIAL — o que a conta não vê e o contador leva a culpa.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * O QUE ESTAVA FALTANDO.
+ *
+ * O motor responde "a conta fecha?" e imprime `re`. Isso descreve a
+ * ARITMÉTICA e esconde a NEGOCIAÇÃO — que é onde a coisa dá errado.
+ *
+ * Um caso real da grade: repasse necessário de 0,97%, ganho do comprador de
+ * 7,37%. Parece confortável. Mas a faixa de negociação vai de 0,97% (o
+ * fornecedor no zero) a 8,08% (o comprador no zero): há 7,11 pontos em
+ * disputa, e o fornecedor precisa de 12% deles só para não perder. Os outros
+ * 88% vão para quem tiver poder de barganha. Se ele não conseguir nada,
+ * absorve 0,77% da receita — pouco em dinheiro, e o comprador levou sete
+ * pontos que saíram do bolso dele.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * A ASSIMETRIA DE SEQUÊNCIA, que é o risco de verdade.
+ *
+ * Ao exercer a opção, o crédito integral passa ao comprador AUTOMATICAMENTE.
+ * Não depende de acordo de preço nenhum. Quem opta em setembro e vai negociar
+ * em outubro negocia sem nada para trocar: o comprador já recebeu.
+ *
+ * É estruturalmente diferente de qualquer outra negociação comercial, e é onde
+ * o contador se queima — ele recomendou, o cliente optou, o repasse nunca veio.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * O QUE ESTA FUNÇÃO É E O QUE ELA NÃO É.
+ *
+ * É uma leitura da mesma conta, em unidade de negociação. NÃO muda saída
+ * nenhuma: a árvore continua decidindo o que decidia. O laudo passa a poder
+ * dizer em que posição o empresário entra na conversa — e a decisão comercial
+ * continua sendo dele, não do documento.
+ *
+ * Medido na grade de 22.400 combinações, a parte da faixa que o fornecedor
+ * precisa varia de 12% a 90% conforme o caso. A "Zona de fronteira" é onde a
+ * pressão é MÁXIMA (mediana 89,7%) — o cenário em que o laudo hoje diz
+ * "decisão do empresário" sem avisar que quase não há espaço para negociar.
+ * ========================================================================== */
+
+export type NivelPressao = "folgada" | "media" | "apertada";
+
+export interface PressaoComercial {
+  /** o reajuste em que o FORNECEDOR fica no zero — abaixo dele, ele absorve */
+  piso: number;
+  /** o reajuste em que o COMPRADOR fica no zero — acima dele, ele recusa */
+  teto: number;
+  /** o que está em disputa entre os dois, em pontos de receita qualificada */
+  excedente: number;
+  /** quanto da faixa o fornecedor precisa só para não perder (0 a 1) */
+  parte_minima: number;
+  nivel: NivelPressao;
+  /** o que a empresa absorve se não conseguir repassar NADA, sobre a receita */
+  absorve: number;
+}
+
+export function pressaoComercial(
+  res: Resultado,
+  p: Parametros = PARAMETROS_2027
+): PressaoComercial | null {
+  /**
+   * QUANDO NÃO HÁ NEGOCIAÇÃO, A SEÇÃO NÃO SAI. Três casos, e os três são
+   * silêncio honesto em vez de tabela sem sentido:
+   *
+   *  · custo líquido negativo — a empresa já paga menos sozinha, não há o que
+   *    pedir a ninguém;
+   *  · receita qualificada abaixo do piso — não há com quem negociar, e a
+   *    árvore já recusou por VOLUME. Imprimir uma faixa aqui daria à empresa um
+   *    caminho que a recomendação nega duas páginas antes;
+   *  · piso acima do teto — o repasse necessário é maior do que o crédito do
+   *    comprador cobre. Não existe preço que sirva aos dois, e o motivo do S1
+   *    já diz isso com todas as letras.
+   *
+   * A primeira versão devolvia um objeto degenerado no terceiro caso (faixa de
+   * 42,5% a 8,0%, excedente zero). Uma tabela dessas no laudo é pior que
+   * nenhuma: parece número, e não é. Pego pelo teste.
+   */
+  if (!isFinite(res.re) || res.cl <= 0 || res.fc <= 0) return null;
+  if (res.rq < (p.rqMin ?? 0.3)) return null;
+
+  /* o comprador paga `p` a mais e ganha `a(1+p) − das`; zera em p = fc/(1−a) */
+  const teto = res.fc / (1 - p.aliquota);
+  const piso = res.re;
+  const excedente = teto - piso;
+  if (!(excedente > 0)) return null;
+  const parte = Math.min(piso / teto, 1);
+  return {
+    piso,
+    teto,
+    excedente,
+    parte_minima: parte,
+    /* os cortes são de LEITURA, não de decisão: nenhuma saída depende deles.
+       Servem para o laudo escolher entre três frases. */
+    nivel: parte >= 0.75 ? "apertada" : parte >= 0.5 ? "media" : "folgada",
+    absorve: res.cl,
+  };
 }
 
 export const SAIDAS: Record<Saida, { titulo: string; descricao: string; cor: string }> = {

@@ -92,6 +92,34 @@ export function FolhaTermo({
           <li>A opção vale por semestre e não pode ser alterada no período.</li>
           <li>Quem não optar dentro do prazo permanece no regime tradicional.</li>
           <li>A decisão afeta preço, crédito ao cliente e competitividade.</li>
+          {/**
+            * AS TRÊS LINHAS ABAIXO SÃO O QUE SEPARA "EU RECOMENDEI" DE "EU
+            * INFORMEI, ELE DECIDIU".
+            *
+            * A primeira é a assimetria de sequência: ao exercer a opção o
+            * crédito integral passa ao cliente na hora, sem depender de acordo
+            * de preço. Quem opta e negocia depois negocia sem nada para trocar.
+            * É o ponto em que a recomendação do contador vira problema
+            * comercial do empresário — e onde, sem registro, ele volta como
+            * reclamação contra quem assinou o laudo.
+            */}
+          <li>
+            <b>
+              Ao exercer a opção, o crédito integral passa ao cliente
+              automaticamente, independentemente de acordo de preço.
+            </b>{" "}
+            O reajuste, se houver, depende de negociação — e ela deve ser fechada
+            <b> antes</b> de a opção ser exercida.
+          </li>
+          <li>
+            A empresa declara ciência da faixa de negociação apresentada no laudo e do valor que
+            passará a absorver caso o repasse não seja aceito.
+          </li>
+          <li>
+            <b>Os cálculos são de responsabilidade técnica do profissional que assina o laudo; o
+            resultado comercial da negociação de preço é decisão e risco da empresa.</b>{" "}
+            Nenhum número do laudo garante que o repasse será aceito pelos clientes.
+          </li>
         </ul>
 
         <div className="box">

@@ -1120,7 +1120,17 @@ const CEN = [
   ["C04", { b2b: .5, qual: .25, cred: .5, folha: .2, preco: 2, conc: 0, exig: 0 }, null, "S1"],
   ["C05", { b2b: .7, qual: .7, cred: .4, folha: .2, preco: 2, conc: 1, exig: 0 }, null, "S3"],
   ["C06", { b2b: .8, qual: .9, cred: .9, folha: .1, preco: 2, conc: 1, exig: 1 }, null, "S5"],
-  ["C07", { b2b: .85, qual: .85, cred: .1, folha: .4, preco: 2, conc: 1, exig: 1 }, null, "S1"],
+  /**
+   * C07 MUDOU DE S1 PARA S3 em 05/08/2026, e a mudança é a correção do repasse.
+   *
+   *   re 8,923% · re × (1 − 8,8%) = 8,138% · fc 7,327% · 1,2 × fc = 8,792%
+   *
+   * O repasse CRU estourava o teto por 13 centésimos de ponto. O que o
+   * comprador SENTE — descontado o crédito que o próprio reajuste gera — cabe
+   * dentro da banda. É o caso limítrofe que a correção existe para acertar: a
+   * empresa recebia "não optar" por causa de um efeito que não existe.
+   */
+  ["C07", { b2b: .85, qual: .85, cred: .1, folha: .4, preco: 2, conc: 1, exig: 1 }, null, "S3"],
   ["C08", { b2b: .9, qual: .95, cred: .65, folha: .15, preco: 3, conc: 1, exig: 1 }, null, "S4"],
   ["C09", { b2b: .6, qual: .5, cred: .5, folha: .2, preco: 3, conc: 1, exig: 0 }, null, "S1"],
   ["C10", { b2b: .6, qual: .49, cred: .5, folha: .2, preco: 3, conc: 1, exig: 0 }, null, "S1"],
@@ -1147,7 +1157,16 @@ const SEG = [
   ["G02", [{ anexo: 3, share: .6 }, { anexo: 1, share: .4 }], 3, 1200000,
    { b2b: .8, qual: .85, cred: .4, folha: .32, preco: 2, conc: 1, exig: 0 }, 0.018449, "S4", "S4"],
   ["G03", [{ anexo: 5, share: .5 }, { anexo: 1, share: .5 }], 5, 1200000, R_G, 0.025104, "S4", "S4"],
-  ["G04", [{ anexo: 5, share: .5 }, { anexo: 1, share: .5 }], 1, 1200000, R_G, 0.025104, "S4", "S3"],
+  /**
+   * G04 e G08: a coluna "pelo cadastro" virou S4. Esses dois cenários existem
+   * para mostrar que tratar empresa mista pelo anexo do cadastro TROCA a saída
+   * — e continuam mostrando, só que agora o erro aparece em outro par.
+   *
+   * Pelo Anexo I sozinho: re 6,045% · líquido 5,513% · 0,8 × fc 5,946%.
+   * O repasse cru caía DENTRO da banda de fronteira; o líquido fica abaixo
+   * dela. Mesma correção do C07, mesmo mecanismo.
+   */
+  ["G04", [{ anexo: 5, share: .5 }, { anexo: 1, share: .5 }], 1, 1200000, R_G, 0.025104, "S4", "S4"],
   /**
    * G05 e G06 MUDARAM em 05/08/2026, e não por conveniência de teste.
    *
@@ -1167,16 +1186,33 @@ const SEG = [
    * que mudou foi a regra do ISS, e não a tabela inteira desandando.
    */
   ["G05", [{ anexo: 3, share: .6 }, { anexo: 5, share: .4 }], 3, 2400000,
-   { b2b: .75, qual: .85, cred: .3, folha: .30, preco: 2, conc: 1, exig: 0 }, 0.029156, "S3", "S3"],
+   /* G05: re 5,089% caía na banda (0,8 × fc = 4,708%); o líquido 4,641% fica
+      abaixo, e a saída sobe de S3 para S4. */
+   { b2b: .75, qual: .85, cred: .3, folha: .30, preco: 2, conc: 1, exig: 0 }, 0.029156, "S4", "S3"],
   ["G06", [{ anexo: 4, share: .5 }, { anexo: 3, share: .5 }], 4, 3000000,
    { b2b: .9, qual: .9, cred: .45, folha: .34, preco: 2, conc: 1, exig: 0 }, 0.033793, "S4", "S4"],
   ["G07", [{ anexo: 1, share: .4 }, { anexo: 2, share: .3 }, { anexo: 5, share: .3 }], 1, 2000000,
    { b2b: .85, qual: .9, cred: .5, folha: .18, preco: 2, conc: 1, exig: 0 }, 0.020774, "S4", "S4"],
   ["G08", [{ anexo: 5, share: .5 }, { anexo: 1, share: .5 }], 1, 1200000,
-   { ...R_G, preco: 3 }, 0.025104, "S4", "S3"],
+   { ...R_G, preco: 3 }, 0.025104, "S4", "S4"],
   ["G09", [{ anexo: 5, share: .4 }, { anexo: 1, share: .6 }], 1, 1200000,
    { b2b: .75, qual: .9, cred: .3, folha: .15, preco: 2, conc: 1, exig: 0 }, 0.022819, "S3", "S3"],
-  ["G10", [{ anexo: 1, share: 1 }], 1, 1200000, R_G, 0.013679, "S3", "S3"],
+  ["G10", [{ anexo: 1, share: 1 }], 1, 1200000, R_G, 0.013679, "S4", "S4"],
+  /**
+   * G11 ENTROU EM 05/08/2026, e ele é a razão de esta suíte existir.
+   *
+   * Com a correção do repasse (`re × (1 − a)` contra `fc`), G04 e G08 deixaram
+   * de divergir: os dois caminhos passaram a dar S4. Aceitar isso e apagar a
+   * invariante seria transformar a suíte num carimbo — ela foi escrita para
+   * guardar UMA propriedade: tratar empresa mista pelo anexo do cadastro pode
+   * TROCAR a decisão, não só mexer no terceiro decimal.
+   *
+   * A propriedade continua verdadeira; só mudou onde ela aparece. Neste
+   * cenário o dDAS vai de 2,5104% (segregado) para 1,3679% (só Anexo I), e a
+   * diferença joga o caso de "zona de fronteira" para "não optar".
+   */
+  ["G11", [{ anexo: 5, share: .5 }, { anexo: 1, share: .5 }], 1, 1200000,
+   { b2b: .5, qual: .6, cred: .45, folha: .15, preco: 2, conc: 1, exig: 0 }, 0.025104, "S3", "S1"],
 ];
 for (const [id, mix, cadastro, rbt12, r, dasEsperado, saidaSeg, saidaCad] of SEG) {
   const seg = motor.dDASsegregado(mix, rbt12);
@@ -1188,8 +1224,23 @@ for (const [id, mix, cadastro, rbt12, r, dasEsperado, saidaSeg, saidaCad] of SEG
   ok(`${id} saída segregada ${saidaSeg} · pelo cadastro ${saidaCad}`,
      s1 === saidaSeg && s2 === saidaCad, { s1, s2 });
 }
-ok("G04 e G08 são os únicos que MUDAM a decisão",
-   SEG.filter(([, , , , , , a, b]) => a !== b).map(([id]) => id).join(",") === "G04,G08");
+/**
+ * A INVARIANTE DEIXOU DE SER UMA LISTA, e isso é conserto de teste, não
+ * afrouxamento.
+ *
+ * Ela era `join(",") === "G04,G08"` — uma lista fixa. Quebrou duas vezes hoje
+ * por motivo legítimo: a correção do repasse mudou QUAIS cenários divergem,
+ * sem tocar na propriedade que a suíte existe para guardar — que tratar empresa
+ * mista pelo anexo do cadastro pode TROCAR a decisão.
+ *
+ * Agora a asserção é a propriedade em si, com uma âncora nomeada: G11 foi
+ * construído para demonstrá-la e precisa continuar demonstrando. Se um dia
+ * NENHUM cenário divergir, a suíte grita — que é o único caso em que ela
+ * realmente deve gritar.
+ */
+const divergem = SEG.filter(([, , , , , , a, b]) => a !== b).map(([id]) => id);
+ok(`tratar pelo anexo do cadastro TROCA a decisão em ${divergem.length} cenário(s)`,
+   divergem.length >= 1 && divergem.includes("G11"), divergem);
 ok("G10 (um anexo a 100%) devolve o mesmo do caminho antigo",
    motor.dDASsegregado([{ anexo: 1, share: 1 }], 1200000).das === motor.dDASefetivo(1, 1200000).das);
 

@@ -54,6 +54,8 @@ export interface AnaliseGravada {
     bandaSublimite?: number;
     fronteiraMin?: number;
     fronteiraMax?: number;
+    /** piso de receita qualificada congelado na análise (padrão 0,30) */
+    rqMin?: number;
     partilha?: { valor: number | null; motivo: string };
     carimbo?: CarimboAliquota;
     cenarios?: Cenario[];
@@ -73,6 +75,33 @@ export interface AnaliseGravada {
  * true quando as premissas vieram da análise em lote e ainda não foram
  * confirmadas pelo contador. O laudo leva a assinatura dele — ele precisa saber.
  */
+/**
+ * OS DOIS NÚMEROS QUE NÃO PRECISARAM DE COLUNA NOVA.
+ *
+ * `re_liquido` e `re_unico` derivam do que a análise JÁ grava — `re`, `cl` e a
+ * alíquota congelada em `parametros`. Guardá-los seria criar duas colunas que
+ * podem divergir do resto da linha no dia em que alguém corrigir uma e esquecer
+ * a outra. Derivando, as análises antigas também passam a imprimir os dois, com
+ * o mesmo número que o motor produziria hoje.
+ *
+ * `re_liquido`: quando o preço sobe, o IBS/CBS incide sobre o preço maior e o
+ * comprador credita esse valor maior — parte do reajuste volta para ele. É este
+ * número que se compara com o ganho dele, não o `re` cheio.
+ *
+ * `re_unico`: o reajuste necessário se a empresa praticar UMA tabela de preço.
+ * O custo se espalha por toda a receita, então é o próprio `cl` — sempre menor
+ * que `re`, porque `rq < 1`.
+ */
+export function reLiquidoDe(a: AnaliseGravada): number | null {
+  const aliq = a.parametros?.aliquota;
+  if (a.re == null || aliq == null) return null;
+  return Number(a.re) * (1 - Number(aliq));
+}
+
+export function reUnicoDe(a: AnaliseGravada): number | null {
+  return a.cl == null ? null : Number(a.cl);
+}
+
 export function premissasEstimadas(a: AnaliseGravada): boolean {
   return a.parametros?.origem_premissas === "lote_cnae";
 }
@@ -124,12 +153,140 @@ export function resultadoEmTexto(a: AnaliseGravada): string[] {
   const linhas: string[] = [];
   if (a.fc != null) linhas.push(`Crédito transferido ao comprador: ${pct(Number(a.fc))} da operação`);
   if (a.re != null) linhas.push(`Repasse de preço necessário: ${pct(Number(a.re))}`);
-  if (a.re != null && a.fc != null) {
-    const folga = (Number(a.fc) - Number(a.re)) * 100;
+  /**
+   * A LINHA QUE FALTAVA, e sem ela a folga parecia não fechar.
+   *
+   * O reajuste faz o IBS/CBS incidir sobre um preço maior, e o comprador
+   * credita esse valor maior — parte do aumento volta para ele. A folga é
+   * medida sobre o que ele SENTE, não sobre o preço cheio; imprimir só o `re` e
+   * depois uma folga que não sai dele é o tipo de conta que o leitor refaz e não
+   * bate.
+   */
+  const liq = reLiquidoDe(a);
+  if (liq != null) {
+    linhas.push(`O comprador sente ${pct(liq)}: o restante volta a ele como crédito sobre o preço maior`);
+  }
+  if (a.fc != null && liq != null) {
+    const folga = (Number(a.fc) - liq) * 100;
     linhas.push(`Folga na negociação: ${folga.toFixed(1).replace(".", ",")} pontos percentuais`);
+  }
+  /**
+   * O CAMINHO QUE O MOTOR NÃO ESCOLHEU. A conta da decisão supõe preço
+   * diferenciado — sobe para quem credita, mantém para quem não credita. Nem
+   * toda empresa consegue. Com tabela única o reajuste é menor (o custo se
+   * espalha por toda a receita), mas quem não credita paga sem receber nada.
+   */
+  const unico = reUnicoDe(a);
+  if (unico != null && unico > 0) {
+    linhas.push(
+      `Com uma tabela de preço só: ${pct(unico)} em todos os preços — menor, ` +
+        "porém cobrado também de quem não aproveita crédito"
+    );
   }
   return linhas;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * A SEÇÃO DE PRESSÃO COMERCIAL — a separação entre a conta e a negociação.
+ *
+ * O laudo respondia "a conta fecha?" e parava. Quem lê conclui que o difícil
+ * acabou — e o difícil começa ali. A opção transfere o crédito ao comprador no
+ * ato de exercer; o preço se negocia depois, e nessa hora não há mais nada para
+ * trocar.
+ *
+ * Esta seção existe para o documento dizer, com todas as letras, ONDE termina o
+ * trabalho do contador e ONDE começa a decisão do empresário. Não é disclaimer:
+ * é a informação que faltava para a decisão ser dele de verdade.
+ *
+ * Nada aqui muda a recomendação. É leitura da mesma conta, em unidade de
+ * negociação.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+export interface BlocoPressao {
+  faixa: string;
+  excedente: string;
+  posicao: string;
+  nivel: "folgada" | "media" | "apertada";
+  leitura: string;
+  absorve: string;
+  absorve_reais: string | null;
+  /** as frases que vão em destaque, na ordem */
+  avisos: string[];
+}
+
+export function pressaoDoLaudo(a: AnaliseGravada): BlocoPressao | null {
+  const p = a.parametros ?? {};
+  const aliq = p.aliquota;
+  if (a.re == null || a.fc == null || a.cl == null || a.rq == null || aliq == null) return null;
+  const re = Number(a.re), fc = Number(a.fc), cl = Number(a.cl), rq = Number(a.rq);
+  if (!isFinite(re) || cl <= 0 || fc <= 0) return null;
+  /* a MESMA regra do motor: sem receita qualificada suficiente ou sem faixa
+     viável, a seção não sai. Duas regras iguais escritas em dois lugares foi o
+     que produziu a divergência entre Contas e Cobranças — aqui elas são
+     conferidas uma contra a outra em testes/pressao.test.mjs. */
+  if (rq < (typeof p.rqMin === "number" ? p.rqMin : 0.3)) return null;
+
+  const teto = fc / (1 - Number(aliq));
+  const excedente = teto - re;
+  if (!(excedente > 0)) return null;
+  const parte = teto > 0 ? Math.min(re / teto, 1) : 1;
+  const nivel: BlocoPressao["nivel"] = parte >= 0.75 ? "apertada" : parte >= 0.5 ? "media" : "folgada";
+
+  const leitura =
+    nivel === "apertada"
+      ? `A margem é estreita: de cada real em disputa, ${pct(parte, 0)} precisa vir para a empresa só para ela não sair perdendo. Qualquer resistência do cliente coloca a operação no vermelho.`
+      : nivel === "media"
+        ? `A empresa precisa de ${pct(parte, 0)} do que está em disputa para não sair perdendo. Há espaço, mas ele depende de a conversa acontecer.`
+        : `A empresa precisa de ${pct(parte, 0)} do que está em disputa para não sair perdendo. A posição é confortável — o que não significa que o repasse aconteça sozinho.`;
+
+  const avisos: string[] = [
+    "NEGOCIE O PREÇO ANTES DE EXERCER A OPÇÃO, e registre por escrito. Ao optar, o crédito integral " +
+      "passa ao cliente automaticamente, independentemente de acordo de preço. Quem opta primeiro e " +
+      "negocia depois negocia sem nada para trocar: o cliente já recebeu.",
+  ];
+
+  if (a.respostas?.conc === 1) {
+    avisos.push(
+      "Os concorrentes desta empresa estão majoritariamente fora do Simples, e por isso já entregam " +
+        "crédito integral. Aqui a opção não cria vantagem — reduz uma desvantagem, e o argumento de " +
+        "preço perde força mais rápido."
+    );
+  } else {
+    avisos.push(
+      "Gerar crédito integral é vantagem enquanto os concorrentes não geram. Quando eles optarem, a " +
+        "vantagem se dissolve e o custo permanece. Trate o ganho comercial como janela, não como " +
+        "patamar."
+    );
+  }
+
+  if (a.respostas?.preco != null && Number(a.respostas.preco) <= 1) {
+    avisos.push(
+      "A empresa declarou não ter poder de renegociar preço. Nesse caso o cenário realista não é o " +
+        "repasse: é a absorção do custo abaixo. Some a isso a pressão do cliente, que passa a saber " +
+        "que este fornecedor gera crédito integral."
+    );
+  }
+
+  const dinheiro = p.dinheiro?.absorvido_anual;
+
+  return {
+    faixa: `${pct(re)} a ${pct(teto)}`,
+    excedente: pct(excedente),
+    posicao: pct(parte, 0),
+    nivel,
+    leitura,
+    absorve: pct(cl),
+    absorve_reais: dinheiro != null ? moeda(dinheiro) : null,
+    avisos,
+  };
+}
+
+/** a fronteira, dita em uma frase — vai no rodapé da seção */
+export const FRONTEIRA_CONTA_NEGOCIACAO =
+  "Até aqui é conta: os números acima decorrem das premissas informadas e da legislação citada, e " +
+  "são de responsabilidade técnica do profissional que assina. A partir daqui é negociação: o " +
+  "resultado comercial depende da conversa com cada cliente e é decisão do empresário. Nenhum " +
+  "número deste laudo garante que o repasse será aceito.";
 
 export function recomendacao(a: AnaliseGravada): { titulo: string; descricao: string; cor: string } {
   const s = (a.saida ?? "S1") as Saida;
@@ -445,12 +602,48 @@ export function memoriaDeCalculo(a: AnaliseGravada): PassoCalculo[] {
       resultado: `fc = ${pct(Number(a.fc ?? 0))}`,
     });
   }
-  if (a.re != null && a.fc != null) {
+  /**
+   * O PASSO 8 É NOVO, e existe para o laudo não parecer errado.
+   *
+   * A comparação da decisão não é `re` contra `fc` — é `re × (1 − alíquota)`
+   * contra `fc`. Sem este passo escrito, quem confere a conta encontra um
+   * número na seção da recomendação que não sai de nenhuma linha da memória, e
+   * conclui que o documento errou.
+   *
+   * A razão: quando o preço sobe, o IBS/CBS incide sobre o preço maior e o
+   * comprador credita esse valor maior. Parte do reajuste volta para ele.
+   */
+  const liqM = reLiquidoDe(a);
+  if (liqM != null && p.aliquota != null) {
+    const liq = liqM;
     passos.push({
-      passo: "8. Folga da negociação",
-      formula: "folga = fc − re",
-      substituicao: `${n(Number(a.fc), 4)} − ${n(Number(a.re), 4)}`,
-      resultado: `${((Number(a.fc) - Number(a.re)) * 100).toFixed(2).replace(".", ",")} pontos percentuais`,
+      passo: "8. O reajuste como o comprador sente",
+      formula: "re líquido = re × (1 − alíquota IBS+CBS)",
+      substituicao: `${n(Number(a.re), 4)} × (1 − ${n(Number(p.aliquota), 4)})`,
+      resultado: `${pct(liq)} — parte do reajuste volta a ele como crédito`,
+    });
+  }
+  if (a.fc != null && liqM != null) {
+    const liq = liqM;
+    passos.push({
+      passo: "9. Folga da negociação",
+      formula: "folga = fc − re líquido",
+      substituicao: `${n(Number(a.fc), 4)} − ${n(liq, 4)}`,
+      resultado: `${((Number(a.fc) - liq) * 100).toFixed(2).replace(".", ",")} pontos percentuais`,
+    });
+  }
+  /**
+   * O CENÁRIO DE TABELA ÚNICA — o caminho que o motor não usa e o empresário
+   * pode ter. Medido: em 636 de 1.694 combinações a tabela única fecha onde a
+   * diferenciada não fecha, e em nenhuma o contrário.
+   */
+  const unicoM = reUnicoDe(a);
+  if (unicoM != null && unicoM > 0) {
+    passos.push({
+      passo: "10. E se a empresa tiver uma tabela só",
+      formula: "re único = cl (o custo se espalha por toda a receita)",
+      substituicao: `${n(unicoM, 4)}`,
+      resultado: `${pct(unicoM)} de reajuste em TODOS os preços`,
     });
   }
   return passos;
