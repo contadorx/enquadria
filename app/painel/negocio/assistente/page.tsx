@@ -31,9 +31,13 @@ export default function AssistenteAdmin() {
       return;
     }
     setCfg(data as never);
-    const { data: n } = await supabase.from("nps_respostas").select("nota");
+    /* NPS "—" e 0 indicações por FALHA de leitura são idênticos a "ninguém
+       respondeu ainda" — e o placar é justamente o que diz se vale continuar */
+    const { data: n, error: eN } = await supabase.from("nps_respostas").select("nota");
+    if (eN) setErro(`Não consegui ler as respostas de NPS: ${eN.message}`);
     setNotas(((n ?? []) as { nota: number }[]).map((x) => x.nota));
-    const { count } = await supabase.from("indicacoes").select("id", { count: "exact", head: true });
+    const { count, error: eI } = await supabase.from("indicacoes").select("id", { count: "exact", head: true });
+    if (eI) setErro(`Não consegui ler as indicações: ${eI.message}`);
     setIndicacoes(count ?? 0);
   }
 
@@ -44,12 +48,21 @@ export default function AssistenteAdmin() {
     // esta tela é client component e chama carregar() logo abaixo, que relê do
     // banco; não há tela de servidor mostrando estes valores
     const supabase = createClient();
-    const { error } = await supabase
+    /* `.select()` no update: RLS que recusa escrita devolve ZERO LINHAS, não
+       erro. Sem pedir a linha de volta, a tela mostra "Salvo ✓" tendo salvo
+       nada — o mesmo padrão que a 0043 documenta e a tela de Contas já
+       corrigiu. */
+    const { data: alterado, error } = await supabase
       .from("assistente_config")
       // ux-ok: sem tela de servidor lendo isto — carregar() relê logo abaixo
       .update({ ...campos, atualizado_em: new Date().toISOString() })
-      .eq("id", 1);
+      .eq("id", 1)
+      .select("id");
     if (error) { setErro(error.message); return; }
+    if (!alterado?.length) {
+      setErro("O banco não alterou nenhuma linha — provavelmente falta permissão para editar esta configuração.");
+      return;
+    }
     setOk(true);
     setTimeout(() => setOk(false), 2000);
     await carregar();

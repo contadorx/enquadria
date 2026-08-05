@@ -1,4 +1,4 @@
-import { carregarNegocio, brl } from "@/lib/negocio";
+import { carregarNegocio, brl, mrrDe } from "@/lib/negocio";
 import { statusAsaas } from "@/lib/asaas";
 import { createClient } from "@/lib/supabase-server";
 import { PlanoCartao, NovoPlano, TestarAsaas } from "@/components/NegocioUI";
@@ -43,8 +43,12 @@ export default async function PlanosNegocio() {
     if (e.vencimento && new Date(e.vencimento) < new Date()) continue;
     uso[e.plano_id] = uso[e.plano_id] || { n: 0, mrr: 0 };
     uso[e.plano_id].n++;
-    const v = Number(e.valor_centavos || 0);
-    uso[e.plano_id].mrr += e.plano_ciclo === "anual" ? Math.round(v / 12) : e.plano_ciclo === "mensal" ? v : 0;
+    /* a MESMA conta da aba Visão, com a queda para o preço de tabela quando a
+       assinatura não tem valor gravado. Recalculado à mão aqui, este cartão
+       mostrava "3 assinantes · R$ 0,00 de MRR" enquanto a Visão mostrava
+       R$ 141 — e é justamente este número que a tela pede para olhar antes de
+       mexer no preço */
+    uso[e.plano_id].mrr += mrrDe(e, n.planos);
   }
 
   const publicos = n.planos.filter((p) => p.ativo && p.publico);

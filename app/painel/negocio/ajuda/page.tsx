@@ -46,7 +46,13 @@ export default function AjudaAdmin() {
     const supabase = createClient();
     const { data, error } = await supabase
       .from("ajuda_artigos")
-      .select("id, slug, titulo, resumo, categoria, corpo, video_url, capa_url, publicado, publicado_em, ordem, atualizado_em")
+      /* `tipo` e `destaque` FALTAVAM AQUI, e o save gravava os dois de volta
+         com o valor padrão: abrir uma notícia do Quadro da Reforma
+         (tipo='noticia'), corrigir uma vírgula e salvar a convertia em artigo
+         de ajuda — e ela sumia de /painel/reforma, que filtra por tipo. A tela
+         dizia "Salvo ✓". Coluna que o formulário grava tem que ser coluna que
+         o formulário leu. */
+      .select("id, slug, titulo, resumo, categoria, tipo, destaque, corpo, video_url, capa_url, publicado, publicado_em, ordem, atualizado_em")
       .order("categoria")
       .order("ordem");
     if (error) {
@@ -106,6 +112,7 @@ export default function AjudaAdmin() {
 
     setSalvando(true);
     const supabase = createClient();
+    const jaPublicadoEm = sel ? (lista.find((x) => x.id === sel)?.publicado_em ?? null) : null;
     const corpo = {
       slug,
       titulo: f.titulo.trim(),
@@ -118,8 +125,18 @@ export default function AjudaAdmin() {
       capa_url: f.capa_url.trim() || null,
       publicado: f.publicado,
       ordem: Number(f.ordem) || 100,
-      // publicado_em marca a PRIMEIRA publicação; atualizado_em é do gatilho
-      ...(f.publicado ? { publicado_em: new Date().toISOString() } : {}),
+      /**
+       * `publicado_em` MARCA A PRIMEIRA PUBLICAÇÃO — e era reescrito a cada
+       * save, contrariando o próprio comentário que estava aqui.
+       *
+       * O efeito: corrigir hoje um erro de digitação numa notícia de março
+       * jogava ela para o topo de /painel/reforma (ordenado por publicado_em
+       * desc) com a data de hoje. O contador lia como novidade da semana algo
+       * publicado há meses — e a data do documento passava a mentir.
+       *
+       * Agora só é gravado quando ainda não existe.
+       */
+      ...(f.publicado && !jaPublicadoEm ? { publicado_em: new Date().toISOString() } : {}),
     };
 
     const { error } = sel

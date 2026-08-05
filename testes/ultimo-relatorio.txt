@@ -22,7 +22,7 @@ ok    suíte motor (79 asserções)
 ok    suíte muro (11 asserções)
 ok    suíte negocio (20 asserções)
 ok    suíte nps (40 asserções)
-ok    suíte reguas (50 asserções)
+ok    suíte reguas (52 asserções)
 ok    suíte roteiro (24 asserções)
 
 ── Auditoria de UX (percepção, não estética) ───────────────────
@@ -143,6 +143,25 @@ ok    sincronizar também marca a FATURA como paga
 ok    a configuração é mesclada no servidor, não substituída
 ok    gerar_cobranca valida o documento ANTES de criar a assinatura
 ok    e o motivo do Asaas sobe em vez de virar ok:true
+ok    estorno concluído revoga o acesso
+ok    ...e chargeback apenas ABERTO mantém o acesso
+ok    sem service role o webhook devolve 5xx, para o Asaas reenviar
+ok    a validade nunca regride num evento repetido
+ok    o pagamento alimenta as colunas de cobrança do escritório
+ok    o editor de ajuda LÊ tipo e destaque antes de gravá-los
+ok    e publicado_em só é gravado na PRIMEIRA publicação
+ok    MRR em risco não conta o mesmo escritório duas vezes
+ok    a conversão do funil não passa de 100%
+ok    e o painel avisa quando um número zerou por falha de leitura
+ok    o mês do caixa é o do calendário brasileiro
+ok    a escada de cobrança só considera degrau LIGADO
+ok    o pós-janela é um toque só, não um por fase
+ok    o pré-vencimento não sai na rodada em que a cobrança nasce
+ok    o limite por execução corta quem VAI sair, não quem está travado
+ok    e as vencidas são apuradas pelo dia do Brasil
+ok    plano com identificador vazio é recusado
+ok    o destaque só é limpo depois de confirmar que o plano existe
+ok    limpar a data de acesso também espelha em valido_ate
 ok    o contexto das réguas LÊ o erro da RPC em vez de descartá-lo
 ok    e fonte quebrada não vira fila vazia silenciosa
 ok    o cron não relata 0 planejados sem dizer nada
@@ -253,4 +272,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 216 verificações automáticas
+TUDO PASSOU — 235 verificações automáticas

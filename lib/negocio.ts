@@ -29,6 +29,7 @@ export async function carregarNegocio(): Promise<Negocio> {
     funil: [], porPlano: [],
     uso: { empresas: 0, analises: 0, laudos: 0, termos: 0, assinados: 0 },
     historico: [],
+    avisos: [],
     caixa: { recebido_mes: 0, recebido_total: 0, aberto: 0, vencido: 0, vencidas: 0, pagas: 0 },
     janela: { abre: "2026-09-01", fecha: "2026-09-30", dias: 0, pct: 0 },
     acoes: [], meta: { assinantes: 0, mrr: 0 },
@@ -60,7 +61,13 @@ export async function carregarNegocio(): Promise<Negocio> {
     assinados: Number(e.assinados || 0),
   })) as Escritorio[];
 
-  const [{ data: planosRaw }, { data: recursosRaw }, { data: histRaw }, { data: cfgRaw }, { data: faturasRaw }] =
+  const [
+    { data: planosRaw, error: ePlanos },
+    { data: recursosRaw },
+    { data: histRaw },
+    { data: cfgRaw },
+    { data: faturasRaw, error: eFaturas },
+  ] =
     await Promise.all([
       supabase.from("planos").select("*").order("ordem", { ascending: true }),
       supabase.from("plataforma_recursos").select("*").order("ordem", { ascending: true }),
@@ -81,6 +88,19 @@ export async function carregarNegocio(): Promise<Negocio> {
 
   const config: Record<string, any> = {};
   for (const c of ((cfgRaw as any[]) || [])) config[c.chave] = c.valor;
+
+  /**
+   * O CAIXA PRECISA DIZER QUANDO NÃO SABE.
+   *
+   * O erro destas consultas era descartado. Se o SELECT em `faturas` falhasse,
+   * o bloco "Caixa — o que entrou de verdade" mostrava R$ 0 recebido, R$ 0
+   * total, 0 cobranças pagas — com o subtítulo "fonte: central de faturas" e
+   * nenhum aviso. Zero por falha é indistinguível de zero por não ter entrado
+   * dinheiro, e é a pior forma de errar num painel de receita.
+   */
+  const avisos: string[] = [];
+  if (eFaturas) avisos.push(`o caixa não pôde ser lido: ${eFaturas.message}`);
+  if (ePlanos) avisos.push(`a lista de planos não pôde ser lida: ${ePlanos.message}`);
 
   const caixa = caixaDe(
     ((faturasRaw as any[]) || []) as Parameters<typeof caixaDe>[0],
@@ -106,7 +126,18 @@ export async function carregarNegocio(): Promise<Negocio> {
     const d = e.ultima_analise ? dias(e.ultima_analise) : e.criado_em ? dias(e.criado_em) : 0;
     return d >= 21;
   });
-  const mrrEmRisco = [...vencendo, ...parados].reduce((s, e) => s + mrrDe(e, planos), 0);
+  /**
+   * SEM DUPLICAR — os dois conjuntos se sobrepõem, e no pior caso.
+   *
+   * Assinante que vence em 5 dias E está sem análise há 30 é o perfil de churn
+   * mais típico que existe: ele entra nas duas listas, e a soma contava a
+   * mesma assinatura duas vezes. O card mostrava R$ 94 para uma assinatura de
+   * R$ 47 — e com poucos assinantes o "em risco" podia passar do MRR total,
+   * que é um número impossível na cara de quem olha.
+   */
+  const emRisco = new Map<string, Escritorio>();
+  for (const e of [...vencendo, ...parados]) emRisco.set(e.id, e);
+  const mrrEmRisco = Array.from(emRisco.values()).reduce((s, e) => s + mrrDe(e, planos), 0);
 
   const inicioMes = new Date();
   inicioMes.setDate(1);
@@ -132,7 +163,19 @@ export async function carregarNegocio(): Promise<Negocio> {
   // A conversão que importa não é cadastro→pago: é PROVOU→pago. Quem emitiu um
   // laudo viu o produto inteiro; se não assinou depois disso, o problema é
   // preço ou valor percebido, não onboarding.
-  const conversao = comLaudo ? Math.round((ativos.length / comLaudo) * 100) : 0;
+  /**
+   * PROVOU → PAGOU, e o numerador tem que ser subconjunto do denominador.
+   *
+   * Era `ativos / comLaudo`, e assinar não exige ter emitido laudo: com 5
+   * assinantes e 3 escritórios que emitiram laudo, o funil imprimia "3 já
+   * emitiram laudo · 167% desses assinam". Percentual acima de 100 num funil
+   * não é arredondamento: é a conta olhando para conjuntos diferentes.
+   *
+   * Agora conta quem emitiu laudo E assinou.
+   */
+  const idsAtivos = new Set(ativos.map((e) => e.id));
+  const provaramEPagaram = escritorios.filter((e) => e.laudos > 0 && idsAtivos.has(e.id)).length;
+  const conversao = comLaudo ? Math.round((provaramEPagaram / comLaudo) * 100) : 0;
 
   // -------------------------------------------------------------- por plano
   const mapa: Record<string, { nome: string; assinantes: number; mrr: number }> = {};
@@ -342,6 +385,7 @@ export async function carregarNegocio(): Promise<Negocio> {
     porPlano,
     uso,
     historico,
+    avisos,
     caixa,
     janela,
     acoes,

@@ -92,6 +92,8 @@ export interface Negocio {
   historico: { mes: string; mrr: number; assinantes: number }[];
   /** o extrato: o que entrou, o que está em aberto, o que venceu */
   caixa: Caixa;
+  /** o que não pôde ser lido — número zerado por falha não pode passar por número */
+  avisos: string[];
   janela: { abre: string; fecha: string; dias: number; pct: number };
   acoes: Acao[];
   meta: { assinantes: number; mrr: number };
@@ -181,12 +183,35 @@ export interface Caixa {
   pagas: number;
 }
 
+/**
+ * O MÊS E O DIA NO CALENDÁRIO BRASILEIRO.
+ *
+ * `toISOString().slice(0,7)` é o mês em UTC. Depois das 21h do último dia do
+ * mês, o UTC já virou: o card "Recebido no mês" zerava e passava a mostrar o
+ * mês seguinte enquanto o usuário ainda estava no mês corrente. E um pagamento
+ * confirmado em 31/08 às 22h era gravado como 01/09 e contava em setembro.
+ */
+const emSP = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Sao_Paulo",
+  year: "numeric", month: "2-digit", day: "2-digit",
+});
+export function diaBr(d: Date): string {
+  return emSP.format(d);
+}
+export function mesBr(d: Date | string): string {
+  if (typeof d === "string") {
+    // data-calendário já vem no formato certo; timestamp passa pelo fuso
+    return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d.slice(0, 7) : emSP.format(new Date(d)).slice(0, 7);
+  }
+  return emSP.format(d).slice(0, 7);
+}
+
 export function caixaDe(
   faturas: { status: string; valor_centavos: number; vencimento?: string | null; pago_em?: string | null }[],
   hoje: Date
 ): Caixa {
-  const mes = hoje.toISOString().slice(0, 7);
-  const hojeISO = hoje.toISOString().slice(0, 10);
+  const mes = mesBr(hoje);
+  const hojeISO = diaBr(hoje);
   const c: Caixa = { recebido_mes: 0, recebido_total: 0, aberto: 0, vencido: 0, vencidas: 0, pagas: 0 };
 
   for (const f of faturas) {
@@ -194,7 +219,7 @@ export function caixaDe(
     if (f.status === "pago") {
       c.recebido_total += v;
       c.pagas++;
-      if ((f.pago_em ?? "").slice(0, 7) === mes) c.recebido_mes += v;
+      if (f.pago_em && mesBr(f.pago_em) === mes) c.recebido_mes += v;
       continue;
     }
     if (f.status === "cancelado" || f.status === "estornado") continue;

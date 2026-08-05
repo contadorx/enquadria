@@ -101,13 +101,27 @@ export async function POST(req: Request) {
       if (patch.preco_centavos !== undefined && Number(patch.preco_centavos) < 0)
         return NextResponse.json({ erro: "preço não pode ser negativo" }, { status: 400 });
 
+      /**
+       * CONFIRMA QUE O PLANO EXISTE ANTES DE MEXER NOS OUTROS.
+       *
+       * A limpeza do `destaque` rodava primeiro, sem checar nada. Um POST com
+       * id errado (a tela aberta em outra aba, um plano renomeado) zerava o
+       * destaque de TODOS os planos, não gravava nada no alvo, e respondia
+       * `ok: true`: a exclusividade que a linha promete sumia sem aviso.
+       */
+      const { data: existe } = await supabase.from("planos").select("id").eq("id", id).maybeSingle();
+      if (!existe) return NextResponse.json({ erro: "plano não encontrado" }, { status: 404 });
+
       // destaque é exclusivo: só um plano pode ser "o mais escolhido"
       if (patch.destaque === true) {
-        await supabase.from("planos").update({ destaque: false }).neq("id", id);
+        const { error: eLimpa } = await supabase.from("planos").update({ destaque: false }).neq("id", id);
+        if (eLimpa) return NextResponse.json({ erro: eLimpa.message }, { status: 500 });
       }
 
-      const { error } = await supabase.from("planos").update(patch).eq("id", id);
+      const { data: alterado, error } = await supabase
+        .from("planos").update(patch).eq("id", id).select("id");
       if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
+      if (!alterado?.length) return NextResponse.json({ erro: "nada foi alterado" }, { status: 500 });
       return NextResponse.json({ ok: true });
     }
 
@@ -120,6 +134,21 @@ export async function POST(req: Request) {
         .replace(/[\u0300-\u036f]/g, "")
         .replace(/[^a-z0-9]+/g, "_")
         .replace(/^_|_$/g, "");
+
+      /**
+       * ID VAZIO É PLANO PRESO PARA SEMPRE.
+       *
+       * Um nome só de símbolos ("+++", "★") deixa o slug vazio, e a linha
+       * entrava com `id = ""`. Depois disso ela não pode mais ser editada
+       * (`salvar_plano` rejeita `!id` com "plano inválido") nem apagada (não
+       * existe ação de exclusão): fica na listagem do painel para sempre.
+       */
+      if (!id) {
+        return NextResponse.json(
+          { erro: "Não consegui derivar um identificador do nome. Use letras ou números no nome do plano." },
+          { status: 400 }
+        );
+      }
 
       const { data: ultimo } = await supabase
         .from("planos").select("ordem").order("ordem", { ascending: false }).limit(1).maybeSingle();
@@ -252,12 +281,28 @@ export async function POST(req: Request) {
       const patch: Record<string, unknown> = {};
       for (const c of ["plano_id", "status", "valor_centavos", "vencimento", "origem"])
         if (corpo[c] !== undefined) patch[c] = corpo[c] === "" ? null : corpo[c];
-      if (patch.vencimento) patch.valido_ate = patch.vencimento; // mantém a coluna antiga em dia
+      /**
+       * LIMPAR A DATA TAMBÉM É UMA MUDANÇA.
+       *
+       * Era `if (patch.vencimento)`, então `vencimento: null` — o campo "Acesso
+       * até" apagado pela tela — não espelhava em `valido_ate`. A resposta era
+       * `ok: true`, a tela dizia "Assinatura salva", e nada mudava para quem
+       * lê: a RPC faz `coalesce(vencimento, valido_ate)` e devolvia a data
+       * velha, e o gate de acesso lê `valido_ate` — o acesso continuava
+       * liberado. O campo que você acabou de apagar reaparecia na tela.
+       */
+      if ("vencimento" in patch) patch.valido_ate = patch.vencimento;
 
       const assinaturaId = corpo.assinatura_id ? String(corpo.assinatura_id) : null;
       if (assinaturaId) {
-        const { error } = await db.from("assinaturas").update(patch).eq("id", assinaturaId);
+        /* update de 0 linhas (id inexistente, RLS) não devolve erro: sem pedir
+           a linha de volta, "Assinatura salva" seria dito sobre coisa nenhuma */
+        const { data: alterada, error } = await db
+          .from("assinaturas").update(patch).eq("id", assinaturaId).select("id");
         if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
+        if (!alterada?.length) {
+          return NextResponse.json({ erro: "assinatura não encontrada — nada foi alterado" }, { status: 404 });
+        }
       } else {
         const { error } = await db.from("assinaturas").insert({
           tenant_id: tenantId,

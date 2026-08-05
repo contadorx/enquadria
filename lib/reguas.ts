@@ -415,10 +415,18 @@ export function planejar(ctx: Contexto): Envio[] {
        */
       const f = faseDaJanela();
       if (e.laudos > 0 && (f.fase === "aliquota" || f.fase === "cancelamento")) {
+        /**
+         * UM TOQUE, NÃO DOIS.
+         *
+         * A chave incluía a FASE, e a regra cobre duas fases do calendário com
+         * o mesmo texto: saía em outubro (`aliquota`) e de novo em novembro
+         * (`cancelamento`), com assunto e corpo idênticos. A descrição da
+         * própria regra diz "de 01/10 a 30/11" — um período, uma mensagem.
+         */
         monta(
           "pos_janela_revisao",
           e,
-          `pos_janela_revisao:${e.id}:${f.fase}`,
+          `pos_janela_revisao:${e.id}`,
           `fase ${f.fase} com ${e.laudos} laudo(s) emitido(s)`,
           { dias: f.dias ?? 0 }
         );
@@ -461,7 +469,10 @@ export function planejar(ctx: Contexto): Envio[] {
        * caso em que nada foi avisado.
        * ═════════════════════════════════════════════════════════════════════
        */
+      const antesDaGerada = out.length;
       monta("cobranca_gerada", e, `cobranca_gerada:${e.assinatura_id}`, "cobrança emitida", vars);
+      /* o e-mail da cobrança está saindo AGORA, nesta mesma rodada? */
+      const geradaSaiAgora = out.length > antesDaGerada;
 
       /**
        * ═════════════════════════════════════════════════════════════════════
@@ -488,7 +499,17 @@ export function planejar(ctx: Contexto): Envio[] {
         const atraso = dias(e.vencimento);
         if (atraso < 0) {
           const faltam = -atraso;
-          if (faltam <= (ctx.config.aviso_pre_vencimento_dias ?? 3)) {
+          /**
+           * NÃO NA MESMA RODADA EM QUE A COBRANÇA NASCEU.
+           *
+           * A cobrança é criada com vencimento em 3 dias e o aviso
+           * pré-vencimento também vale 3 — então `faltam <= 3` era verdade já
+           * na primeira execução, e chegavam em sequência "Sua cobrança
+           * Enquadria — R$ 47,00" e "Sua cobrança vence em 3 dias", sobre a
+           * mesma fatura recém-criada. Aviso de vencimento pressupõe que já
+           * houve tempo de pagar.
+           */
+          if (!geradaSaiAgora && faltam <= (ctx.config.aviso_pre_vencimento_dias ?? 3)) {
             monta("cobranca_pre_vencimento", e, `cobranca_pre_vencimento:${e.assinatura_id}`, `vence em ${faltam} dia(s)`, {
               ...vars,
               dias: faltam,
@@ -507,12 +528,29 @@ export function planejar(ctx: Contexto): Envio[] {
            * degrau que diga o que vai acontecer, o corte de acesso chega sem
            * ter sido anunciado.
            */
-          const escada: [string, number][] = [
-            ["cobranca_no_dia", regras["cobranca_no_dia"]?.dias ?? 0],
-            ["cobranca_d1", regras["cobranca_d1"]?.dias ?? 1],
-            ["cobranca_d5", regras["cobranca_d5"]?.dias ?? 5],
-            ["cobranca_d10", regras["cobranca_d10"]?.dias ?? 10],
-          ];
+          /**
+           * SÓ DEGRAU LIGADO ENTRA NA ESCADA.
+           *
+           * A lista usava o valor PADRÃO (`?? 10`) mesmo para regra desativada
+           * no banco, e depois `monta` saía calado porque `regras[chave]` não
+           * existia. Efeito: desligar "Aviso de suspensão" para não ameaçar
+           * suspensão fazia o inadimplente parar de receber QUALQUER cobrança
+           * a partir do D+10 — o degrau desligado virava o alvo e bloqueava os
+           * de baixo, que já tinham sido enviados.
+           *
+           * Filtrando pelas regras ativas, desligar um degrau faz o anterior
+           * voltar a ser o mais alto, que é o comportamento que alguém espera
+           * ao desligar um degrau.
+           */
+          const escada = ([
+            ["cobranca_no_dia", 0],
+            ["cobranca_d1", 1],
+            ["cobranca_d5", 5],
+            ["cobranca_d10", 10],
+          ] as [string, number][])
+            .filter(([chave]) => !!regras[chave])
+            .map(([chave, padrao]) => [chave, regras[chave]?.dias ?? padrao] as [string, number])
+            .sort((x, y) => x[1] - y[1]);
           const atingidos = escada.filter(([, d]) => atraso >= d);
           const alvo = atingidos.length ? atingidos[atingidos.length - 1] : null;
           if (alvo) {
@@ -569,7 +607,21 @@ export function planejar(ctx: Contexto): Envio[] {
     }
   }
 
-  return out.slice(0, ctx.config.limite_por_execucao ?? 200);
+  /**
+   * O LIMITE CORTA QUEM VAI SAIR, não quem está travado.
+   *
+   * O `slice` vinha antes de separar os sem destinatário: escritório órfão
+   * (que nunca grava trava e volta em toda execução) ocupava cota para sempre,
+   * e como a lista vem ordenada por criação, o corte caía sempre nos mesmos —
+   * os mais antigos nunca recebiam. Com limite 1 e dois escritórios,
+   * reproduzia-se o absurdo: a única vaga ia para um envio sem endereço.
+   *
+   * Os travados continuam na lista (a tela os mostra e explica), só não gastam
+   * a cota de quem pode receber.
+   */
+  const teto = ctx.config.limite_por_execucao ?? 200;
+  const podem = out.filter((x) => !!x.para).slice(0, teto);
+  return [...podem, ...out.filter((x) => !x.para)];
 }
 
 // ---------------------------------------------------------------------------
@@ -767,12 +819,26 @@ export async function vencidasPendentes(
   db: any,
   opts: { marcar?: boolean } = {}
 ): Promise<{ ids: string[]; marcadas: number }> {
-  const hoje = new Date().toISOString().slice(0, 10);
-  const { data } = await db
+  /**
+   * O DIA É O DO BRASIL. `toISOString()` é UTC: das 21h às 23h59 de Brasília o
+   * UTC já virou, e a assinatura que vence HOJE entrava na lista de vencidas.
+   * Com `bloquear_automatico` ligado, o cron das 21h cortava o acesso três
+   * horas antes do fim do dia pelo qual o cliente pagou.
+   */
+  const hoje = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
+
+  const { data, error: eLer } = await db
     .from("assinaturas")
     .select("id, tenant_id, vencimento")
     .eq("status", "ativa")
     .lt("vencimento", hoje);
+
+  /* leitura falhando devolvia lista vazia, e o cron respondia
+     `vencidas_encontradas: 0` — igualzinho a um dia sem nenhuma vencida */
+  if (eLer) throw new Error(`não consegui ler as assinaturas vencidas: ${eLer.message}`);
 
   const ids = ((data as any[]) || []).map((a) => a.id as string);
   if (!ids.length || !opts.marcar) return { ids, marcadas: 0 };

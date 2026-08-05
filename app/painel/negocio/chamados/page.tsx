@@ -62,11 +62,15 @@ export default function ChamadosAdmin() {
     setLista(cs);
 
     if (cs.length) {
-      const { data: m } = await supabase
+      const { data: m, error: eMsg } = await supabase
         .from("chamado_mensagens")
         .select("id, chamado_id, autor, corpo, criado_em, notificado_em")
         .in("chamado_id", cs.map((c) => c.id))
         .order("criado_em");
+      /* sem histórico, o alarme "e-mail não saiu" (que depende de
+         notificado_em) some da tela — e ele é a razão de ser desta página.
+         Falha de leitura tem que aparecer, não virar chamado sem resposta. */
+      if (eMsg) setErro(`Não consegui ler o histórico das conversas: ${eMsg.message}`);
       setMsgs((m ?? []) as unknown as Msg[]);
     }
   }

@@ -23,11 +23,16 @@ export default async function Cobrancas() {
    * de quem. É o que responde "esse pagamento entrou?" sem abrir o Asaas.
    */
   const supabase = createClient();
-  const { data: faturas } = await supabase
+  const { data: faturas, error: eFaturas } = await supabase
     .from("faturas")
     .select("id, tenant_id, plano_nome, descricao, valor_centavos, status, vencimento, pago_em, link_pagamento")
     .order("vencimento", { ascending: false })
     .limit(30);
+
+  /* "Nenhuma fatura registrada ainda" é a frase que a própria tela ensina a
+     interpretar como "o webhook não entregou". Um erro de LEITURA virando essa
+     frase transforma falha de banco em diagnóstico errado sobre o Asaas. */
+  const erroFaturas = eFaturas ? eFaturas.message : null;
   const ultimas = (faturas ?? []) as unknown as Fatura[];
   const hoje2 = new Date();
   const temAsaas = !!process.env.ASAAS_API_KEY;
@@ -50,7 +55,12 @@ export default async function Cobrancas() {
   const dias = (d: string) => Math.floor((hoje.getTime() - new Date(d).getTime()) / 86_400_000);
 
   const pendentes = n.escritorios.filter((e) => e.status === "pendente");
-  const aReceber = pendentes.reduce((s, e) => s + Number(e.valor_centavos || 0), 0);
+  /* com a queda para o preço do plano: assinatura sem valor gravado fazia o
+     card "A receber" mostrar R$ 0,00 contradizendo o MRR da mesma página */
+  const valorDe = (e: (typeof n.escritorios)[number]) =>
+    Number(e.valor_centavos || 0) ||
+    Number(n.planos.find((p) => p.id === e.plano_id)?.preco_centavos || 0);
+  const aReceber = pendentes.reduce((s, e) => s + valorDe(e), 0);
 
   const ativos = n.escritorios.filter((e) => e.status === "ativa" && e.vencimento);
   const degraus = [
@@ -171,7 +181,12 @@ export default async function Cobrancas() {
           O que o Asaas confirmou, direto da tabela alimentada pelo webhook. Fatura que não aparece
           aqui é fatura que o webhook não entregou.
         </p>
-        {ultimas.length === 0 ? (
+        {erroFaturas ? (
+          <p className="rounded border border-amarelo/40 bg-amarelowash p-4 text-[13px]">
+            Não consegui ler as faturas: {erroFaturas}. Isto é falha de leitura, <b>não</b> significa
+            que o webhook deixou de entregar.
+          </p>
+        ) : ultimas.length === 0 ? (
           <p className="rounded border border-line bg-surface p-4 text-[13px] text-muted">
             Nenhuma fatura registrada ainda.
           </p>

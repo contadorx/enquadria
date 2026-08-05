@@ -824,6 +824,97 @@ secao("Contratação — o clique que não fazia nada");
        /cob\.ativo && !cob\.checkout_url/.test(ng));
   }
 
+  /**
+   * ═════════════════════════════════════════════════════════════════════════
+   * A SEGUNDA LEVA DA VARREDURA — o que estava triado e agora está fechado.
+   * ═════════════════════════════════════════════════════════════════════════
+   */
+  {
+    const wh3 = fs.readFileSync(path.join(RAIZ, "app/api/asaas/route.ts"), "utf8");
+
+    /* dinheiro devolvido tem que derrubar o acesso; chargeback ABERTO é
+       acusação, não veredito — cortar quem talvez tenha razão custa o cliente */
+    ok("estorno concluído revoga o acesso",
+       /const DEVOLVIDO = new Set/.test(wh3) && /if \(devolvido && assinaturaId\)/.test(wh3));
+    ok("...e chargeback apenas ABERTO mantém o acesso",
+       /const CONTESTADO = new Set/.test(wh3) && /contestado: true/.test(wh3));
+
+    /* 200 sem ter gravado faz o Asaas descartar o evento para sempre */
+    ok("sem service role o webhook devolve 5xx, para o Asaas reenviar",
+       /if \(!admin\)[\s\S]{0,240}status: 503/.test(wh3));
+
+    /* reprocessamento não pode tirar acesso já concedido */
+    ok("a validade nunca regride num evento repetido",
+       /jaTinha && jaTinha > data \? jaTinha : data/.test(wh3));
+
+    /* as colunas que a aba Contas soma e ninguém escrevia */
+    ok("o pagamento alimenta as colunas de cobrança do escritório",
+       /ultimo_pagamento:/.test(wh3) && /valor_mensal: mensalizado/.test(wh3));
+  }
+
+  {
+    const aj = fs.readFileSync(path.join(RAIZ, "app/painel/negocio/ajuda/page.tsx"), "utf8");
+    /* coluna que o formulário grava tem que ser coluna que o formulário leu */
+    const sel = (aj.match(/\.select\("id, slug[^"]*"\)/) || [""])[0];
+    ok("o editor de ajuda LÊ tipo e destaque antes de gravá-los",
+       /tipo/.test(sel) && /destaque/.test(sel), sel || "não achei o select");
+    ok("e publicado_em só é gravado na PRIMEIRA publicação",
+       /!jaPublicadoEm \? \{ publicado_em/.test(aj));
+
+    const ncalc = fs.readFileSync(path.join(RAIZ, "lib/negocio.ts"), "utf8");
+    ok("MRR em risco não conta o mesmo escritório duas vezes", /emRisco\.set\(e\.id, e\)/.test(ncalc));
+    /* procurar só pelo nome da variável passava com a CONTA revertida: a
+       declaração continuava lá, sem ninguém usar. A checagem é na expressão. */
+    ok("a conversão do funil não passa de 100%",
+       /const conversao = comLaudo \? Math\.round\(\(provaramEPagaram \/ comLaudo\)/.test(ncalc),
+       (ncalc.match(/const conversao = [^;]*/) || ["não achei a conta"])[0]);
+    ok("e o painel avisa quando um número zerou por falha de leitura",
+       /avisos\.push/.test(ncalc));
+
+    const calc2 = fs.readFileSync(path.join(RAIZ, "lib/negocio-calc.ts"), "utf8");
+    /* o mês em UTC zerava o caixa depois das 21h do dia 31 */
+    ok("o mês do caixa é o do calendário brasileiro",
+       /export function mesBr/.test(calc2) && !/hoje\.toISOString\(\)\.slice\(0, 7\)/.test(calc2));
+  }
+
+  {
+    const rg2 = fs.readFileSync(path.join(RAIZ, "lib/reguas.ts"), "utf8");
+    /* degrau desligado não pode bloquear os de baixo */
+    ok("a escada de cobrança só considera degrau LIGADO",
+       /\.filter\(\(\[chave\]\) => !!regras\[chave\]\)/.test(rg2));
+    /* a régua cobre um período; a chave por fase mandava dois e-mails iguais */
+    ok("o pós-janela é um toque só, não um por fase",
+       /`pos_janela_revisao:\$\{e\.id\}`/.test(rg2));
+    /* aviso de vencimento pressupõe que já houve tempo de pagar */
+    ok("o pré-vencimento não sai na rodada em que a cobrança nasce",
+       /!geradaSaiAgora/.test(rg2));
+    /* o corte de cota caía sempre nos mesmos, e em quem nem podia receber */
+    ok("o limite por execução corta quem VAI sair, não quem está travado",
+       /out\.filter\(\(x\) => !!x\.para\)\.slice\(0, teto\)/.test(rg2));
+    ok("e as vencidas são apuradas pelo dia do Brasil",
+       /America\/Sao_Paulo/.test(rg2.slice(rg2.indexOf("export async function vencidasPendentes"))));
+
+    const ng2 = fs.readFileSync(path.join(RAIZ, "app/api/negocio/route.ts"), "utf8");
+    /* a MENSAGEM continua no arquivo mesmo com a guarda desligada (`if (false)`):
+       a checagem é na condição */
+    ok("plano com identificador vazio é recusado",
+       /if \(!id\) \{/.test(ng2) && /Não consegui derivar um identificador/.test(ng2),
+       (ng2.match(/if \(![a-z]+\) \{[\s\S]{0,60}derivar/) || ["a guarda do id sumiu"])[0].slice(0, 60));
+
+    /**
+     * `indexOf` DE ALGO QUE NÃO EXISTE É -1, e -1 é menor que tudo: a
+     * comparação de ordem passava justamente quando a checagem era REMOVIDA.
+     * Exigir a presença antes de comparar a ordem é o que fecha o buraco.
+     */
+    const iExiste = ng2.indexOf('.select("id").eq("id", id).maybeSingle()');
+    const iLimpa = ng2.indexOf("destaque: false");
+    ok("o destaque só é limpo depois de confirmar que o plano existe",
+       iExiste >= 0 && iLimpa >= 0 && iExiste < iLimpa,
+       { confirmacao: iExiste, limpeza: iLimpa });
+    ok("limpar a data de acesso também espelha em valido_ate",
+       /"vencimento" in patch/.test(ng2));
+  }
+
   const rg = fs.readFileSync(path.join(RAIZ, "lib/reguas.ts"), "utf8");
   /* olhar por "error" no arquivo inteiro casaria com qualquer coisa: a
      checagem é na desestruturação da RPC, que era exatamente o que faltava */

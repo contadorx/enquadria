@@ -62,6 +62,19 @@ export default async function NegocioVisao() {
         </p>
       </div>
 
+      {/* zero por falha de leitura não pode passar por zero de verdade */}
+      {n.avisos.length > 0 && (
+        <div className="rounded border border-amarelo/40 bg-amarelowash p-4">
+          <p className="text-[13px] font-bold text-amarelo">Parte dos números não pôde ser lida</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5 text-[12.5px] text-slate2">
+            {n.avisos.map((a) => <li key={a}>{a}</li>)}
+          </ul>
+          <p className="mt-1.5 text-[11.5px] text-muted">
+            Os cartões abaixo mostram zero onde a leitura falhou — não trate como receita zerada.
+          </p>
+        </div>
+      )}
+
       {/* ──────────────────────────────────────── receita RECORRENTE (projeção) */}
       <section>
         <h2 className="mb-2 text-[14px] font-bold">

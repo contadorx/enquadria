@@ -12,7 +12,10 @@ export const dynamic = "force-dynamic";
 
 export default async function CursoNegocio() {
   const supabase = createClient();
-  const { data } = await supabase.from("curso_videos").select("slug, video_url");
+  /* leitura falhando deixa TODOS os campos vazios ("aula em breve") — e o
+     admin, ao salvar um deles, publica por cima de um mapa que ele acredita
+     estar vazio */
+  const { data, error: eVideos } = await supabase.from("curso_videos").select("slug, video_url");
 
   const mapa: MapaVideos = Object.fromEntries(
     (data ?? []).map((l) => [l.slug as string, (l.video_url as string | null) ?? ""])
@@ -20,6 +23,13 @@ export default async function CursoNegocio() {
 
   return (
     <div>
+      {eVideos && (
+        <p className="mb-4 rounded border border-amarelo/40 bg-amarelowash p-3 text-[12.5px]">
+          Não consegui ler os vídeos já publicados ({eVideos.message}). Os campos abaixo aparecem
+          vazios por causa disso — <b>não</b> porque as aulas estejam sem link. Salvar agora pode
+          apagar um link existente.
+        </p>
+      )}
       <h1 className="text-[19px] font-bold tracking-tight">Vídeos do curso</h1>
       <p className="mt-0.5 max-w-[76ch] text-[13px] leading-relaxed text-muted">
         Cole o link do YouTube de cada aula e salve — a aula entra no ar na hora, sem deploy. Serve

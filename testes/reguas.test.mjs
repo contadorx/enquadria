@@ -210,9 +210,27 @@ ok(sete.filter((c) => c.startsWith("cobranca_d")).length === 1,
 ok(chavesCob(emDias(-12)).includes("cobranca_d10"),
    "12 dias de atraso: sai o aviso de suspensão");
 
-// antes do vencimento, dentro da janela configurada
-ok(chavesCob(emDias(2)).includes("cobranca_pre_vencimento"),
-   "faltando 2 dias: sai o pré-vencimento");
+/* ─────────────────────────────────────────────────────────────────────────
+ * O AVISO DE VENCIMENTO PRESSUPÕE QUE JÁ HOUVE TEMPO DE PAGAR.
+ *
+ * A cobrança nasce com vencimento em 3 dias e o aviso pré-vencimento também
+ * vale 3: `faltam <= 3` era verdade já na primeira execução, e chegavam em
+ * sequência "Sua cobrança Enquadria — R$ 47,00" e "vence em 3 dias", sobre a
+ * mesma fatura recém-criada. Este teste trocou de expectativa de propósito —
+ * a anterior descrevia o defeito.
+ * ───────────────────────────────────────────────────────────────────────── */
+{
+  const primeiraRodada = chavesCob(emDias(2));
+  ok(primeiraRodada.includes("cobranca_gerada"),
+     "na rodada em que a cobrança nasce, sai o e-mail da cobrança");
+  ok(!primeiraRodada.includes("cobranca_pre_vencimento"),
+     "...e NÃO sai junto o aviso de vencimento, sobre a mesma fatura");
+
+  /* depois que a cobrança já foi avisada, o pré-vencimento volta a valer */
+  const depois = chavesCob(emDias(2), new Set(["cobranca_gerada:a1"]));
+  ok(depois.includes("cobranca_pre_vencimento"),
+     "faltando 2 dias, com a cobrança já avisada: sai o pré-vencimento");
+}
 ok(!chavesCob(emDias(30)).includes("cobranca_pre_vencimento"),
    "faltando 30 dias: ainda não incomoda");
 

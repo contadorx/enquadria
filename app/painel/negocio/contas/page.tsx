@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { calcularMetricas, moedaBR, valorReal, ehPagante, type ContaMetrica } from "@/lib/cobranca";
+import { mesBr } from "@/lib/negocio-calc";
 
 /**
  * AS CONTAS — a tela onde uma conta vira teste, cortesia ou cancelada.
@@ -96,7 +97,10 @@ export default function ContasAdmin() {
     router.refresh();
   }
 
-  const mes = new Date().toISOString().slice(0, 7);
+  /* mês no calendário brasileiro: `toISOString` é UTC, e depois das 21h do
+     dia 31 o churn do mês zerava sozinho — apagando cancelamentos reais e
+     jogando um cancelamento das 21h30 para o mês seguinte */
+  const mes = mesBr(new Date());
   const m = calcularMetricas(contas, mes);
 
   return (
@@ -221,11 +225,33 @@ export default function ContasAdmin() {
               </select>
             </label>
             <label className="block">
-              <span className="mb-1 block text-[12.5px] font-semibold">Valor mensal</span>
+              <span className="mb-1 block text-[12.5px] font-semibold">
+                Valor mensal <span className="font-normal text-muted">(em reais)</span>
+              </span>
               <input
                 type="number"
                 defaultValue={sel.valor_mensal ?? 0}
-                onBlur={(e) => void gravar(sel.id, { valor_mensal: Number(e.target.value) })}
+                /**
+                 * `Number(e.target.value)` VIRAVA ZERO no formato brasileiro.
+                 *
+                 * Num `input type="number"`, digitar "297,00" deixa o `value`
+                 * VAZIO — o navegador não aceita a vírgula. `Number("")` é 0, e
+                 * o campo gravava `valor_mensal = 0` com "Salvo ✓" na tela: o
+                 * escritório saía do MRR sem ninguém perceber.
+                 *
+                 * Campo vazio agora não grava nada. Vazio é "não digitei",
+                 * nunca "vale zero".
+                 */
+                onBlur={(e) => {
+                  const bruto = e.target.value.trim();
+                  if (!bruto) return;
+                  const n = Number(bruto);
+                  if (!Number.isFinite(n) || n < 0) {
+                    setErro("Valor mensal inválido. Use ponto para centavos (297.00), sem R$.");
+                    return;
+                  }
+                  void gravar(sel.id, { valor_mensal: Math.round(n) });
+                }}
                 className="w-full rounded-sm border border-line px-3 py-2 text-sm"
               />
             </label>

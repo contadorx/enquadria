@@ -38,6 +38,41 @@ const PAGO = new Set(["PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"]);
 const DIAS_PADRAO = 31;
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * O DINHEIRO VOLTOU — e o acesso não voltava com ele.
+ *
+ * Só PAYMENT_CONFIRMED e PAYMENT_RECEIVED mexiam em `assinaturas`. Estorno,
+ * chargeback e recebimento desfeito marcavam a fatura e saíam por
+ * `{ ok: true, ignorado: true }`. Resultado: cliente paga o anual, abre
+ * chargeback vinte dias depois, e usa o produto por mais 345 dias com o
+ * dinheiro de volta no bolso dele.
+ *
+ * A DISTINÇÃO IMPORTA, e é por isso que são duas listas:
+ *
+ *   DEVOLVIDO — o dinheiro saiu em definitivo. Estorno concluído é decisão
+ *   tomada (por você ou pelo cliente, com o Asaas confirmando), e recebimento
+ *   em dinheiro desfeito é registro corrigido. Aqui o acesso cai.
+ *
+ *   CONTESTADO — chargeback ABERTO ou em disputa é acusação, não veredito.
+ *   Uma parte relevante é revertida em favor do lojista. Cortar o acesso de
+ *   quem talvez tenha razão do outro lado transforma uma disputa de R$ 47 num
+ *   cliente perdido — e se a disputa for ganha, você cortou sem motivo.
+ *   Aqui o acesso FICA e o caso vira ação de alta prioridade no painel.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+const DEVOLVIDO = new Set([
+  "PAYMENT_REFUNDED",
+  "PAYMENT_PARTIALLY_REFUNDED",
+  "PAYMENT_RECEIVED_IN_CASH_UNDONE",
+  "PAYMENT_CHARGEBACK_DISPUTE_LOST",
+]);
+const CONTESTADO = new Set([
+  "PAYMENT_CHARGEBACK_REQUESTED",
+  "PAYMENT_CHARGEBACK_DISPUTE",
+  "PAYMENT_AWAITING_CHARGEBACK_REVERSAL",
+]);
+
+/**
  * Guarda o último evento recebido.
  *
  * É a única forma de o painel dizer se o webhook está mesmo cadastrado do
@@ -237,7 +272,26 @@ export async function POST(req: Request) {
   }
 
   const confirmado = PAGO.has(evento.event ?? "");
+  const devolvido = DEVOLVIDO.has(evento.event ?? "");
+  const contestado = CONTESTADO.has(evento.event ?? "");
   const assinaturaId = evento.payment?.externalReference;
+
+  /**
+   * SEM SERVICE ROLE, O WEBHOOK PRECISA FALHAR ALTO.
+   *
+   * Respondendo 200 sem ter gravado nada, o Asaas marca o evento como
+   * entregue e NUNCA reenvia: um pagamento confirmado se perde em silêncio, a
+   * assinatura fica pendente, a fatura não nasce e nem a batida de diagnóstico
+   * é gravada (ela também depende do admin). 503 faz ele reenfileirar — que é
+   * o mesmo tratamento já dado ao token inválido, e pela mesma razão.
+   */
+  if (!admin) {
+    console.error("[asaas] SUPABASE_SERVICE_ROLE_KEY ausente — devolvendo 503 para o Asaas reenviar");
+    return NextResponse.json(
+      { erro: "servidor sem credencial de escrita; reenvie" },
+      { status: 503 }
+    );
+  }
 
   /**
    * A FATURA, antes de qualquer decisão sobre acesso.
@@ -264,9 +318,31 @@ export async function POST(req: Request) {
       evento: evento.event,
       assinatura: assinaturaId,
       aceito: true,
-      motivo: confirmado ? undefined : "evento fora dos dois que ativam acesso",
+      motivo: confirmado
+        ? undefined
+        : devolvido
+          ? "dinheiro devolvido — acesso revogado"
+          : contestado
+            ? "pagamento contestado — acesso mantido, virou ação no painel"
+            : "evento fora dos dois que ativam acesso",
       fatura_erro: faturaErro ?? undefined,
     });
+  }
+
+  /* ───────────────────────────── dinheiro devolvido: o acesso cai junto */
+  if (devolvido && assinaturaId) {
+    const { error } = await admin
+      .from("assinaturas")
+      .update({ status: "cancelada", valido_ate: null })
+      .eq("id", assinaturaId);
+    if (error) console.error(`[asaas] estorno: assinatura ${assinaturaId} não foi revogada: ${error.message}`);
+    return NextResponse.json({ ok: true, revogada: !error, motivo: evento.event });
+  }
+
+  /* ─────────── contestado: o acesso fica, mas isto não pode passar batido */
+  if (contestado && assinaturaId) {
+    console.warn(`[asaas] pagamento contestado (${evento.event}) na assinatura ${assinaturaId}`);
+    return NextResponse.json({ ok: true, contestado: true, motivo: evento.event });
   }
 
   if (!confirmado || !assinaturaId) {
@@ -274,11 +350,6 @@ export async function POST(req: Request) {
   }
 
   const supabase = admin;
-  if (!supabase) {
-    // sem service role: aceita o evento para não gerar reenvio, mas avisa no log
-    console.warn("[asaas] SUPABASE_SERVICE_ROLE_KEY ausente — assinatura não ativada:", assinaturaId);
-    return NextResponse.json({ ok: true, pendente: true });
-  }
 
   // quantos dias este plano concede
   const { data: assin } = await supabase
@@ -288,6 +359,7 @@ export async function POST(req: Request) {
     .maybeSingle();
 
   let diasAcesso = DIAS_PADRAO;
+  let ciclo: string | null = null;
   const planoId = (assin as { plano_id?: string } | null)?.plano_id;
   if (planoId) {
     const { data: plano } = await supabase
@@ -296,6 +368,7 @@ export async function POST(req: Request) {
       .eq("id", planoId)
       .maybeSingle();
     const p = plano as { dias_acesso?: number | null; ciclo?: string | null } | null;
+    ciclo = p?.ciclo ?? null;
     if (p?.dias_acesso) diasAcesso = Number(p.dias_acesso);
     else if (p?.ciclo === "anual") diasAcesso = 365;
   }
@@ -342,17 +415,81 @@ export async function POST(req: Request) {
   const base = evento.payment?.confirmedDate || evento.payment?.paymentDate || evento.payment?.dueDate;
   const data = validadeFinal(base ?? new Date(), diasAcesso, credito);
 
+  /**
+   * ═════════════════════════════════════════════════════════════════════════
+   * A VALIDADE NUNCA REGRIDE — o webhook precisa ser idempotente.
+   *
+   * O Asaas manda mais de um evento por cobrança: `PAYMENT_CONFIRMED` e, mais
+   * tarde, `PAYMENT_RECEIVED` (D+1 no boleto, na liquidação do cartão). Os
+   * dois chegam com o mesmo `externalReference`.
+   *
+   * No PRIMEIRO, `decidirSucessao` via a mensal ainda ativa e somava os 18
+   * dias que sobravam; em seguida `encerrarAssinaturas` a marcava cancelada.
+   * No SEGUNDO, `outras` já não encontrava nada e o crédito voltava a zero —
+   * e o update regravava `valido_ate` sem os dias herdados. **Os 18 dias já
+   * pagos sumiam do banco**, sem log e sem aviso, depois de a tela ter
+   * prometido por escrito que eles entrariam.
+   *
+   * A regra é simples e cobre reprocessamento, reenvio e backlog: fica a data
+   * MAIOR entre a que já está gravada e a calculada agora. Nenhum reprocesso
+   * pode tirar acesso que já foi concedido.
+   * ═════════════════════════════════════════════════════════════════════════
+   */
+  const { data: antes } = await supabase
+    .from("assinaturas")
+    .select("valido_ate")
+    .eq("id", assinaturaId)
+    .maybeSingle();
+  const jaTinha = (antes as { valido_ate?: string | null } | null)?.valido_ate ?? null;
+  const validade = jaTinha && jaTinha > data ? jaTinha : data;
+
+  const pagoEmISO = base && /^\d{4}-\d{2}-\d{2}$/.test(base)
+    ? `${base}T12:00:00-03:00`
+    : new Date(base || Date.now()).toISOString();
+
   const { error } = await supabase
     .from("assinaturas")
     .update({
       status: "ativa",
-      valido_ate: data,
-      vencimento: data,
-      pago_em: new Date(base || Date.now()).toISOString(),
+      valido_ate: validade,
+      vencimento: validade,
+      pago_em: pagoEmISO,
     })
     .eq("id", assinaturaId);
 
   if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
+
+  /**
+   * ═════════════════════════════════════════════════════════════════════════
+   * AS COLUNAS DE COBRANÇA DO ESCRITÓRIO — que ninguém escrevia.
+   *
+   * A aba Negócio → Contas calcula MRR, ticket, churn e LTV a partir de
+   * `tenants.ultimo_pagamento`, `ultimo_pagamento_valor`, `valor_mensal` e
+   * `ciclo_cobranca`. Essas colunas existem desde a 0031 e NADA no sistema as
+   * preenchia — só digitação manual. Resultado: a aba Visão mostrava "MRR
+   * R$ 47" e a aba Contas, no mesmo painel, "MRR R$ 0,00 · 0 pagantes".
+   *
+   * Quem sabe que um pagamento entrou é este webhook. Era só ele contar.
+   *
+   * `valor_mensal` fica com o valor NORMALIZADO por mês (anual dividido por
+   * 12), que é o que a tela soma — misturar R$ 470 de um anual com R$ 47 de um
+   * mensal na mesma coluna produziria um MRR dez vezes maior num deles.
+   */
+  if (tenantId) {
+    const valorPago = Math.round(Number(evento.payment?.value || 0) * 100);
+    const mensalizado = ciclo === "anual" ? Math.round(valorPago / 12) : valorPago;
+    const { error: eT } = await supabase
+      .from("tenants")
+      .update({
+        ultimo_pagamento: pagoEmISO,
+        ultimo_pagamento_valor: valorPago,
+        valor_mensal: mensalizado,
+        ciclo_cobranca: ciclo ?? "mensal",
+        proximo_vencimento: validade,
+      })
+      .eq("id", tenantId);
+    if (eT) console.error(`[asaas] tenant ${tenantId} sem os dados de cobrança: ${eT.message}`);
+  }
 
   /* só depois de a nova estar ATIVA: se encerrássemos antes e o update acima
      falhasse, a conta ficaria sem plano nenhum — com o dinheiro já pago */
