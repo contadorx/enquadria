@@ -6,6 +6,7 @@ import { comResponsavel } from "@/lib/escritorio-server";
 import { BotaoImprimir } from "@/components/BotaoImprimir";
 import { FolhaTermo } from "@/components/FolhaTermo";
 import { trilhaEmTexto } from "@/lib/esign";
+import { decisaoDoSnapshot } from "@/lib/termo";
 
 export default async function TermoDoc({ params }: { params: { id: string } }) {
   const supabase = createClient();
@@ -71,6 +72,10 @@ export default async function TermoDoc({ params }: { params: { id: string } }) {
     );
   }
 
+  /* recomendação, pontos e decisão saem do que foi CONGELADO na emissão —
+     recalcular aqui faria o termo de agosto mudar de texto em outubro */
+  const parte = decisaoDoSnapshot(termo.snapshot);
+
   const optou = (snap?.decisao ?? termo.decisao) === "optar";
   const assinado = termo.assinatura_status === "assinado" || !!termo.assinado_em;
   const trilha = assinado
@@ -109,6 +114,12 @@ export default async function TermoDoc({ params }: { params: { id: string } }) {
         empresa={empresa}
         escritorio={t ? { nome: t.nome, crc: t.crc, logo_url: t.logo_url } : null}
         decisao={optou ? "optar" : "permanecer"}
+        recomendacao={parte.recomendacao}
+        tipo_decisao={parte.tipo_decisao}
+        motivo_divergencia={parte.motivo_divergencia}
+        pontos={parte.pontos}
+        laudo_url={parte.laudo_url}
+        laudo_numero={parte.laudo_numero}
         assinado={assinado}
         assinante_nome={termo.assinante_nome}
         assinado_em={termo.assinado_em}

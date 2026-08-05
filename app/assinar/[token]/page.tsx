@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { formatarCnpj } from "@/lib/cnpj";
 import { CLAUSULAS_CIENCIA } from "@/lib/esign";
+import { decisaoDoSnapshot } from "@/lib/termo";
 import { Assinatura } from "@/components/Assinatura";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +22,9 @@ export default async function AssinarPage({ params }: { params: { token: string 
 
   const { data: termo } = await supabase
     .from("termos")
-    .select("assinatura_status, decisao, assinante_nome, assinado_em, metodo, hash_documento, analise_id")
+    .select(
+      "assinatura_status, decisao, assinante_nome, assinado_em, metodo, hash_documento, analise_id, snapshot"
+    )
     .eq("token", params.token)
     .maybeSingle();
   if (!termo) notFound();
@@ -54,6 +57,16 @@ export default async function AssinarPage({ params }: { params: { token: string 
     .eq("analise_id", termo.analise_id)
     .maybeSingle();
   const linkLaudo = laudo?.token ? `/laudo/${laudo.token}` : null;
+
+  /**
+   * O QUE A PESSOA ASSINA PRECISA SER O QUE ELA LÊ.
+   *
+   * A recomendação, o tipo da decisão e o motivo declarado ENTRAM no conteúdo
+   * canônico desde 05/08/2026 — ou seja, viram hash. Mostrá-los aqui não é
+   * enfeite: sem isso o signatário estaria assinando um documento com trechos
+   * que ele não viu, que é a definição de assinatura no escuro.
+   */
+  const parte = decisaoDoSnapshot(termo.snapshot);
 
   if (termo.assinatura_status === "assinado") {
     return (
@@ -90,8 +103,12 @@ export default async function AssinarPage({ params }: { params: { token: string 
         cnpj={empresa?.cnpj ? formatarCnpj(empresa.cnpj) : ""}
         decisao={(termo.decisao ?? "permanecer") as "optar" | "permanecer"}
         clausulas={CLAUSULAS_CIENCIA}
-        linkLaudo={linkLaudo}
-        numeroLaudo={laudo?.numero ?? null}
+        recomendacao={parte.recomendacao}
+        tipoDecisao={parte.tipo_decisao}
+        motivo={parte.motivo_divergencia}
+        pontos={parte.pontos}
+        linkLaudo={parte.laudo_url ?? linkLaudo}
+        numeroLaudo={parte.laudo_numero ?? laudo?.numero ?? null}
         hash={termo.hash_documento ?? ""}
       />
     </Casca>
