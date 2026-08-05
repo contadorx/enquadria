@@ -24,6 +24,7 @@ import {
   fraseDaDecisao, CIENCIA_DOS_EFEITOS, ROTULO_TIPO,
   nomeCorrompido, AVISO_NOME_CORROMPIDO,
   blocoDoTermo, ehTipoDecisao, decisaoDoSnapshot,
+  cienciaDefasada, avisoCienciaDefasada,
 } from "./termo.js";
 import { PARAMETROS_2027, ehOptar } from "./motor.js";
 /* o conteúdo canônico é o que vira hash e vira assinatura — testar o termo sem
@@ -354,6 +355,50 @@ ok(/não que ele estava certo/.test(AVISO_NOME_CORROMPIDO),
      sha256(conteudoCanonico({ ...base, decisao: "permanecer", motivo: "   ", tipo_decisao: null })),
      "motivo em branco e tipo nulo não vazam para o texto");
 }
+
+/* ═══════════ 13 · A LISTA DE CIÊNCIA CONGELADA ═══════════════════════════
+ *
+ * O DEFEITO, visto numa tela de assinatura em 05/08/2026. As três superfícies
+ * imprimiam a constante VIVA em vez da lista gravada no snapshot. No dia em que
+ * a lista cresceu de 4 para 7 itens, os 21 termos já emitidos passaram a ser
+ * EXIBIDOS com 7 cláusulas — e o hash deles cobre 4.
+ *
+ * DOIS JÁ ESTAVAM ASSINADOS. O papel passou a mostrar que o signatário deu
+ * ciência do cadeado do art. 41 § 5º, e ele não deu: aquele texto não existia
+ * quando ele assinou. O erro anda na PIOR direção — o documento diz mais do que
+ * foi aceito.
+ * ══════════════════════════════════════════════════════════════════════════ */
+{
+  const QUATRO = ["um", "dois", "três", "quatro"];
+
+  ok(decisaoDoSnapshot({ clausulas: QUATRO }).clausulas.length === 4,
+     "a lista congelada volta como foi gravada, não como está hoje");
+  ok(decisaoDoSnapshot({ clausulas: QUATRO }).clausulas.join("|") === QUATRO.join("|"),
+     "e com o texto exato — é ele que entrou no hash");
+  ok(decisaoDoSnapshot({}).clausulas === null && decisaoDoSnapshot({ clausulas: [] }).clausulas === null,
+     "termo anterior ao snapshot volta nulo, e aí a constante viva é o que há");
+  ok(decisaoDoSnapshot({ clausulas: "quatro" }).clausulas === null &&
+     decisaoDoSnapshot({ clausulas: [1, "vale", null] }).clausulas.length === 1,
+     "lixo no lugar da lista não vira cláusula");
+
+  /* o aviso é para o CONTADOR, e muda conforme já tenha assinatura */
+  ok(cienciaDefasada(QUATRO), "4 itens contra os 7 de hoje é lista defasada");
+  ok(!cienciaDefasada(CIENCIA_DOS_EFEITOS), "a lista atual não é defasada");
+  ok(!cienciaDefasada(null), "termo sem lista congelada não é acusado de defasado");
+
+  const pendente = avisoCienciaDefasada(QUATRO, false);
+  const assinadoJa = avisoCienciaDefasada(QUATRO, true);
+  ok(/emita um novo antes de colher a assinatura/.test(pendente),
+     "pendente: o conselho é emitir de novo ANTES da assinatura");
+  ok(/não deve ser substituído nem reescrito/.test(assinadoJa),
+     "assinado: o documento continua valendo e NÃO se reescreve — reescrever prova é destruí-la");
+  ok(/art\. 41, § 5º/.test(pendente) && /art\. 41, § 5º/.test(assinadoJa),
+     "e os dois dizem O QUE ficou de fora, senão o aviso não ajuda a decidir");
+  ok(avisoCienciaDefasada(CIENCIA_DOS_EFEITOS, false) === null &&
+     avisoCienciaDefasada(null, true) === null,
+     "sem defasagem não há aviso — alerta que aparece sempre não é lido");
+}
+
 
 console.log(f === 0 ? "\nOK" : `\n${f} FALHA(S)`);
 process.exit(f === 0 ? 0 : 1);

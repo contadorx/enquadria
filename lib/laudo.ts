@@ -828,7 +828,16 @@ export function condicoesDeValidade(a: AnaliseGravada): string[] {
   if (r.cred != null) {
     cond.push(`As compras que geram crédito permanecerem em torno de ${pct(r.cred)} da receita.`);
   }
-  if (a.re != null && isFinite(Number(a.re)) && ehOptarSaida(a.saida)) {
+  /**
+   * `re > 0` — a condição de 05/08/2026, e ela remove uma frase impossível.
+   *
+   * Com custo líquido negativo o repasse de equilíbrio também é negativo, e o
+   * laudo pedia que "o reajuste de preço de −0,1% seja efetivamente aceito
+   * pelos clientes empresa". Reajuste negativo não é reajuste a ser aceito: é a
+   * ausência de reajuste a negociar, que é justamente o que torna o caso fácil.
+   * A condição some porque não existe — não porque foi escondida.
+   */
+  if (a.re != null && isFinite(Number(a.re)) && Number(a.re) > 0 && ehOptarSaida(a.saida)) {
     cond.push(
       `O reajuste de preço de ${pct(Number(a.re))} ser efetivamente aceito pelos clientes empresa antes do fim da janela.`
     );

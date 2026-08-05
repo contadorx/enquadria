@@ -40,6 +40,17 @@ export interface DadosFolhaTermo {
   laudo_numero?: number | null;
   /** o que a empresa precisa observar; derivado, nunca genérico */
   pontos?: string[];
+  /**
+   * A LISTA DE CIÊNCIA CONGELADA no snapshot da emissão.
+   *
+   * Imprimir a constante VIVA era um defeito de prova: quando a lista cresceu
+   * de 4 para 7 itens em 05/08/2026, os termos já assinados passaram a EXIBIR
+   * 7 cláusulas — e o hash deles cobre 4. O papel dizia que o signatário deu
+   * ciência de um texto que não existia no dia em que ele assinou.
+   *
+   * Ausente só em termos anteriores ao snapshot; aí a constante é o que há.
+   */
+  clausulas?: string[] | null;
   assinado: boolean;
   assinante_nome?: string | null;
   assinado_em?: string | null;
@@ -58,6 +69,7 @@ export function FolhaTermo({
   laudo_url,
   laudo_numero,
   pontos = [],
+  clausulas,
   assinado,
   assinante_nome,
   assinado_em,
@@ -218,8 +230,11 @@ export function FolhaTermo({
           * quem pede ressarcimento de crédito não volta ao DAS no ano corrente
           * nem no seguinte. É justamente o perfil que a conta mais manda optar.
           */}
+        {/* a lista CONGELADA na emissão — é ela que entrou no hash. A constante
+            viva só entra em termo anterior ao snapshot, onde não há o que
+            congelar. Ver o comentário da prop `clausulas`. */}
         <ul>
-          {CIENCIA_DOS_EFEITOS.map((x, i) => (
+          {(clausulas ?? CIENCIA_DOS_EFEITOS).map((x, i) => (
             <li key={i}>{x}</li>
           ))}
         </ul>

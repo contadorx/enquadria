@@ -120,6 +120,7 @@ export default async function TermoPublico({ params }: { params: { token: string
         tipo_decisao={parte.tipo_decisao}
         motivo_divergencia={parte.motivo_divergencia}
         pontos={parte.pontos}
+        clausulas={parte.clausulas}
         laudo_url={parte.laudo_url}
         laudo_numero={parte.laudo_numero}
         assinado

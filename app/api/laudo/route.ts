@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { situacaoPlano, mensagemBloqueio, montarMuro, type Assinatura } from "@/lib/plano";
+import { garantirAnaliseCoerente } from "@/lib/recalculo-server";
 import { HONORARIO_PADRAO } from "@/lib/potencial";
 import { COLUNAS_ESCRITORIO, type Escritorio } from "@/lib/escritorio";
 import { responsavelDoTenant } from "@/lib/escritorio-server";
@@ -73,6 +74,17 @@ export async function POST(req: Request) {
     }
   }
 
+  /**
+   * ANTES DE CONGELAR, CONFERE SE A ANÁLISE AINDA SE SUSTENTA.
+   *
+   * `emitir_laudo` monta o snapshot a partir da linha de `analises`. Se ela foi
+   * calculada por um motor anterior e a decisão de hoje é outra, o documento
+   * nasce congelando a saída velha — e o texto do laudo, que é gerado pelo
+   * código de hoje, discute a saída nova. Refazer AQUI, antes da RPC, é o único
+   * ponto em que os dois passam a falar do mesmo caso.
+   */
+  const recalculada = await garantirAnaliseCoerente(supabase, corpo.analise_id);
+
   const { data, error } = await supabase
     .rpc("emitir_laudo", { p_analise: corpo.analise_id })
     .single();
@@ -128,5 +140,5 @@ export async function POST(req: Request) {
     console.error("[laudo] identidade não entrou no snapshot:", e instanceof Error ? e.message : e);
   }
 
-  return NextResponse.json({ ok: true, laudo_id: laudo.id, numero: laudo.numero });
+  return NextResponse.json({ ok: true, laudo_id: laudo.id, numero: laudo.numero, recalculada });
 }

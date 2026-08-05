@@ -6,7 +6,7 @@ import { comResponsavel } from "@/lib/escritorio-server";
 import { BotaoImprimir } from "@/components/BotaoImprimir";
 import { FolhaTermo } from "@/components/FolhaTermo";
 import { trilhaEmTexto } from "@/lib/esign";
-import { decisaoDoSnapshot } from "@/lib/termo";
+import { decisaoDoSnapshot, avisoCienciaDefasada } from "@/lib/termo";
 
 export default async function TermoDoc({ params }: { params: { id: string } }) {
   const supabase = createClient();
@@ -110,6 +110,18 @@ export default async function TermoDoc({ params }: { params: { id: string } }) {
         </div>
       </div>
 
+      {/**
+        * O AVISO É PARA O CONTADOR e vive só aqui, na via dele — fora da
+        * impressão. O cliente vê o documento que corresponde ao hash, correto
+        * e completo em si; quem tem uma decisão a tomar ("emito de novo para
+        * colher a ciência do cadeado?") é quem emitiu.
+        */}
+      {avisoCienciaDefasada(parte.clausulas, assinado) && (
+        <div className="no-print mb-4 rounded-sm border border-amarelo bg-amarelowash p-3 text-[12.5px] leading-relaxed text-slate2">
+          {avisoCienciaDefasada(parte.clausulas, assinado)}
+        </div>
+      )}
+
       <FolhaTermo
         empresa={empresa}
         escritorio={t ? { nome: t.nome, crc: t.crc, logo_url: t.logo_url } : null}
@@ -118,6 +130,7 @@ export default async function TermoDoc({ params }: { params: { id: string } }) {
         tipo_decisao={parte.tipo_decisao}
         motivo_divergencia={parte.motivo_divergencia}
         pontos={parte.pontos}
+        clausulas={parte.clausulas}
         laudo_url={parte.laudo_url}
         laudo_numero={parte.laudo_numero}
         assinado={assinado}

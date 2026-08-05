@@ -102,7 +102,10 @@ export default async function AssinarPage({ params }: { params: { token: string 
         empresa={empresa?.razao_social ?? "Empresa"}
         cnpj={empresa?.cnpj ? formatarCnpj(empresa.cnpj) : ""}
         decisao={(termo.decisao ?? "permanecer") as "optar" | "permanecer"}
-        clausulas={CLAUSULAS_CIENCIA}
+        /* a lista CONGELADA na emissão: é ela que entrou no hash que a pessoa
+           está prestes a assinar. Imprimir a constante viva fazia a tela
+           mostrar 7 cláusulas sobre um documento cujo hash cobre 4. */
+        clausulas={parte.clausulas ?? CLAUSULAS_CIENCIA}
         recomendacao={parte.recomendacao}
         tipoDecisao={parte.tipo_decisao}
         motivo={parte.motivo_divergencia}

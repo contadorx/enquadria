@@ -77,12 +77,27 @@ export function recomendacaoDoTermo(a: AnaliseGravada): Recomendacao {
         "para quem compra, e é ela que dá (ou tira) sentido à opção."
     );
   }
-  if (a.cl != null && Number(a.cl) <= 0) {
+  /**
+   * O FUNDAMENTO FALA A LÍNGUA DA SAÍDA CONGELADA, e este `saida === "S5"` é a
+   * correção de 05/08/2026.
+   *
+   * Antes o teste era `cl <= 0` cru — a regra VIVA aplicada sobre os números.
+   * Numa análise gravada como S4 antes de o S5 existir, o cartão saía com o
+   * título "Optar, CONDICIONADO A REPASSE" e, três linhas abaixo, "a vantagem
+   * não depende de renegociar preço com ninguém". As duas frases no mesmo
+   * documento, uma vinda da saída congelada e a outra da regra de hoje.
+   *
+   * Recalcular metade da recomendação é o mesmo erro das duas listas de
+   * ciência: o documento passa a ter duas verdades e escolhe uma por linha.
+   * Quem conserta análise velha é `lib/recalculo.ts`, na emissão — aqui a
+   * saída congelada manda, sempre.
+   */
+  if (saida === "S5" && a.cl != null && Number(a.cl) <= 0) {
     baseado.push(
       `Custo líquido de ${pct(Number(a.cl))}: no regime regular a empresa paga MENOS, pelos créditos ` +
         "das próprias compras. A vantagem não depende de renegociar preço com ninguém."
     );
-  } else if (a.re != null && a.fc != null && isFinite(Number(a.re))) {
+  } else if (a.re != null && a.fc != null && isFinite(Number(a.re)) && Number(a.re) > 0) {
     baseado.push(
       `Repasse de preço necessário de ${pct(Number(a.re))}, contra ${pct(Number(a.fc))} de crédito ` +
         "que o cliente empresa passa a ganhar."
@@ -376,6 +391,24 @@ export interface ParteDecisaoDoTermo {
   pontos: string[];
   laudo_url: string | null;
   laudo_numero: number | null;
+  /**
+   * A LISTA DE CIÊNCIA CONGELADA — e ignorá-la era um defeito de prova.
+   *
+   * ENCONTRADO EM 05/08/2026, olhando a tela de assinatura. As três superfícies
+   * imprimiam a constante VIVA (`CIENCIA_DOS_EFEITOS`) em vez da lista gravada
+   * no snapshot. No dia em que a lista cresceu de 4 para 7 itens, os 21 termos
+   * já emitidos passaram a ser EXIBIDOS com 7 cláusulas — e o hash deles cobre 4.
+   *
+   * Dois já estavam ASSINADOS. O papel passou a mostrar que o signatário deu
+   * ciência do cadeado do art. 41 § 5º, e ele não deu: aquele texto não existia
+   * quando ele assinou. O erro anda na pior direção possível — o documento diz
+   * MAIS do que foi aceito, e é o tipo de divergência que só aparece quando
+   * alguém compara o texto com o hash, que é exatamente o dia em que ela custa.
+   *
+   * `null` só para termos anteriores ao snapshot; aí não há o que congelar e a
+   * constante viva é o melhor disponível.
+   */
+  clausulas: string[] | null;
 }
 
 export function decisaoDoSnapshot(snapshot: unknown): ParteDecisaoDoTermo {
@@ -385,9 +418,14 @@ export function decisaoDoSnapshot(snapshot: unknown): ParteDecisaoDoTermo {
     tipo_decisao?: unknown;
     motivo_divergencia?: unknown;
     laudo?: { token?: string | null; numero?: number | null } | null;
+    clausulas?: unknown;
   };
   const rec = s.recomendacao;
+  const clausulas = Array.isArray(s.clausulas)
+    ? s.clausulas.filter((x): x is string => typeof x === "string")
+    : null;
   return {
+    clausulas: clausulas && clausulas.length ? clausulas : null,
     /* só aceita a recomendação inteira: meia recomendação no papel é pior que
        nenhuma, porque parece completa */
     recomendacao:
@@ -426,6 +464,32 @@ export function nomeCorrompido(nome?: string | null): boolean {
      caractere alto são UTF-8 lido como latin-1 — nenhuma delas aparece em
      português escrito corretamente. */
   return /\uFFFD|\u00C3[\u00A0-\u00BF]|\u00C2[\u00A0-\u00BF]/.test(nome);
+}
+
+/**
+ * ESTE TERMO FOI EMITIDO COM UMA LISTA DE CIÊNCIA MAIS ANTIGA?
+ *
+ * Quem precisa saber é o CONTADOR, não o cliente. O cliente vê o documento que
+ * corresponde ao hash — correto e completo em si. Quem tem uma decisão a tomar
+ * ("emito de novo para colher ciência do cadeado do art. 41 § 5º?") é quem
+ * emitiu, e a resposta muda conforme o termo já esteja assinado ou não.
+ */
+export function cienciaDefasada(clausulas: string[] | null): boolean {
+  return !!clausulas && clausulas.length < CIENCIA_DOS_EFEITOS.length;
+}
+
+export function avisoCienciaDefasada(clausulas: string[] | null, assinado: boolean): string | null {
+  if (!cienciaDefasada(clausulas)) return null;
+  const n = clausulas!.length;
+  const base =
+    `Este termo foi emitido com a lista de ciência de ${n} itens; a atual tem ` +
+    `${CIENCIA_DOS_EFEITOS.length} — inclusive o cadeado do art. 41, § 5º, da LC 214/2025, que ` +
+    "torna a opção irreversível para quem pedir ressarcimento de créditos. ";
+  return assinado
+    ? base +
+        "O documento assinado é este, e continua válido pelo que diz. Para ter a ciência do cadeado " +
+        "por escrito, emita um termo novo — o antigo não deve ser substituído nem reescrito."
+    : base + "Ainda não foi assinado: emita um novo antes de colher a assinatura.";
 }
 
 export const AVISO_NOME_CORROMPIDO =

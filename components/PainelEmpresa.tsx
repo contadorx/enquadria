@@ -205,6 +205,15 @@ export function PainelEmpresa({
    * a única coisa que um termo de ciência precisa capturar, e era justamente a
    * que não aparecia.
    */
+  /**
+   * A ANÁLISE FOI REFEITA NA EMISSÃO — e isto NÃO pode ser silencioso.
+   *
+   * Análise calculada por motor anterior pode mudar de saída na hora de emitir.
+   * Refazer é a decisão certa (documento incoerente é pior), mas quem assina o
+   * laudo é o contador: se a recomendação virou outra entre o clique e o papel,
+   * ele tem de ler isso antes de mandar o link ao cliente.
+   */
+  const [recalculada, setRecalculada] = useState<{ de: string | null; para: string | null; aviso: string } | null>(null);
   const [tipoDecisao, setTipoDecisao] = useState<"seguir" | "divergir" | "adiar">("seguir");
   const [motivoDiv, setMotivoDiv] = useState("");
   /**
@@ -351,6 +360,7 @@ export function PainelEmpresa({
          */
         const janela = window.open(`/doc/laudo/${json.laudo_id}`, "_blank");
         setEmitido({ id: json.laudo_id as string, numero: json.numero as number, abriu: !!janela });
+        if (json.recalculada) setRecalculada(json.recalculada);
         mudou();
       } else if (json.bloqueado_por_plano) {
         if (json.muro) setMuro(json.muro as Muro);
@@ -463,6 +473,7 @@ export function PainelEmpresa({
       const json = await resp.json();
       if (resp.ok && json.link_assinatura) {
         setLink(window.location.origin + json.link_assinatura);
+        if (json.recalculada) setRecalculada(json.recalculada);
         /**
          * O aviso diz se o CONVITE SAIU. Esta rota passou a enviar (antes só a
          * de lote enviava), e sem esta linha o contador não teria como
@@ -649,6 +660,30 @@ export function PainelEmpresa({
                 <p className="mt-2 text-[11.5px] text-amarelo">
                   Confirme as premissas acima antes de emitir: o laudo sai com a sua assinatura.
                 </p>
+              )}
+
+              {/**
+                * A RECOMENDAÇÃO MUDOU ENTRE O CLIQUE E O PAPEL.
+                *
+                * Fica ACIMA do "✓ laudo emitido" de propósito: o verde é a
+                * notícia boa e é lido primeiro; esta é a que exige leitura. Um
+                * recálculo automático que não aparece na tela seria trocar um
+                * documento incoerente por um que mudou sozinho — pior, porque o
+                * primeiro pelo menos se denuncia na leitura.
+                */}
+              {recalculada && (
+                <div className="mt-3 rounded-sm border border-amarelo bg-amarelowash p-3">
+                  <div className="text-[13px] font-semibold text-amarelo">
+                    A análise foi refeita nesta emissão: {recalculada.de} → {recalculada.para}
+                  </div>
+                  <p className="mt-1 text-[12px] leading-relaxed text-slate2">{recalculada.aviso}</p>
+                  <button
+                    onClick={() => setRecalculada(null)}
+                    className="mt-2 rounded-sm border border-line px-3 py-1.5 text-[12px] font-semibold text-slate2"
+                  >
+                    Li e confiro
+                  </button>
+                </div>
               )}
 
               {emitido && (

@@ -80,6 +80,7 @@ try {
     "lib/escritorio.ts", "lib/roteiro.ts", "lib/abertura.ts", "lib/comparativo.ts",
     "lib/curso.ts", "lib/faturas.ts", "lib/filtro-faturas.ts", "lib/email-eventos.ts", "lib/documento.ts", "lib/assinatura.ts",
     "lib/negocio-calc.ts", "lib/projecao.ts", "lib/deriva.ts", "lib/gateway-limpeza.ts",
+    "lib/recalculo.ts",
   ];
   const cfg = path.join(RAIZ, "tsconfig.testes.json");
   fs.writeFileSync(cfg, JSON.stringify({
@@ -425,11 +426,11 @@ secao("Endereços públicos — o que chega ao cliente sem login");
    */
   {
     const FIO = [
-      ["app/doc/termo/[id]/page.tsx", ["recomendacao=", "pontos=", "tipo_decisao=", "laudo_url="],
+      ["app/doc/termo/[id]/page.tsx", ["recomendacao=", "pontos=", "tipo_decisao=", "laudo_url=", "clausulas="],
        "o dossiê do contador"],
-      ["app/termo/[token]/page.tsx", ["recomendacao=", "pontos=", "tipo_decisao=", "laudo_url="],
+      ["app/termo/[token]/page.tsx", ["recomendacao=", "pontos=", "tipo_decisao=", "laudo_url=", "clausulas="],
        "a via do cliente"],
-      ["app/assinar/[token]/page.tsx", ["recomendacao=", "pontos=", "tipoDecisao="],
+      ["app/assinar/[token]/page.tsx", ["recomendacao=", "pontos=", "tipoDecisao=", "parte.clausulas"],
        "a tela onde ele assina"],
       ["app/api/termo/route.ts", ["tipo_decisao:", "motivo_divergencia:", "recomendacao:", "blocoDoTermo"],
        "a rota que emite"],
@@ -441,6 +442,23 @@ secao("Endereços públicos — o que chega ao cliente sem login");
       const faltando = exigidos.filter((e) => !src.includes(e));
       ok(`${oque} passa a recomendação adiante`, src !== "" && faltando.length === 0,
          src === "" ? "arquivo não encontrado" : `faltando: ${faltando.join(", ")}`);
+    }
+
+    /**
+     * A FOLHA IMPRIME A LISTA CONGELADA, não a constante viva.
+     *
+     * Quando a ciência cresceu de 4 para 7 itens em 05/08/2026, os 21 termos já
+     * emitidos passaram a ser EXIBIDOS com 7 cláusulas — e o hash deles cobre 4.
+     * Dois já estavam assinados: o papel passou a dizer que o signatário deu
+     * ciência do cadeado do art. 41 § 5º, e ele não deu. O documento passou a
+     * dizer MAIS do que foi aceito, que é a pior direção do erro.
+     */
+    {
+      const folha = fs.readFileSync(path.join(RAIZ, "components/FolhaTermo.tsx"), "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "");
+      ok("a folha imprime a lista de ciência CONGELADA, não a constante viva",
+         /\(\s*clausulas\s*\?\?\s*CIENCIA_DOS_EFEITOS\s*\)/.test(folha),
+         "usa CIENCIA_DOS_EFEITOS direto — termo antigo passa a exibir cláusula que o hash dele não cobre");
     }
 
     /* e as três superfícies leem o snapshot pela MESMA função — cada uma lendo

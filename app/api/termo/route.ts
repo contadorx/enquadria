@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase-admin";
 import { conteudoCanonico, sha256, novoToken, CLAUSULAS_CIENCIA } from "@/lib/esign";
 import { enviarEmail, htmlConviteAssinatura } from "@/lib/email";
 import { blocoDoTermo, ehTipoDecisao, validarDecisao } from "@/lib/termo";
+import { garantirAnaliseCoerente } from "@/lib/recalculo-server";
 import type { AnaliseGravada } from "@/lib/laudo";
 
 /**
@@ -68,6 +69,11 @@ export async function POST(req: Request) {
    * eles a recomendação sairia sem o "baseado em", que é a parte que sustenta o
    * documento.
    */
+  /* mesma conferência do laudo, e ANTES da leitura: o termo congela a
+     recomendação, e congelar a de um motor aposentado é o defeito que a
+     Transportadora Rota Certa expôs em 05/08 */
+  const recalculada = await garantirAnaliseCoerente(supabase, corpo.analise_id);
+
   const { data: analise } = await supabase
     .from("analises")
     .select(
@@ -262,6 +268,9 @@ export async function POST(req: Request) {
     termo_id: termoId,
     token,
     link_assinatura: `/assinar/${token}`,
+    /* NUNCA silencioso: se a recomendação mudou entre o clique e o papel, quem
+       assina o laudo precisa saber antes de mandar o link ao cliente */
+    recalculada,
     // o link continua vindo mesmo com o e-mail enviado: sem chave configurada,
     // ou com o e-mail recusado, copiar o link é o caminho que sobra
     enviado,
