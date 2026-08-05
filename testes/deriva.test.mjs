@@ -34,6 +34,7 @@ const crua = (x = {}) => ({
   respostas: { b2b: .8, qual: .9, cred: .35, folha: .2, preco: 2, conc: 0, exig: 0 },
   parametros: { aliquota: A, das: 0.0251 },
   tem_laudo: false, laudo_numero: null, laudo_emitido_em: null, termo_assinado: false,
+  tenant_teste: false, pdf_saida: null, pdf_re: null, pdf_fc: null, pdf_motor: null,
   ...x,
 });
 
@@ -163,6 +164,69 @@ const REAL_S1_S3 = {
   ok(!/supabase|createClient|update\(|upsert\(|insert\(/.test(fonte),
      "e o módulo não importa banco nenhum: não existe caminho para gravar daqui");
 }
+
+
+/* ═══════════ 5 · contas de TESTE saem do alarme ════════════════════════
+ * Em 05/08/2026 as sete análises que mudavam estavam TODAS em contas do próprio
+ * dono. Contá-las é encher o alarme de ruído produzido pela própria casa — e
+ * alarme com ruído é alarme que ninguém lê. Elas continuam no relatório, à
+ * parte; somem da conta.
+ * ══════════════════════════════════════════════════════════════════════════ */
+{
+  const r = resumirDeriva([
+    derivaDe(crua({ ...REAL_S1_S3, id: "t1", tenant_teste: true, tem_laudo: true })),
+    derivaDe(crua({ ...REAL_S1_S3, id: "t2", tenant_teste: true })),
+    derivaDe(crua({ id: "r1" })),
+  ]);
+  ok(r.mudam === 0 && r.criticas === 0,
+     "duas análises que mudam, mas em conta de teste: não entram na deriva", r);
+  ok(r.em_teste === 2, "…e são contadas à parte, não escondidas", r.em_teste);
+  ok(r.transicoes.length === 0, "sem transições fantasmas no quadro");
+  ok(/2 análise\(s\) de contas de teste ficaram de fora/.test(leituraDaDeriva(r)),
+     "e a frase declara o que ficou de fora — número que some sem explicação vira desconfiança");
+}
+{
+  /* a mesma análise, agora em conta REAL, tem de voltar a contar */
+  const r = resumirDeriva([derivaDe(crua({ ...REAL_S1_S3, tem_laudo: true }))]);
+  ok(r.mudam === 1 && r.criticas === 1 && r.em_teste === 0,
+     "em conta real, a mesma análise conta — o filtro é o `is_teste`, não o caso", r);
+}
+{
+  /* o percentual é sobre a base SEM teste; senão 1 de 3 vira 33% quando é 100% */
+  const r = resumirDeriva([
+    derivaDe(crua({ ...REAL_S1_S3, id: "a" })),
+    derivaDe(crua({ ...REAL_S1_S3, id: "b", tenant_teste: true })),
+    derivaDe(crua({ ...REAL_S1_S3, id: "c", tenant_teste: true })),
+  ]);
+  ok(/1 de 1 análises \(100%\)/.test(leituraDaDeriva(r)),
+     "o denominador exclui as de teste — 1 de 1, não 1 de 3", leituraDaDeriva(r));
+}
+
+/* ═══════════ 6 · a análise revisada DEPOIS do laudo ════════════════════
+ * Problema diferente do motor e mais comum: o contador mexeu numa premissa e
+ * recalculou, e o que está na tela dele já não é o que está no PDF do cliente.
+ * Nenhum motor mudou — mudou a análise. Contar os dois juntos esconderia de
+ * quem é o problema.
+ * ══════════════════════════════════════════════════════════════════════════ */
+{
+  const d = derivaDe(crua({ saida: "S4", pdf_saida: "S1", tem_laudo: true, laudo_numero: 7 }));
+  ok(d.divergiu_do_pdf === true, "a análise gravada não bate com o PDF emitido");
+  ok(d.muda === false, "e isso NÃO é deriva do motor — o motor concorda com a análise", d.recalculada);
+  const r = resumirDeriva([d]);
+  ok(r.divergem_do_pdf === 1 && r.mudam === 0, "o resumo separa os dois contadores", r);
+  ok(/REVISADAS depois do laudo/.test(leituraDaDeriva(r)) && /revisão do contador/.test(leituraDaDeriva(r)),
+     "e a frase diz de quem é o problema e como se resolve");
+}
+ok(derivaDe(crua({ saida: "S4", pdf_saida: "S4", tem_laudo: true })).divergiu_do_pdf === false,
+   "PDF igual à análise não é divergência");
+ok(derivaDe(crua({ saida: "S4", pdf_saida: null })).divergiu_do_pdf === false,
+   "sem PDF não há do que divergir — ausência não é conflito");
+
+/* ═══════════ 7 · o carimbo do motor ════════════════════════════════════ */
+ok(derivaDe(crua()).motor === null,
+   "análise anterior ao carimbo não inventa versão: devolve null");
+ok(derivaDe(crua({ parametros: { aliquota: A, das: 0.0251, motor: "2026.08.05" } })).motor === "2026.08.05",
+   "e com carimbo, devolve a versão que calculou");
 
 console.log(f === 0 ? "\nOK" : `\n${f} FALHA(S)`);
 process.exit(f === 0 ? 0 : 1);

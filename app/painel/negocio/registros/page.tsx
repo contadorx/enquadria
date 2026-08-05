@@ -102,6 +102,22 @@ export default async function Registros() {
           ))}
         </div>
 
+        {(resumo.em_teste > 0 || resumo.divergem_do_pdf > 0) && (
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            {resumo.em_teste > 0 && (
+              <span className="rounded-sm border border-line bg-surface2 px-2.5 py-1 text-[11.5px] text-muted">
+                {resumo.em_teste} de contas de teste, fora da conta
+              </span>
+            )}
+            {resumo.divergem_do_pdf > 0 && (
+              <span className="rounded-sm border border-amarelo/40 bg-amarelowash px-2.5 py-1 text-[11.5px] text-slate2">
+                <b>{resumo.divergem_do_pdf}</b> revisada(s) depois do laudo — não bate com o PDF do
+                cliente
+              </span>
+            )}
+          </div>
+        )}
+
         {resumo.sem_base > 0 && (
           <p className="mt-2.5 text-[12px] text-muted">
             {resumo.sem_base} análise{resumo.sem_base === 1 ? "" : "s"} não pôde ser recalculada por
@@ -139,6 +155,8 @@ export default async function Registros() {
                 <th className="px-3 py-2.5 font-semibold">Escritório</th>
                 <th className="px-3 py-2.5 font-semibold">Empresa</th>
                 <th className="px-3 py-2.5 font-semibold">Calculada</th>
+                <th className="px-3 py-2.5 font-semibold">Motor</th>
+                <th className="px-3 py-2.5 font-semibold">No PDF</th>
                 <th className="px-3 py-2.5 font-semibold">Gravada</th>
                 <th className="px-3 py-2.5 font-semibold">Hoje daria</th>
                 <th className="px-3 py-2.5 font-semibold">Folga impressa</th>
@@ -151,6 +169,12 @@ export default async function Registros() {
                   <td className="px-3 py-2.5">{l.tenant_nome ?? "—"}</td>
                   <td className="px-3 py-2.5">{l.empresa_nome ?? "—"}</td>
                   <td className="px-3 py-2.5 text-muted">{data(l.calculado_em)}</td>
+                  <td className="px-3 py-2.5 font-mono text-[11px] text-muted">
+                    {l.motor ?? "sem carimbo"}
+                  </td>
+                  <td className={`px-3 py-2.5 font-mono ${l.divergiu_do_pdf ? "font-bold text-vermelho" : "text-muted"}`}>
+                    {l.pdf_saida ?? "—"}
+                  </td>
                   <td className="px-3 py-2.5 font-mono">{l.gravada}</td>
                   <td className="px-3 py-2.5 font-mono font-bold">
                     {l.recalculada}
@@ -197,6 +221,7 @@ export default async function Registros() {
               <th className="px-3 py-2.5 font-semibold">Empresas</th>
               <th className="px-3 py-2.5 font-semibold">Análises</th>
               <th className="px-3 py-2.5 font-semibold">Laudos</th>
+              <th className="px-3 py-2.5 font-semibold">Assinados</th>
               <th className="px-3 py-2.5 font-semibold">Termos</th>
               <th className="px-3 py-2.5 font-semibold">Saídas</th>
               <th className="px-3 py-2.5 font-semibold">Último trabalho</th>
@@ -232,6 +257,17 @@ export default async function Registros() {
                     )}
                   </td>
                   <td className="px-3 py-2.5 font-mono">{String(c.laudos ?? 0)}</td>
+                  {/* LAUDO EMITIDO e LAUDO ASSINADO são negócios diferentes: o
+                      primeiro é produção, o segundo é decisão fechada. Mostrar
+                      só o primeiro faz o painel parecer melhor do que está. */}
+                  <td className="px-3 py-2.5 font-mono">
+                    {String(c.laudos_assinados ?? 0)}
+                    {Number(c.laudos ?? 0) > 0 && (
+                      <span className="ml-1 text-[10.5px] text-muted">
+                        {Math.round((Number(c.laudos_assinados ?? 0) / Number(c.laudos)) * 100)}%
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-2.5 font-mono">
                     {String(c.termos_assinados ?? 0)}/{String(c.termos ?? 0)}
                   </td>
@@ -259,7 +295,7 @@ export default async function Registros() {
             })}
             {!lista.length && (
               <tr>
-                <td colSpan={9} className="px-3 py-8 text-center text-muted">
+                <td colSpan={10} className="px-3 py-8 text-center text-muted">
                   Nenhuma conta.
                 </td>
               </tr>

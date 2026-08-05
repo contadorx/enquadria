@@ -26,6 +26,8 @@ export type StatusFatura = "pendente" | "pago" | "vencido" | "cancelado" | "esto
 
 export interface Fatura {
   id: string;
+  /** de quem é a fatura — o extrato do gestor filtra por contratante */
+  tenant_id?: string | null;
   asaas_id?: string | null;
   descricao?: string | null;
   /** nome do plano no momento da cobrança — o extrato do gestor mostra este */

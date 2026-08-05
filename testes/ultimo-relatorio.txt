@@ -3,7 +3,7 @@
 ok    compila sem erro
 
 ── Suítes de função pura ───────────────────────────────────────
-ok    29 suítes encontradas na pasta
+ok    32 suítes encontradas na pasta
 ok    suíte abertura (34 asserções)
 ok    suíte absorcao (32 asserções)
 ok    suíte ajuda (41 asserções)
@@ -14,13 +14,16 @@ ok    suíte cobranca-fonte (28 asserções)
 ok    suíte cockpit (37 asserções)
 ok    suíte coleta (42 asserções)
 ok    suíte curso (9 asserções)
-ok    suíte deriva (31 asserções)
+ok    suíte deriva (45 asserções)
 ok    suíte documento (20 asserções)
+ok    suíte email-eventos (35 asserções)
 ok    suíte envio (87 asserções)
 ok    suíte erros-auth (20 asserções)
 ok    suíte escritorio (12 asserções)
 ok    suíte exercicios (58 asserções)
 ok    suíte faturas (35 asserções)
+ok    suíte filtro-faturas (41 asserções)
+ok    suíte gateway-limpeza (29 asserções)
 ok    suíte janela (20 asserções)
 ok    suíte laudo-fundamentacao (41 asserções)
 ok    suíte motor (80 asserções)
@@ -38,7 +41,7 @@ ok    suíte tabela-2027 (82 asserções)
 ok    auditoria de UX (6 regras limpas)
 
 ── Auditoria de schema (colunas que ninguém garante que existem) 
-ok    auditoria de schema (24 tabelas com proveniência)
+ok    auditoria de schema (25 tabelas com proveniência)
 
 ── Auditoria de upsert (o onConflict que o Postgres não consegue inferir) 
 ok    auditoria de upsert (12 conferidos)
@@ -298,4 +301,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 259 verificações automáticas
+TUDO PASSOU — 262 verificações automáticas

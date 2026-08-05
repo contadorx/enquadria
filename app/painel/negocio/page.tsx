@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { carregarNegocio, brl, type Acao } from "@/lib/negocio";
 import { BotaoFoto } from "@/components/NegocioUI";
+import { BlocoContas } from "@/components/BlocoContas";
 
 export const dynamic = "force-dynamic";
 
@@ -294,6 +295,10 @@ export default async function NegocioVisao() {
           </div>
         )}
       </section>
+
+      {/* A LISTA VEM DEPOIS DO AGREGADO. Quem entra para decidir lê o topo;
+          quem entra para mexer numa conta rola até aqui — e não em outro clique. */}
+      <BlocoContas n={n} />
 
       <p className="text-[11.5px] leading-relaxed text-muted">
         O MRR é normalizado: assinatura mensal entra pelo valor cheio, anual entra dividido por 12. Um escritório

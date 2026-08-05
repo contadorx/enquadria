@@ -32,8 +32,13 @@ interface Conta {
   tenant: { id: string; nome: string; criado_em: string; crc: string | null; status: string | null; is_teste: boolean } | null;
   usuarios: { id: string; email: string; nome: string | null; role: string | null; is_superadmin: boolean; criado_em: string }[];
   empresas: { id: string; razao_social: string; cnpj: string; anexo: number | null; faixa: string | null; rbt12: number | null; analises: number }[];
-  analises: (AnaliseCrua & { empresa: string | null })[];
-  laudos: { id: string; numero: number; emitido_em: string; analise_id: string }[];
+  analises: (AnaliseCrua & {
+    empresa: string | null;
+    laudo_numero: number | null;
+    pdf_saida: string | null;
+    pdf_motor: string | null;
+  })[];
+  laudos: { id: string; numero: number; emitido_em: string; analise_id: string; assinado: boolean }[];
 }
 
 export default async function ContaDoCliente({ params }: { params: { id: string } }) {
@@ -89,12 +94,16 @@ export default async function ContaDoCliente({ params }: { params: { id: string 
         aqui escreve na conta do cliente, e o sistema não assumiu a identidade de ninguém.
       </p>
 
-      <div className="mt-5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
         {[
           ["Usuários", String(c.usuarios.length)],
           ["Empresas", String(c.empresas.length)],
           ["Análises", String(c.analises.length)],
           ["Laudos", String(c.laudos.length)],
+          [
+            "Assinados",
+            `${c.laudos.filter((l) => l.assinado).length}`,
+          ],
         ].map(([t, v]) => (
           <div key={t} className="rounded border border-line bg-surface p-4">
             <div className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">{t}</div>
@@ -136,6 +145,8 @@ export default async function ContaDoCliente({ params }: { params: { id: string 
             <tr>
               <th className="px-3 py-2.5 font-semibold">Empresa</th>
               <th className="px-3 py-2.5 font-semibold">Calculada</th>
+              <th className="px-3 py-2.5 font-semibold">Motor</th>
+              <th className="px-3 py-2.5 font-semibold">No PDF</th>
               <th className="px-3 py-2.5 font-semibold">Saída gravada</th>
               <th className="px-3 py-2.5 font-semibold">Hoje daria</th>
               <th className="px-3 py-2.5 font-semibold">re</th>
@@ -153,12 +164,21 @@ export default async function ContaDoCliente({ params }: { params: { id: string 
                 tem_laudo: !!l,
                 laudo_numero: l?.numero ?? null,
                 laudo_emitido_em: l?.emitido_em ?? null,
-                termo_assinado: false,
+                termo_assinado: !!l?.assinado,
               });
               return (
                 <tr key={a.id} className={`border-b border-linesoft ${d.muda ? "bg-amarelowash" : ""}`}>
                   <td className="px-3 py-2.5">{a.empresa ?? "—"}</td>
                   <td className="px-3 py-2.5 text-[11.5px] text-muted">{data(a.calculado_em)}</td>
+                  {/* TRÊS COLUNAS OU NENHUMA. Duas escondem o caso em que a
+                      análise foi revisada DEPOIS do laudo — problema diferente
+                      da deriva do motor, e mais comum. */}
+                  <td className="px-3 py-2.5 font-mono text-[11px] text-muted">
+                    {d.motor ?? "sem carimbo"}
+                  </td>
+                  <td className={`px-3 py-2.5 font-mono ${d.divergiu_do_pdf ? "font-bold text-vermelho" : "text-muted"}`}>
+                    {a.pdf_saida ?? "—"}
+                  </td>
                   <td className="px-3 py-2.5">
                     <span className="font-mono font-bold">{a.saida}</span>
                     <div className="text-[10.5px] text-muted">
@@ -193,7 +213,7 @@ export default async function ContaDoCliente({ params }: { params: { id: string 
               );
             })}
             {!c.analises.length && (
-              <tr><td colSpan={7} className="px-3 py-8 text-center text-muted">Nenhuma análise.</td></tr>
+              <tr><td colSpan={9} className="px-3 py-8 text-center text-muted">Nenhuma análise.</td></tr>
             )}
           </tbody>
         </table>

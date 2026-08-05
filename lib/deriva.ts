@@ -39,6 +39,8 @@ export interface AnaliseCrua {
   id: string;
   tenant_id: string | null;
   tenant_nome: string | null;
+  /** conta marcada como teste — sai da deriva, ver `resumirDeriva` */
+  tenant_teste?: boolean;
   empresa_id: string | null;
   empresa_nome: string | null;
   calculado_em: string | null;
@@ -54,6 +56,11 @@ export interface AnaliseCrua {
   laudo_numero: number | null;
   laudo_emitido_em: string | null;
   termo_assinado: boolean;
+  /** o que está DENTRO do PDF emitido — vem do snapshot do laudo */
+  pdf_saida?: string | null;
+  pdf_re?: number | null;
+  pdf_fc?: number | null;
+  pdf_motor?: string | null;
 }
 
 export interface LinhaDeriva {
@@ -76,6 +83,20 @@ export interface LinhaDeriva {
   absorcao_cabe: boolean;
   /** por que não deu para recalcular esta linha */
   sem_base: string | null;
+  teste: boolean;
+  /** versão do motor que produziu a análise; null nas anteriores ao carimbo */
+  motor: string | null;
+  /** a saída que está DENTRO do PDF emitido */
+  pdf_saida: string | null;
+  /**
+   * A ANÁLISE FOI REVISADA DEPOIS DO LAUDO.
+   *
+   * Caso distinto da deriva do motor e mais fácil de acontecer: o contador
+   * mexeu numa premissa e recalculou, e agora o que está na tela dele não é o
+   * que está no PDF que o cliente tem. Nenhum motor mudou — mudou a análise.
+   * Misturar os dois num contador só esconde o que é problema de quem.
+   */
+  divergiu_do_pdf: boolean;
 }
 
 /** as premissas que o motor exige; ausência de qualquer uma impede recalcular */
@@ -110,6 +131,11 @@ export function derivaDe(a: AnaliseCrua): LinhaDeriva {
     folga_agora: null,
     absorcao_cabe: false,
     sem_base: null,
+    teste: !!a.tenant_teste,
+    motor: (a.parametros?.motor as string) ?? null,
+    pdf_saida: a.pdf_saida ?? null,
+    /* só é divergência quando existe PDF para divergir DE */
+    divergiu_do_pdf: !!a.pdf_saida && !!a.saida && a.pdf_saida !== a.saida,
   };
 
   const p = (a.parametros ?? {}) as Record<string, unknown>;
@@ -165,9 +191,26 @@ export interface ResumoDeriva {
   transicoes: { de: string; para: string; n: number; comDocumento: number }[];
   /** maior diferença de folga impressa, em pontos percentuais */
   maior_diferenca_folga: number;
+  /** análises de contas de teste, contadas à parte e fora de todo o resto */
+  em_teste: number;
+  /** análises revisadas depois do laudo — outro problema, contado separado */
+  divergem_do_pdf: number;
 }
 
-export function resumirDeriva(linhas: LinhaDeriva[]): ResumoDeriva {
+/**
+ * O RESUMO IGNORA CONTAS DE TESTE.
+ *
+ * Conta de teste é onde a gente quebra coisas de propósito. Contar as análises
+ * dela na deriva enche o alarme de ruído produzido pela própria casa — e alarme
+ * com ruído é alarme que ninguém lê. Em 05/08/2026 isso era 100% do sinal: as
+ * sete análises que mudavam estavam todas em contas do próprio dono.
+ *
+ * Elas continuam sendo contadas, à parte, em `em_teste` — some do alarme, não
+ * some do relatório.
+ */
+export function resumirDeriva(todas: LinhaDeriva[]): ResumoDeriva {
+  const emTeste = todas.filter((l) => l.teste).length;
+  const linhas = todas.filter((l) => !l.teste);
   const mapa = new Map<string, { de: string; para: string; n: number; comDocumento: number }>();
   let maior = 0;
   for (const l of linhas) {
@@ -189,6 +232,8 @@ export function resumirDeriva(linhas: LinhaDeriva[]): ResumoDeriva {
     criticas: linhas.filter((l) => l.critica).length,
     transicoes: Array.from(mapa.values()).sort((a, b) => b.n - a.n),
     maior_diferenca_folga: maior,
+    em_teste: emTeste,
+    divergem_do_pdf: linhas.filter((l) => l.divergiu_do_pdf).length,
   };
 }
 
@@ -197,20 +242,30 @@ export function resumirDeriva(linhas: LinhaDeriva[]): ResumoDeriva {
  * olhar a tabela. Sem isto o relatório é uma lista, e lista não vira decisão.
  */
 export function leituraDaDeriva(r: ResumoDeriva): string {
-  if (r.total === 0) return "Não há análises gravadas.";
+  const teste = r.em_teste
+    ? ` ${r.em_teste} análise(s) de contas de teste ficaram de fora desta conta.`
+    : "";
+  const pdf = r.divergem_do_pdf
+    ? ` Além disso, ${r.divergem_do_pdf} análise(s) foram REVISADAS depois do laudo e já não batem com o PDF que o cliente tem — isso não é deriva do motor, é revisão do contador, e se resolve reemitindo.`
+    : "";
+  if (r.total === 0) return "Não há análises gravadas." + teste;
   if (r.mudam === 0) {
     return (
-      `Nenhuma das ${r.total} análises mudaria de saída se fosse recalculada com o motor de hoje. ` +
-      "As correções recentes não alcançaram nenhum caso da base."
+      `Nenhuma das ${r.recalculadas} análises mudaria de saída se fosse recalculada com o motor de ` +
+      "hoje. As correções recentes não alcançaram nenhum caso da base." + teste + pdf
     );
   }
-  const pct = ((r.mudam / r.total) * 100).toFixed(0);
+  /* `total` JÁ é a contagem sem as de teste — subtrair de novo produzia
+     denominador negativo ("1 de -1"), pego pelo teste do percentual. */
+  const base = r.total;
+  const pct = base > 0 ? ((r.mudam / base) * 100).toFixed(0) : "0";
   return (
-    `${r.mudam} de ${r.total} análises (${pct}%) mudariam de saída se fossem recalculadas hoje` +
+    `${r.mudam} de ${base} análises (${pct}%) mudariam de saída se fossem recalculadas hoje` +
     (r.criticas > 0
       ? `, e ${r.criticas} delas já têm laudo emitido ou termo assinado. Essas ${r.criticas} exigem ` +
         "decisão caso a caso: o documento que o cliente tem na mão continua o que era, e refazer a " +
         "análise não o reescreve — mas o contador precisa saber que a conta mudou."
-      : ". Nenhuma delas virou documento ainda, então dá para refazer sem conversa difícil.")
+      : ". Nenhuma delas virou documento ainda, então dá para refazer sem conversa difícil.") +
+    teste + pdf
   );
 }

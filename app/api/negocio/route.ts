@@ -3,6 +3,10 @@ import { decidirContratacao, type AssinaturaResumo } from "@/lib/assinatura";
 import { encerrarAssinaturas } from "@/lib/assinatura-server";
 import { createClient } from "@/lib/supabase-server";
 import { createAdminClient } from "@/lib/supabase-admin";
+import {
+  planejarLimpeza, limparNoGateway, podeApagar, resumoDoPlano,
+  type CobrancaDoGateway,
+} from "@/lib/gateway-limpeza";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -507,7 +511,37 @@ export async function POST(req: Request) {
           { status: 500 }
         );
       }
-      return NextResponse.json({ ok: true, ...(data as object) });
+      /**
+       * O QUE VAI ACONTECER NO GATEWAY, dito ANTES do clique.
+       *
+       * A prévia perguntava ao banco o que o delete apagaria e ficava calada
+       * sobre o Asaas — que é justamente o lado que continua cobrando depois.
+       * Agora ela lê as assinaturas da conta e mostra o plano: o que será
+       * cancelado, o que já está encerrado lá, e o que IMPEDE a exclusão.
+       */
+      const { data: assins } = await supabase
+        .from("assinaturas")
+        .select("id, asaas_id, status, valor_centavos, vencimento")
+        .eq("tenant_id", tenantId);
+      const planoPrevia = planejarLimpeza(
+        ((assins ?? []) as Record<string, unknown>[]).map((a) => ({
+          assinatura_id: String(a.id),
+          asaas_id: (a.asaas_id as string) ?? null,
+          status: (a.status as string) ?? null,
+          valor_centavos: a.valor_centavos == null ? null : Number(a.valor_centavos),
+          vencimento: (a.vencimento as string) ?? null,
+        })) as CobrancaDoGateway[]
+      );
+
+      return NextResponse.json({
+        ok: true,
+        ...(data as object),
+        gateway: {
+          resumo: resumoDoPlano(planoPrevia),
+          cancelar: planoPrevia.filter((x) => x.destino === "cancelar").length,
+          impede: planoPrevia.filter((x) => x.destino === "impede").map((x) => x.motivo),
+        },
+      });
     }
 
     case "excluir_conta": {
@@ -519,6 +553,46 @@ export async function POST(req: Request) {
       /* o banco confere o nome, as três recusas e grava a auditoria na mesma
          transação do delete. Aqui não se repete nenhuma dessas regras: regra
          repetida é regra que um dia diverge. */
+      /**
+       * ═══════════════════════════════════════════════════════════════════
+       * O GATEWAY VEM PRIMEIRO. Apagar aqui não apaga lá — e o "lá" cobra.
+       *
+       * A ordem é o desenho: apagando primeiro, uma falha de rede deixaria
+       * cobrança viva SEM os `asaas_id` para achá-la, porque eles teriam ido
+       * embora com as linhas. Cancelando antes, o pior caso é cobrança
+       * cancelada e conta ainda de pé — que é só tentar de novo.
+       *
+       * E se sobrar qualquer coisa viva lá (cobrança paga, ou falha de rede),
+       * a exclusão PARA. "Não consegui falar com o Asaas" não é "não havia
+       * nada lá", e tratar os dois igual é exatamente como o dinheiro escapa.
+       * ═══════════════════════════════════════════════════════════════════
+       */
+      const { data: assinaturas, error: eAssin } = await supabase
+        .from("assinaturas")
+        .select("id, asaas_id, status, valor_centavos, vencimento")
+        .eq("tenant_id", tenantId);
+      if (eAssin) {
+        return NextResponse.json(
+          { erro: `não consegui ler as cobranças desta conta: ${eAssin.message}. Nada foi apagado.` },
+          { status: 500 }
+        );
+      }
+      const limpeza = await limparNoGateway(
+        planejarLimpeza(
+          ((assinaturas ?? []) as Record<string, unknown>[]).map((a) => ({
+            assinatura_id: String(a.id),
+            asaas_id: (a.asaas_id as string) ?? null,
+            status: (a.status as string) ?? null,
+            valor_centavos: a.valor_centavos == null ? null : Number(a.valor_centavos),
+            vencimento: (a.vencimento as string) ?? null,
+          })) as CobrancaDoGateway[]
+        )
+      );
+      const veredito = podeApagar(limpeza);
+      if (!veredito.pode) {
+        return NextResponse.json({ erro: veredito.motivo, gateway: limpeza }, { status: 409 });
+      }
+
       const { data, error } = await supabase.rpc("excluir_conta", {
         p_tenant: tenantId,
         p_confirmacao: confirmacao,

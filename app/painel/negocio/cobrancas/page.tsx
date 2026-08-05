@@ -1,14 +1,10 @@
 import { carregarNegocio, brl } from "@/lib/negocio";
 import { RodarReguas } from "@/components/NegocioUI";
 import { createClient } from "@/lib/supabase-server";
-import {
-  ROTULO_STATUS,
-  dataBR,
-  moedaCentavos,
-  ordenarFaturas,
-  statusEfetivo,
-  type Fatura,
-} from "@/lib/faturas";
+import { type Fatura } from "@/lib/faturas";
+import { LIMITE_SEGURO } from "@/lib/filtro-faturas";
+import { ExtratoFaturas } from "@/components/ExtratoFaturas";
+import { PlanosEAsaas } from "@/components/PlanosEAsaas";
 
 export const dynamic = "force-dynamic";
 
@@ -27,14 +23,16 @@ export default async function Cobrancas() {
     .from("faturas")
     .select("id, tenant_id, plano_nome, descricao, valor_centavos, status, vencimento, pago_em, link_pagamento")
     .order("vencimento", { ascending: false })
-    .limit(30);
+    /* eram 30. Trinta responde "o que aconteceu esta semana" e nenhuma das
+       perguntas que aparecem quando alguém liga. O teto está declarado em
+       LIMITE_SEGURO e a tela AVISA quando bate nele, em vez de truncar calada. */
+    .limit(LIMITE_SEGURO);
 
   /* "Nenhuma fatura registrada ainda" é a frase que a própria tela ensina a
      interpretar como "o webhook não entregou". Um erro de LEITURA virando essa
      frase transforma falha de banco em diagnóstico errado sobre o Asaas. */
   const erroFaturas = eFaturas ? eFaturas.message : null;
   const ultimas = (faturas ?? []) as unknown as Fatura[];
-  const hoje2 = new Date();
   const temAsaas = !!process.env.ASAAS_API_KEY;
   const temServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -50,6 +48,11 @@ export default async function Cobrancas() {
   const planos = n.planos
     .filter((p) => p.ativo)
     .map((p) => ({ id: p.id, nome: p.nome, preco_centavos: p.preco_centavos, ciclo: p.ciclo }));
+
+  /* tenant_id → nome: sem isto o seletor de contratante mostraria uuid, e uuid
+     em relatório não é informação */
+  const nomes: Record<string, string> = {};
+  for (const e of n.escritorios) nomes[e.id] = e.nome ?? "(sem nome)";
 
   const hoje = new Date();
   const dias = (d: string) => Math.floor((hoje.getTime() - new Date(d).getTime()) / 86_400_000);
@@ -149,47 +152,26 @@ export default async function Cobrancas() {
       </p>
 
       {/* ------------------------------------------------ EXTRATO DE FATURAS */}
-      <section>
-        <h2 className="text-[15px] font-bold">Últimas faturas</h2>
-        <p className="mb-2 mt-0.5 text-[12.5px] text-muted">
-          O que o Asaas confirmou, direto da tabela alimentada pelo webhook. Fatura que não aparece
-          aqui é fatura que o webhook não entregou.
+      {erroFaturas ? (
+        <p className="rounded border border-amarelo/40 bg-amarelowash p-4 text-[13px]">
+          Não consegui ler as faturas: {erroFaturas}. Isto é falha de leitura, <b>não</b> significa
+          que o webhook deixou de entregar.
         </p>
-        {erroFaturas ? (
-          <p className="rounded border border-amarelo/40 bg-amarelowash p-4 text-[13px]">
-            Não consegui ler as faturas: {erroFaturas}. Isto é falha de leitura, <b>não</b> significa
-            que o webhook deixou de entregar.
-          </p>
-        ) : ultimas.length === 0 ? (
-          <p className="rounded border border-line bg-surface p-4 text-[13px] text-muted">
-            Nenhuma fatura registrada ainda.
-          </p>
-        ) : (
-          <div className="overflow-hidden rounded border border-line bg-surface">
-            <table className="w-full border-collapse text-[13px]">
-              <tbody>
-                {ordenarFaturas(ultimas, hoje2).map((f) => (
-                  <tr key={f.id}>
-                    <td className="border-b border-linesoft px-3 py-2">
-                      {f.descricao ?? f.plano_nome ?? "Assinatura"}
-                    </td>
-                    <td className="border-b border-linesoft px-3 py-2 font-mono text-[12px] text-muted">
-                      {dataBR(f.vencimento)}
-                    </td>
-                    <td className="border-b border-linesoft px-3 py-2 text-right font-mono text-[12px]">
-                      {moedaCentavos(f.valor_centavos)}
-                    </td>
-                    <td className="border-b border-linesoft px-3 py-2 text-right text-[12px] font-semibold">
-                      {ROTULO_STATUS[statusEfetivo(f, hoje2)]}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      ) : (
+        <ExtratoFaturas faturas={ultimas} nomes={nomes} />
+      )}
 
-</div>
+      {/**
+        * PLANOS E ASAAS descem para cá, e deixam de ser uma rota.
+        *
+        * Eram um item de menu próprio, e a pergunta que leva alguém até lá é a
+        * mesma que leva a esta tela: "como o dinheiro entra?". Um plano existe
+        * para virar fatura; a chave do Asaas existe para a fatura ser criada.
+        * Separar em duas rotas obrigava a lembrar em qual das duas estava a
+        * coisa — e ninguém lembra.
+        */}
+      <PlanosEAsaas />
+
+    </div>
   );
 }

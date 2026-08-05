@@ -104,7 +104,10 @@ function autoteste() {
   ok(limpo.length === 0, `o código de hoje não tem travessia (${base.length} arquivos)`);
 
   const cli = join(RAIZ, "components/ContaLinha.tsx");
-  const srv = join(RAIZ, "app/painel/negocio/contas/page.tsx");
+  /* O SERVER COMPONENT DO CASO REAL MUDOU DE ARQUIVO em 05/08, quando Contas
+     virou a seção de baixo da Visão. O autoteste seguiu o código: sabotar um
+     arquivo que virou `redirect()` passaria a não testar nada, em verde. */
+  const srv = join(RAIZ, "components/BlocoContas.tsx");
   ok(existsSync(cli) && existsSync(srv), "os dois arquivos do caso real existem");
 
   /* sabotagem 1 — exatamente o bug de 05/08 */

@@ -59,6 +59,11 @@ export interface AnaliseGravada {
     /** teto de absorção congelado na análise (padrão 0,01 = 1 ponto da receita) */
     absorcaoMax?: number;
     /**
+     * versão do motor que produziu esta análise. Lida pela tela de Registros;
+     * NÃO impressa no laudo — ver o comentário de MOTOR_VERSAO em lib/motor.ts.
+     */
+    motor?: string;
+    /**
      * C6 — a projeção da RBT12 até o fim do período de efeito, congelada.
      * Ausente quando o contador não informou a RBT12 dos doze meses anteriores:
      * sem medição não se projeta, e o laudo simplesmente não ganha a seção.

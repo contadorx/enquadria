@@ -151,6 +151,36 @@ export interface Resultado {
   absorcao_cabe?: boolean;
 }
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A VERSÃO DO MOTOR — o carimbo que faltava.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * O PROBLEMA QUE ELA RESOLVE, e ele foi medido antes de existir solução: em
+ * 05/08/2026, 7 de 43 análises da base dariam saída DIFERENTE se recalculadas,
+ * e não havia como saber, olhando uma análise, qual motor a produziu. Dava para
+ * inferir pela data — e inferir por data quebra na primeira vez que duas
+ * correções entram no mesmo dia, que foi exatamente o que aconteceu com C7, C8
+ * e a tabela de 2029.
+ *
+ * ONDE ELA VAI E ONDE NÃO VAI. Vai para `parametros.motor` de toda análise
+ * nova, e para a tela de Registros. NÃO vai para o laudo — e isso é decisão,
+ * não esquecimento: enquanto o laudo renderizar com o código de hoje sobre
+ * dados de ontem, imprimir "motor 2026.08.05" num documento emitido em julho
+ * seria carimbar de errado com ar de precisão. O carimbo só entra no documento
+ * quando o texto renderizado for congelado junto (ver roadmap).
+ *
+ * COMO NUMERAR: data da mudança que altera RESULTADO, não da última linha
+ * editada. Comentário novo não muda a versão; um corte de banda, sim.
+ */
+export const MOTOR_VERSAO = "2026.08.05";
+
+/** o que mudou em cada versão que altera resultado — o laudo não lê isto; a tela de Registros lê */
+export const MOTOR_HISTORICO: { versao: string; mudou: string }[] = [
+  { versao: "2026.08.05", mudou: "repasse líquido nas duas bandas · absorção vira S3 · tabelas de 2029 a 2033 · teto de ISS declarado indefinido de 2029 em diante" },
+  { versao: "2026.07.26", mudou: "árvore reordenada: qualificação antes de custo líquido · S5 ganha saída própria · teste de preço antes da banda" },
+];
+
 export const PARAMETROS_2027: Parametros = {
   aliquota: 0.088,
   das: 0.01473,

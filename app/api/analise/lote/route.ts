@@ -10,6 +10,7 @@ import {
   alertaFatorR,
   sharePCDe,
   PARAMETROS_2027,
+  MOTOR_VERSAO,
   type Respostas,
 } from "@/lib/motor";
 import { anexoPorCnae } from "@/lib/triagem";
@@ -135,6 +136,12 @@ export async function POST(req: Request) {
       /* CONGELADOS porque o laudo BRANCHEIA neles. `rqMin` e `absorcaoMax`
          ficavam de fora e o laudo caía no padrão: mudar a convenção amanhã
          reescreveria em silêncio o que um documento assinado ontem afirma. */
+      /* O CARIMBO DO MOTOR. Vai para a análise, NÃO para o laudo: enquanto o
+         documento renderizar com o código de hoje sobre dados de ontem, um
+         "motor 2026.08.05" impresso num laudo de julho carimbaria de errado
+         com ar de precisão. Ver o roadmap: o carimbo entra no papel quando o
+         texto renderizado for congelado junto. */
+      motor: MOTOR_VERSAO,
       rqMin: base.rqMin,
       absorcaoMax: base.absorcaoMax,
       rbt12,

@@ -76,8 +76,8 @@ try {
     "lib/plano.ts", "lib/potencial.ts", "lib/reguas.ts", "lib/janela.ts",
     "lib/emails-cliente.ts", "lib/erros-auth.ts", "lib/ajuda.ts", "lib/cobranca.ts", "lib/nps.ts",
     "lib/escritorio.ts", "lib/roteiro.ts", "lib/abertura.ts", "lib/comparativo.ts",
-    "lib/curso.ts", "lib/faturas.ts", "lib/documento.ts", "lib/assinatura.ts",
-    "lib/negocio-calc.ts", "lib/projecao.ts", "lib/deriva.ts",
+    "lib/curso.ts", "lib/faturas.ts", "lib/filtro-faturas.ts", "lib/email-eventos.ts", "lib/documento.ts", "lib/assinatura.ts",
+    "lib/negocio-calc.ts", "lib/projecao.ts", "lib/deriva.ts", "lib/gateway-limpeza.ts",
   ];
   const cfg = path.join(RAIZ, "tsconfig.testes.json");
   fs.writeFileSync(cfg, JSON.stringify({
