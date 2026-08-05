@@ -3,9 +3,9 @@ import { createClient } from "@/lib/supabase-server";
 import { COLUNAS_ESCRITORIO, type Escritorio } from "@/lib/escritorio";
 import { responsavelDoTenant } from "@/lib/escritorio-server";
 import { createAdminClient } from "@/lib/supabase-admin";
-import { conteudoCanonico, sha256, novoToken, CLAUSULAS_CIENCIA } from "@/lib/esign";
+import { conteudoDaProposta, sha256, novoToken, CLAUSULAS_CIENCIA } from "@/lib/esign";
 import { enviarEmail, htmlConviteAssinatura } from "@/lib/email";
-import { blocoDoTermo, ehTipoDecisao, validarDecisao } from "@/lib/termo";
+import { blocoDoTermo } from "@/lib/termo";
 import { garantirAnaliseCoerente } from "@/lib/recalculo-server";
 import type { AnaliseGravada } from "@/lib/laudo";
 
@@ -100,32 +100,25 @@ export async function POST(req: Request) {
 
   /**
    * ═════════════════════════════════════════════════════════════════════════
-   * O BLOCO CONGELADO — recomendação, pontos, tipo e o que a decisão resolve.
+   * A EMISSÃO CONGELA A RECOMENDAÇÃO. NÃO A DECISÃO.
    * ═════════════════════════════════════════════════════════════════════════
    *
-   * `blocoDoTermo()` é a ÚNICA fonte: a rota não decide nada, só passa o tipo
-   * que o contador escolheu na tela. A decisão vem DERIVADA — receber
-   * "permanecer" pronto era o que permitia gravar o contrário da recomendação
-   * sem que o papel registrasse que houve divergência.
+   * Até 05/08/2026 esta rota recebia o tipo da decisão escolhido pelo CONTADOR
+   * e o termo chegava ao cliente já dizendo "a empresa decide optar". A empresa
+   * assinava embaixo de uma decisão que nunca declarou — e o papel voltava a
+   * não distinguir quem decidiu o quê, que é o defeito inteiro que o termo
+   * existe para resolver.
    *
-   * O `corpo.decisao` legado ainda serve de rede: sem `tipo_decisao`, o tipo é
-   * inferido comparando com a recomendação. Quem manda a decisão contrária sem
-   * dizer o motivo cai na validação abaixo, e é assim que deve ser.
+   * Agora quem escolhe entre seguir, divergir e adiar é o SIGNATÁRIO, em
+   * `/api/assinar`. Aqui a decisão nasce como `sem_decisao` — o valor que o
+   * enum `decisao_empresa` já previa e que nunca tinha sido usado.
+   *
+   * E POR ISSO O HASH DO DOCUMENTO NÃO É CALCULADO AQUI. Um hash feito antes
+   * de a decisão existir não cobre a decisão, e é ela que o termo prova. O que
+   * se sela na emissão é a PROPOSTA — a recomendação e as cláusulas —, para que
+   * ninguém possa alegar depois que a recomendação era outra.
    */
-  const bruta = analise as unknown as AnaliseGravada;
-  const tipoPedido = ehTipoDecisao(corpo.tipo_decisao) ? corpo.tipo_decisao : null;
-  const provisorio = blocoDoTermo(bruta, "seguir");
-  const tipo =
-    tipoPedido ??
-    (corpo.decisao && corpo.decisao !== provisorio.recomendacao.decisao ? "divergir" : "seguir");
-
-  const bloco = blocoDoTermo(bruta, tipo, corpo.motivo_divergencia);
-  const valida = validarDecisao({
-    tipo: bloco.tipo_decisao,
-    decisao: bloco.decisao,
-    motivo: bloco.motivo_divergencia,
-  });
-  if (!valida.ok) return NextResponse.json({ erro: valida.erro }, { status: 400 });
+  const bloco = blocoDoTermo(analise as unknown as AnaliseGravada, "seguir");
 
   /* o laudo que embasa — o termo cita o número e linka a memória de cálculo */
   // schema-ok: laudos.token é criado pela migration 0028 (alter dinâmico)
@@ -135,15 +128,13 @@ export async function POST(req: Request) {
     .eq("analise_id", corpo.analise_id)
     .maybeSingle();
 
-  const hash = sha256(
-    conteudoCanonico({
+  const hashProposta = sha256(
+    conteudoDaProposta({
       empresa: empresa?.razao_social ?? corpo.empresa ?? "empresa",
       cnpj: empresa?.cnpj ?? "",
-      decisao: bloco.decisao,
-      clausulas: CLAUSULAS_CIENCIA,
       recomendacao: bloco.recomendacao.decisao,
-      tipo_decisao: bloco.tipo_decisao,
-      motivo: bloco.motivo_divergencia,
+      saida: bloco.recomendacao.saida,
+      clausulas: CLAUSULAS_CIENCIA,
     })
   );
   const token = novoToken();
@@ -151,7 +142,7 @@ export async function POST(req: Request) {
   // cria a linha base pela RPC existente (tenant/numeração), sem assinatura externa
   const { data: termoId, error } = await supabase.rpc("registrar_termo", {
     p_analise: corpo.analise_id,
-    p_decisao: bloco.decisao,
+    p_decisao: "sem_decisao",
     p_nome: corpo.nome,
     p_email: corpo.email,
     p_assinatura_url: null,
@@ -164,27 +155,28 @@ export async function POST(req: Request) {
     .from("termos")
     .update({
       token,
-      hash_documento: hash,
+      /* hash_documento fica NULO até a assinatura: é lá que a decisão entra no
+         conteúdo, e um hash que não cobre a decisão não prova o termo */
       assinatura_status: "pendente",
       assinante_email: corpo.email,
-      /* as colunas da 0052 — consultáveis (a fila de divergentes de março sai
-         de um índice, não de varredura em JSON) */
-      tipo_decisao: bloco.tipo_decisao,
-      motivo_divergencia: bloco.motivo_divergencia,
+      /* tipo_decisao NULO = ainda não decidido. A coluna existe desde a 0052 e
+         é preenchida por quem assina, não por quem emite. */
+      tipo_decisao: null,
+      motivo_divergencia: null,
       recomendacao: bloco.recomendacao.decisao,
       recomendacao_saida: bloco.recomendacao.saida,
       // congela a apresentação: o documento não muda se a análise for revisada
       snapshot: {
         congelado_em: new Date().toISOString(),
-        decisao: bloco.decisao,
+        /* o selo da PROPOSTA: prova que a recomendação e as cláusulas de hoje
+           são estas, mesmo que a decisão só apareça semanas depois */
+        hash_proposta: hashProposta,
         clausulas: CLAUSULAS_CIENCIA,
         /* o texto inteiro da recomendação e dos pontos, como saiu HOJE. Guardar
            só a saída obrigaria a página a recalcular na hora de imprimir — e aí
            o termo de agosto mudaria de conteúdo quando o motor mudasse. */
         recomendacao: bloco.recomendacao,
         pontos: bloco.pontos,
-        tipo_decisao: bloco.tipo_decisao,
-        motivo_divergencia: bloco.motivo_divergencia,
         laudo: laudo?.token ? { token: laudo.token, numero: laudo.numero } : null,
         empresa: {
           razao_social: empresa?.razao_social ?? corpo.empresa ?? "empresa",
@@ -232,8 +224,9 @@ export async function POST(req: Request) {
         empresa: empresa?.razao_social ?? corpo.empresa ?? "sua empresa",
         escritorio,
         link: `${base}/assinar/${token}`,
-        /* o convite anuncia o que está no papel, não o que foi pedido */
-        decisao: bloco.decisao,
+        /* o convite anuncia a RECOMENDAÇÃO — a decisão ainda não existe, e
+           anunciá-la seria dizer ao cliente o que ele vai decidir */
+        decisao: bloco.recomendacao.decisao,
       }),
       tag: "termo-convite",
       responderPara: user.email ? { email: user.email, nome: tt?.nome ?? undefined } : undefined,

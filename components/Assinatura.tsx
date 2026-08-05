@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { ROTULO_TIPO, fraseDaDecisao, type Recomendacao, type TipoDecisao } from "@/lib/termo";
+import {
+  ROTULO_TIPO, fraseDaDecisao, resolverDecisao, validarDecisao,
+  type Recomendacao, type TipoDecisao,
+} from "@/lib/termo";
 
 interface Props {
   token: string;
@@ -40,12 +43,40 @@ export function Assinatura({
   const [aceite, setAceite] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
-  const [resultado, setResultado] = useState<{ metodo: string; assinado_em: string } | null>(null);
+  const [resultado, setResultado] = useState<{ metodo: string; assinado_em: string; hash?: string } | null>(null);
+  /**
+   * A DECISÃO É DAQUI PARA BAIXO — mudança de 05/08/2026.
+   *
+   * O termo chegava com a decisão já escrita pelo contador ("a empresa decide
+   * optar") e o cliente só assinava embaixo. O papel voltava a não distinguir
+   * quem decidiu o quê, que é o defeito inteiro que o termo existe para
+   * resolver. Nada vem pré-selecionado: pré-selecionar "seguir" seria a mesma
+   * decisão do contador, só que disfarçada de escolha.
+   */
+  const [tipo, setTipo] = useState<TipoDecisao | null>(tipoDecisao ?? null);
+  const [motivoTexto, setMotivoTexto] = useState(motivo ?? "");
 
-  const optou = decisao === "optar";
+  const recomendada = recomendacao?.decisao ?? decisao;
+  /* o que a escolha do cliente produz, em tempo real — ele vê o efeito antes
+     de assinar, não depois */
+  const valeu = tipo
+    ? resolverDecisao(tipo, recomendacao ?? { decisao: recomendada, saida: "S1", titulo: "", baseado_em: [] })
+    : null;
+  const optou = (valeu ?? decisao) === "optar";
 
   async function continuar() {
     setErro(null);
+    if (!tipo) {
+      setErro("Escolha o que a empresa decidiu antes de continuar.");
+      return;
+    }
+    /* a mesma regra do servidor, dita antes da ida: descobrir que faltava o
+       motivo depois do código de e-mail seria fazer a pessoa recomeçar */
+    const v = validarDecisao({ tipo, decisao: valeu ?? decisao, motivo: motivoTexto });
+    if (!v.ok) {
+      setErro(v.erro ?? "revise a decisão");
+      return;
+    }
     if (!nome.trim() || !email.trim()) {
       setErro("Preencha nome e e-mail.");
       return;
@@ -83,11 +114,17 @@ export function Assinatura({
       const resp = await fetch("/api/assinar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, acao: "confirmar", nome, cpf, email, codigo }),
+        body: JSON.stringify({
+          token, acao: "confirmar", nome, cpf, email, codigo,
+          tipo_decisao: tipo,
+          motivo_divergencia: motivoTexto.trim() || null,
+        }),
       });
       const json = await resp.json();
       if (!resp.ok) throw new Error(json.erro ?? "falha ao assinar");
-      setResultado({ metodo: json.metodo, assinado_em: json.assinado_em });
+      /* o hash agora NASCE na assinatura: mostrar o da emissão no recibo daria à
+         pessoa um código que não confere com o documento dela */
+      setResultado({ metodo: json.metodo, assinado_em: json.assinado_em, hash: json.hash_documento });
       setEtapa("ok");
     } catch (e) {
       setErro(e instanceof Error ? e.message : "erro inesperado");
@@ -113,7 +150,7 @@ export function Assinatura({
           {new Date(resultado.assinado_em).toLocaleString("pt-BR")}.
         </p>
         <p className="mt-3 break-all font-mono text-[10.5px] text-muted">
-          hash do documento: {hash}
+          hash do documento: {resultado.hash ?? hash}
         </p>
         {/*
           "Você já pode fechar esta página" era o fim da conversa — e a pessoa
@@ -184,26 +221,97 @@ export function Assinatura({
           </div>
         )}
 
-        <div className="mt-3 rounded-sm bg-surface px-3 py-2 text-[13px]">
-          Decisão: <b className="text-ink">{optou ? "Optar pelo regime híbrido (fora do DAS) a partir de 2027" : "Permanecer no regime tradicional"}</b>
-          {tipoDecisao && recomendacao && (
-            <span className="mt-1 block text-[12.5px] text-slate2">
-              <b>{ROTULO_TIPO[tipoDecisao]}.</b>{" "}
-              {fraseDaDecisao({ tipo: tipoDecisao, decisao, motivo }, recomendacao)}
-            </span>
+        {/**
+          * A DECISÃO — escolhida AQUI, por quem assina.
+          *
+          * Antes este bloco dizia "Decisão: Optar…" já preenchido pelo
+          * contador, e o cliente só assinava embaixo. Agora ele escolhe, e vê o
+          * efeito da escolha antes de assinar. Nada vem pré-selecionado:
+          * pré-selecionar "seguir" seria a decisão do contador disfarçada de
+          * escolha do cliente.
+          */}
+        <div className="mt-3 rounded-sm border border-accent bg-surface px-3 py-3">
+          <div className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-accentdeep">
+            A decisão da empresa
+          </div>
+          <p className="mt-1 text-[12.5px] text-slate2">
+            Esta parte é sua. A recomendação acima é técnica; a decisão é da empresa, e é ela que
+            este documento registra.
+          </p>
+          <div className="mt-2.5 flex flex-col gap-2">
+            {(Object.keys(ROTULO_TIPO) as TipoDecisao[]).map((t) => (
+              <label
+                key={t}
+                className={`flex cursor-pointer items-start gap-2.5 rounded-sm border px-3 py-2.5 text-[13px] ${
+                  tipo === t ? "border-accent bg-surface2 text-ink" : "border-line text-slate2"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="tipo-decisao"
+                  checked={tipo === t}
+                  onChange={() => setTipo(t)}
+                  className="mt-0.5"
+                />
+                <span>
+                  <b>{ROTULO_TIPO[t]}</b>
+                  <span className="mt-0.5 block text-[12px] text-muted">
+                    {t === "seguir" &&
+                      `A empresa faz o que a análise recomenda: ${
+                        recomendada === "optar" ? "optar pelo regime híbrido" : "permanecer no regime tradicional"
+                      }.`}
+                    {t === "divergir" &&
+                      `A empresa decide o contrário: ${
+                        recomendada === "optar" ? "permanecer no regime tradicional" : "optar pelo regime híbrido"
+                      }. O motivo é obrigatório.`}
+                    {t === "adiar" &&
+                      "Não exercer a opção nesta janela e reavaliar na seguinte. Sem manifestação no prazo, permanece no regime tradicional."}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+
+          {tipo && tipo !== "seguir" && (
+            <div className="mt-2.5">
+              <label className="mb-1 block text-[12px] font-semibold text-slate2">
+                {tipo === "divergir" ? "Por que a empresa decidiu diferente? (obrigatório)" : "Observação (opcional)"}
+              </label>
+              <textarea
+                value={motivoTexto}
+                onChange={(e) => setMotivoTexto(e.target.value)}
+                rows={3}
+                placeholder={
+                  tipo === "divergir"
+                    ? "Ex.: a empresa está em negociação de venda e não quer mudar o regime agora."
+                    : "Ex.: vamos reavaliar em março, depois do fechamento do trimestre."
+                }
+                className="w-full rounded-sm border border-line px-3 py-2 text-[13px] outline-none focus:border-accent"
+              />
+              {/* com as PALAVRAS DE QUEM DECIDIU: se o contador escreve no lugar
+                  dele, é o contador caracterizando a razão do cliente — e é essa
+                  frase que se contesta depois */}
+              <p className="mt-1 text-[11px] text-muted">
+                Escreva com as suas palavras. O texto entra no documento que você assina.
+              </p>
+            </div>
           )}
-          {/* O motivo é do EMPRESÁRIO e entra no hash. Ele precisa lê-lo antes
-              de assinar — inclusive para dizer "não foi isso que eu falei". */}
-          {tipoDecisao === "divergir" && (
-            <span className="mt-1.5 block rounded-sm border border-amarelo bg-amarelowash px-2.5 py-2 text-[12.5px] text-slate2">
-              <b>Motivo registrado como sendo da empresa:</b> {motivo || "—"}
-              <br />
-              <span className="text-[11.5px] text-muted">
-                Se esta não for a sua razão, fale com o seu contador antes de assinar.
+
+          {tipo && (
+            <p className="mt-2.5 rounded-sm bg-surface2 px-3 py-2 text-[12.5px] text-slate2">
+              <b className="text-ink">
+                {optou ? "Optar pelo regime híbrido (fora do DAS) a partir de 2027" : "Permanecer no regime tradicional"}
+              </b>
+              <span className="mt-0.5 block">
+                {fraseDaDecisao(
+                  { tipo, decisao: valeu ?? decisao, motivo: motivoTexto },
+                  recomendacao ?? { decisao: recomendada, saida: "S1", titulo: "", baseado_em: [] }
+                )}
               </span>
-            </span>
+            </p>
           )}
         </div>
+
         <ul className="mt-3 list-disc pl-5 text-[12.5px] text-slate2">
           {clausulas.map((c, i) => (
             <li key={i} className="mb-1">{c}</li>

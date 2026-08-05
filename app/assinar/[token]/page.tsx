@@ -101,7 +101,10 @@ export default async function AssinarPage({ params }: { params: { token: string 
         token={params.token}
         empresa={empresa?.razao_social ?? "Empresa"}
         cnpj={empresa?.cnpj ? formatarCnpj(empresa.cnpj) : ""}
-        decisao={(termo.decisao ?? "permanecer") as "optar" | "permanecer"}
+        /* `sem_decisao` até a assinatura — quem escolhe é quem assina. O
+           componente usa este valor só como base para o rótulo enquanto nada
+           foi escolhido. */
+        decisao={(termo.decisao === "optar" ? "optar" : "permanecer") as "optar" | "permanecer"}
         /* a lista CONGELADA na emissão: é ela que entrou no hash que a pessoa
            está prestes a assinar. Imprimir a constante viva fazia a tela
            mostrar 7 cláusulas sobre um documento cujo hash cobre 4. */

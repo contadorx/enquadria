@@ -75,6 +75,50 @@ export function conteudoCanonico(d: {
 }
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * O CONTEÚDO DA PROPOSTA — o que o CONTADOR congela na emissão.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * A partir de 05/08/2026 quem escolhe entre seguir, divergir e adiar é o
+ * SIGNATÁRIO, na página de assinatura. Isso move o hash do documento da emissão
+ * para a assinatura — e tem de mover: um hash calculado antes de a decisão
+ * existir não cobre a decisão, e é justamente ela que o termo serve para provar.
+ *
+ * Mas alguma coisa PRECISA ser congelada na emissão, senão a empresa poderia
+ * alegar que a recomendação era outra. É o que esta função faz: sela a
+ * recomendação técnica e as cláusulas de ciência, sem tocar na decisão.
+ *
+ * Os dois selos respondem a perguntas diferentes, e por isso são duas funções:
+ *   `conteudoDaProposta`  — "o contador recomendou isto, nesta data."
+ *   `conteudoCanonico`    — "a empresa leu tudo aquilo e decidiu isto."
+ * Uma função só, com campos opcionais, produziria um hash cujo significado
+ * dependeria de quais campos estavam preenchidos — que é a definição de prova
+ * ambígua.
+ */
+export function conteudoDaProposta(d: {
+  empresa: string;
+  cnpj: string;
+  recomendacao: "optar" | "permanecer";
+  saida?: string | null;
+  clausulas: string[];
+}): string {
+  return [
+    "PROPOSTA DE TERMO DE CIÊNCIA — IBS/CBS",
+    `EMPRESA: ${d.empresa}`,
+    `CNPJ: ${d.cnpj}`,
+    `RECOMENDAÇÃO TÉCNICA: ${
+      d.recomendacao === "optar"
+        ? "OPTAR pelo regime híbrido — recolhimento de IBS/CBS fora do DAS a partir de 2027"
+        : "PERMANECER no regime tradicional do Simples Nacional"
+    }`,
+    ...(d.saida ? [`SAÍDA DA ANÁLISE: ${d.saida}`] : []),
+    "DECISÃO: a ser declarada pela empresa no ato da assinatura.",
+    "CIÊNCIA:",
+    ...d.clausulas.map((c, i) => `${i + 1}. ${c}`),
+  ].join("\n");
+}
+
+/**
  * AS CLÁUSULAS DE CIÊNCIA — uma lista só, e esta é a correção de 05/08/2026.
  *
  * Havia DUAS cópias: esta e a de `components/FolhaTermo.tsx`. Depois viraram

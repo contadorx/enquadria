@@ -432,16 +432,54 @@ secao("Endereços públicos — o que chega ao cliente sem login");
        "a via do cliente"],
       ["app/assinar/[token]/page.tsx", ["recomendacao=", "pontos=", "tipoDecisao=", "parte.clausulas"],
        "a tela onde ele assina"],
-      ["app/api/termo/route.ts", ["tipo_decisao:", "motivo_divergencia:", "recomendacao:", "blocoDoTermo"],
+      ["app/api/termo/route.ts", ["recomendacao:", "blocoDoTermo", "hash_proposta"],
        "a rota que emite"],
-      ["app/api/termo/lote/route.ts", ["tipo_decisao:", "recomendacao:", "blocoDoTermo"],
+      ["app/api/termo/lote/route.ts", ["recomendacao:", "blocoDoTermo", "hash_proposta"],
        "a rota de lote"],
+      /* o guarda inteiro, não o import: apagar a chamada e deixar o import é
+         exatamente o que um refactor distraído faz */
+      ["app/api/assinar/route.ts",
+       ["ehTipoDecisao(corpo.tipo_decisao)", "validarDecisao({", "if (!valida.ok)", "resolverDecisao(",
+        "hash_documento: hashDocumento"],
+       "a rota que assina"],
     ];
     for (const [arq, exigidos, oque] of FIO) {
       const src = fs.existsSync(path.join(RAIZ, arq)) ? fs.readFileSync(path.join(RAIZ, arq), "utf8") : "";
       const faltando = exigidos.filter((e) => !src.includes(e));
       ok(`${oque} passa a recomendação adiante`, src !== "" && faltando.length === 0,
          src === "" ? "arquivo não encontrado" : `faltando: ${faltando.join(", ")}`);
+    }
+
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * A EMISSÃO NÃO DECIDE — a decisão é de quem assina.
+     * ═══════════════════════════════════════════════════════════════════════
+     *
+     * Até 05/08/2026 o contador escolhia seguir/divergir/adiar na hora de
+     * emitir, e o termo chegava ao cliente dizendo "a empresa decide optar".
+     * A empresa assinava embaixo de uma decisão que nunca declarou — o papel
+     * voltava a não distinguir quem decidiu o quê.
+     *
+     * O sinal mais confiável de recaída é o HASH: se a emissão volta a calcular
+     * `hash_documento`, é porque voltou a achar que conhece a decisão. Um hash
+     * feito antes de a decisão existir não cobre a decisão.
+     */
+    {
+      const emissao = ["app/api/termo/route.ts", "app/api/termo/lote/route.ts"];
+      for (const arq of emissao) {
+        const src = fs.readFileSync(path.join(RAIZ, arq), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+        ok(`${arq.split("/").slice(2).join("/")} não calcula o hash do documento na emissão`,
+           !/hash_documento:\s*hash\b/.test(src) && !/conteudoCanonico\(/.test(src),
+           "voltou a selar o documento antes de a decisão existir");
+        ok(`${arq.split("/").slice(2).join("/")} grava a decisão em branco`,
+           /p_decisao:\s*"sem_decisao"/.test(src),
+           "está gravando uma decisão que a empresa não declarou");
+      }
+      const assina = fs.readFileSync(path.join(RAIZ, "app/api/assinar/route.ts"), "utf8");
+      ok("a rota de assinatura carimba a evidência com o hash NOVO",
+         /montarEvidencia\([\s\S]{0,200}hash_documento:\s*hashDocumento/.test(assina) &&
+           /carimbar\(hashDocumento/.test(assina),
+         "a evidência ou o carimbo ainda usam o hash da emissão, que não cobre a decisão");
     }
 
     /**
@@ -456,6 +494,10 @@ secao("Endereços públicos — o que chega ao cliente sem login");
     {
       const folha = fs.readFileSync(path.join(RAIZ, "components/FolhaTermo.tsx"), "utf8")
         .replace(/\/\*[\s\S]*?\*\//g, "");
+      /* termo pendente não pode imprimir escolha que ninguém fez */
+      ok("a folha não afirma decisão em termo emitido e não assinado",
+         /!tipo_decisao\s*&&\s*!assinado/.test(folha) && /AGUARDANDO_DECISAO/.test(folha),
+         "as caixinhas voltam marcadas antes de a empresa decidir");
       ok("a folha imprime a lista de ciência CONGELADA, não a constante viva",
          /\(\s*clausulas\s*\?\?\s*CIENCIA_DOS_EFEITOS\s*\)/.test(folha),
          "usa CIENCIA_DOS_EFEITOS direto — termo antigo passa a exibir cláusula que o hash dele não cobre");

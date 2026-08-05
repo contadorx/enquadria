@@ -4,7 +4,7 @@ import type { AnaliseGravada } from "@/lib/laudo";
 import { responsavelDoTenant } from "@/lib/escritorio-server";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
-import { conteudoCanonico, sha256, novoToken, CLAUSULAS_CIENCIA } from "@/lib/esign";
+import { conteudoDaProposta, sha256, novoToken, CLAUSULAS_CIENCIA } from "@/lib/esign";
 import { enviarEmail, htmlConviteAssinatura } from "@/lib/email";
 
 /**
@@ -15,11 +15,12 @@ import { enviarEmail, htmlConviteAssinatura } from "@/lib/email";
  * assinatura direto para cada um. Sem a chave de e-mail, os termos são criados
  * do mesmo jeito e o contador copia os links na tela de entrega.
  *
- * A DECISÃO REGISTRADA SEGUE A RECOMENDAÇÃO — e no lote não pode ser outra
- * coisa. Divergir exige o motivo escrito pelo empresário, e não existe motivo
- * do empresário num lote de duzentos termos gerados de uma vez. Quem decide
- * diferente muda o termo na tela da empresa, um a um, que é onde a conversa
- * aconteceu.
+ * O LOTE NÃO DECIDE NADA — e desde 05/08/2026 a emissão individual também não.
+ * Cada termo sai com a RECOMENDAÇÃO congelada e a decisão em branco; quem
+ * escolhe entre seguir, divergir e adiar é o signatário, na página de
+ * assinatura. É o único desenho em que o papel prova que a decisão foi da
+ * empresa — e resolve de graça o problema do lote, que nunca teve como conter
+ * o motivo escrito por duzentos empresários diferentes.
  */
 export async function POST(req: Request) {
   const supabase = createClient();
@@ -114,23 +115,23 @@ export async function POST(req: Request) {
 
     /* mesma função da rota individual — uma fonte só para o mesmo papel */
     const bloco = blocoDoTermo(a as unknown as AnaliseGravada, "seguir");
-    const decisao = bloco.decisao;
     const laudoDela = mapaLaudo.get(a.id);
-    const hash = sha256(
-      conteudoCanonico({
+    /* SELO DA PROPOSTA, não do documento: a decisão nasce na assinatura desde
+       05/08/2026, e um hash feito antes dela não cobre o que o termo prova */
+    const hashProposta = sha256(
+      conteudoDaProposta({
         empresa: e.razao_social,
         cnpj: e.cnpj,
-        decisao,
-        clausulas: CLAUSULAS_CIENCIA,
         recomendacao: bloco.recomendacao.decisao,
-        tipo_decisao: bloco.tipo_decisao,
+        saida: bloco.recomendacao.saida,
+        clausulas: CLAUSULAS_CIENCIA,
       })
     );
     const token = novoToken();
 
     const { data: termoId, error } = await supabase.rpc("registrar_termo", {
       p_analise: a.id,
-      p_decisao: decisao,
+      p_decisao: "sem_decisao",
       p_nome: e.contato_nome,
       p_email: e.contato_email,
       p_assinatura_url: null,
@@ -145,20 +146,17 @@ export async function POST(req: Request) {
       .from("termos")
       .update({
         token,
-        hash_documento: hash,
         assinatura_status: "pendente",
         assinante_email: e.contato_email,
-        tipo_decisao: bloco.tipo_decisao,
+        tipo_decisao: null,
         recomendacao: bloco.recomendacao.decisao,
         recomendacao_saida: bloco.recomendacao.saida,
         snapshot: {
           congelado_em: new Date().toISOString(),
-          decisao,
+          hash_proposta: hashProposta,
           clausulas: CLAUSULAS_CIENCIA,
           recomendacao: bloco.recomendacao,
           pontos: bloco.pontos,
-          tipo_decisao: bloco.tipo_decisao,
-          motivo_divergencia: null,
           laudo: laudoDela?.token
             ? { token: laudoDela.token, numero: laudoDela.numero }
             : null,
@@ -183,7 +181,8 @@ export async function POST(req: Request) {
           empresa: e.razao_social,
           escritorio,
           link: `${base}/assinar/${token}`,
-          decisao,
+          /* o convite anuncia a RECOMENDAÇÃO; a decisão é de quem assina */
+          decisao: bloco.recomendacao.decisao,
         }),
         tag: "termo-convite",
         // "se preferir conversar antes de assinar, é só responder" — e a

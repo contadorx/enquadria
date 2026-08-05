@@ -29,7 +29,7 @@ import {
 import { PARAMETROS_2027, ehOptar } from "./motor.js";
 /* o conteúdo canônico é o que vira hash e vira assinatura — testar o termo sem
    testar o texto assinado é testar a metade que não é prova */
-import { conteudoCanonico, sha256 } from "./esign.js";
+import { conteudoCanonico, conteudoDaProposta, sha256 } from "./esign.js";
 
 let f = 0;
 const ok = (c, m, e) => {
@@ -397,6 +397,58 @@ ok(/não que ele estava certo/.test(AVISO_NOME_CORROMPIDO),
   ok(avisoCienciaDefasada(CIENCIA_DOS_EFEITOS, false) === null &&
      avisoCienciaDefasada(null, true) === null,
      "sem defasagem não há aviso — alerta que aparece sempre não é lido");
+}
+
+
+/* ═══════════ 14 · A DECISÃO É DE QUEM ASSINA ══════════════════════════════
+ *
+ * 05/08/2026. O termo chegava ao cliente já dizendo "Seguir a recomendação. A
+ * empresa acompanha a recomendação técnica e decide optar" — escolhido pelo
+ * CONTADOR na emissão. A empresa assinava embaixo de uma decisão que nunca
+ * declarou, e o papel voltava a não distinguir quem decidiu o quê, que é o
+ * defeito inteiro que o termo existe para resolver.
+ *
+ * O selo se parte em dois: a PROPOSTA é congelada na emissão (a recomendação e
+ * as cláusulas — para ninguém alegar depois que a recomendação era outra), e o
+ * DOCUMENTO é selado na assinatura, com a decisão dentro.
+ * ══════════════════════════════════════════════════════════════════════════ */
+{
+  const base = { empresa: "Metalúrgica São Bernardo Ltda", cnpj: "11222333000181", clausulas: ["um", "dois"] };
+
+  const proposta = conteudoDaProposta({ ...base, recomendacao: "optar", saida: "S5" });
+  ok(/DECISÃO: a ser declarada pela empresa no ato da assinatura\./.test(proposta),
+     "a proposta diz, no próprio texto, que a decisão ainda não existe");
+  ok(/RECOMENDAÇÃO TÉCNICA: OPTAR/.test(proposta) && /SAÍDA DA ANÁLISE: S5/.test(proposta),
+     "e sela a recomendação e a saída — é o que ela serve para provar");
+  ok(/1\. um/.test(proposta) && /2\. dois/.test(proposta), "as cláusulas entram no selo da proposta");
+
+  /* os dois selos respondem a perguntas diferentes e NÃO podem colidir */
+  const documento = conteudoCanonico({
+    ...base, decisao: "optar", recomendacao: "optar", tipo_decisao: "seguir",
+  });
+  ok(sha256(proposta) !== sha256(documento),
+     "o selo da proposta e o do documento assinado são diferentes — provam coisas diferentes");
+  ok(!proposta.startsWith("TERMO DE CIÊNCIA"),
+     "e o texto da proposta não se apresenta como termo assinado");
+
+  /* a proposta NÃO muda com a decisão: ela é o que o contador congelou */
+  ok(sha256(conteudoDaProposta({ ...base, recomendacao: "optar", saida: "S5" })) ===
+     sha256(proposta),
+     "o mesmo estado produz o mesmo selo — sem data de render dentro");
+  ok(sha256(conteudoDaProposta({ ...base, recomendacao: "permanecer", saida: "S5" })) !== sha256(proposta),
+     "recomendação diferente, selo diferente");
+
+  /* a decisão do signatário produz documentos diferentes a partir da MESMA proposta */
+  const rec = { decisao: "optar", saida: "S5", titulo: "", baseado_em: [] };
+  const selar = (tipo, motivo) => sha256(conteudoCanonico({
+    ...base, decisao: resolverDecisao(tipo, rec), recomendacao: "optar",
+    tipo_decisao: tipo, motivo,
+  }));
+  const h = [selar("seguir"), selar("adiar"), selar("divergir", "a empresa está em venda")];
+  ok(new Set(h).size === 3,
+     "seguir, adiar e divergir produzem TRÊS selos distintos — inclusive adiar, que dá o mesmo regime de permanecer");
+  ok(resolverDecisao("adiar", rec) === resolverDecisao("divergir", rec),
+     "…e é justamente por isso que o tipo precisa entrar no texto: os dois resolvem para permanecer");
 }
 
 

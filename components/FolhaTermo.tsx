@@ -3,6 +3,7 @@ import { assinaturaTecnica, mostrarNomeEscrito, type Escritorio } from "@/lib/es
 import { CSS_IMPRESSAO } from "@/lib/impressao";
 import {
   CIENCIA_DOS_EFEITOS, ROTULO_TIPO, fraseDaDecisao, nomeCorrompido, AVISO_NOME_CORROMPIDO,
+  AGUARDANDO_DECISAO,
   type Recomendacao, type TipoDecisao,
 } from "@/lib/termo";
 
@@ -179,20 +180,35 @@ export function FolhaTermo({
         )}
 
         <div className="sec">Decisão da empresa</div>
-        {tipo_decisao && recomendacao && (
-          <p className="txt">
-            <b>{ROTULO_TIPO[tipo_decisao]}.</b>{" "}
-            {fraseDaDecisao({ tipo: tipo_decisao, decisao, motivo: motivo_divergencia }, recomendacao)}
-          </p>
+        {/**
+          * TERMO EMITIDO E NÃO ASSINADO NÃO TEM DECISÃO — desde 05/08/2026 ela
+          * é escolhida por quem assina, na página de assinatura.
+          *
+          * Antes as duas caixinhas vinham marcadas na emissão, e a via impressa
+          * de um termo pendente já afirmava o que a empresa tinha decidido —
+          * antes de ela decidir. Imprimir escolha que ninguém fez é o oposto do
+          * que um termo de ciência serve para provar.
+          */}
+        {!tipo_decisao && !assinado ? (
+          <p className="txt">{AGUARDANDO_DECISAO}</p>
+        ) : (
+          <>
+            {tipo_decisao && recomendacao && (
+              <p className="txt">
+                <b>{ROTULO_TIPO[tipo_decisao]}.</b>{" "}
+                {fraseDaDecisao({ tipo: tipo_decisao, decisao, motivo: motivo_divergencia }, recomendacao)}
+              </p>
+            )}
+            <ul>
+              <li>
+                {optou ? "☑" : "☐"} <b>Optar pelo regime híbrido</b> — recolhimento fora do DAS
+              </li>
+              <li>
+                {optou ? "☐" : "☑"} <b>Permanecer no regime tradicional</b>
+              </li>
+            </ul>
+          </>
         )}
-        <ul>
-          <li>
-            {optou ? "☑" : "☐"} <b>Optar pelo regime híbrido</b> — recolhimento fora do DAS
-          </li>
-          <li>
-            {optou ? "☐" : "☑"} <b>Permanecer no regime tradicional</b>
-          </li>
-        </ul>
 
         {/**
           * O MOTIVO DA DIVERGÊNCIA, em destaque e com a autoria declarada.

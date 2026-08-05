@@ -260,6 +260,25 @@ export function ehTipoDecisao(x: unknown): x is TipoDecisao {
 }
 
 /**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * O TERMO EMITIDO AINDA NÃO TEM DECISÃO — e essa é a mudança de 05/08/2026.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * O contador escolhia os três estados na hora de emitir, e o termo chegava ao
+ * cliente já dizendo "A empresa acompanha a recomendação técnica e decide
+ * optar". A empresa assinava embaixo de uma decisão que ela não tinha
+ * declarado em lugar nenhum — o papel voltava a não distinguir quem decidiu o
+ * quê, que era exatamente o defeito que a reestruturação existia para corrigir.
+ *
+ * Agora a emissão congela a RECOMENDAÇÃO; a decisão nasce na assinatura. Até
+ * lá o termo tem `tipo_decisao` nulo e `decisao = 'sem_decisao'`, e as telas
+ * dizem isso em vez de mostrar uma decisão que ninguém tomou.
+ */
+export const AGUARDANDO_DECISAO =
+  "A empresa ainda não declarou a decisão. Ela é escolhida por quem assina, na página de " +
+  "assinatura, entre seguir a recomendação, decidir diferente ou não decidir nesta janela.";
+
+/**
  * O MOTIVO É OBRIGATÓRIO NA DIVERGÊNCIA — e essa é a regra que dá sentido ao
  * documento inteiro.
  *

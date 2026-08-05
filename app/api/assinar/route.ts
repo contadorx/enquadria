@@ -9,6 +9,10 @@ import {
   OTP_MAX_TENTATIVAS,
   type MetodoAssinatura,
 } from "@/lib/esign";
+import { conteudoCanonico, sha256, CLAUSULAS_CIENCIA } from "@/lib/esign";
+import {
+  ehTipoDecisao, validarDecisao, resolverDecisao, decisaoDoSnapshot,
+} from "@/lib/termo";
 import { carimbar } from "@/lib/carimbo";
 import { enviarEmail, htmlCodigoOtp } from "@/lib/email";
 import { htmlTermoAssinadoCliente, htmlTermoAssinadoContador } from "@/lib/emails-cliente";
@@ -38,6 +42,16 @@ export async function POST(req: Request) {
     cpf?: string;
     email?: string;
     codigo?: string;
+    /**
+     * A DECISÃO, escolhida por quem assina — mudança de 05/08/2026.
+     *
+     * Antes o contador escolhia na emissão e o termo chegava dizendo "a empresa
+     * decide optar". A empresa assinava embaixo de uma decisão que nunca
+     * declarou. Agora ela chega em branco e é preenchida aqui, o que é a única
+     * forma de o papel provar de quem foi a decisão.
+     */
+    tipo_decisao?: string;
+    motivo_divergencia?: string;
   };
   try {
     corpo = await req.json();
@@ -50,7 +64,9 @@ export async function POST(req: Request) {
 
   const { data: termo } = await supabase
     .from("termos")
-    .select("id, token, decisao, assinatura_status, analise_id, hash_documento, otp_hash, otp_expira, otp_tentativas")
+    .select(
+      "id, token, decisao, assinatura_status, analise_id, hash_documento, snapshot, recomendacao, otp_hash, otp_expira, otp_tentativas"
+    )
     .eq("token", corpo.token)
     .maybeSingle();
 
@@ -106,6 +122,55 @@ export async function POST(req: Request) {
       return NextResponse.json({ erro: "nome e e-mail obrigatórios" }, { status: 400 });
     }
 
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
+     * A DECISÃO NASCE AQUI, e com ela o hash do documento.
+     * ═══════════════════════════════════════════════════════════════════════
+     *
+     * O hash saiu da emissão porque um hash feito antes de a decisão existir
+     * não cobre a decisão — e é ela que o termo prova. Na emissão fica selada a
+     * PROPOSTA (recomendação + cláusulas, em `snapshot.hash_proposta`); aqui
+     * sela-se o documento inteiro, com o que a empresa declarou.
+     *
+     * A recomendação vem do SNAPSHOT, nunca recalculada: o signatário decide
+     * sobre a recomendação que leu, não sobre a que o motor daria hoje.
+     */
+    const parte = decisaoDoSnapshot(termo.snapshot);
+    const recomendada = (parte.recomendacao?.decisao ??
+      (termo.recomendacao === "optar" ? "optar" : "permanecer")) as "optar" | "permanecer";
+
+    if (!ehTipoDecisao(corpo.tipo_decisao)) {
+      return NextResponse.json(
+        { erro: "escolha o que a empresa decidiu antes de assinar" },
+        { status: 400 }
+      );
+    }
+    const motivo = (corpo.motivo_divergencia ?? "").trim() || null;
+    const decisaoFinal = resolverDecisao(corpo.tipo_decisao, {
+      decisao: recomendada, saida: "S1", titulo: "", baseado_em: [],
+    });
+    const valida = validarDecisao({ tipo: corpo.tipo_decisao, decisao: decisaoFinal, motivo });
+    if (!valida.ok) return NextResponse.json({ erro: valida.erro }, { status: 400 });
+
+    /* o conteúdo assinado usa as cláusulas CONGELADAS na emissão — não as de
+       hoje. Ver `decisaoDoSnapshot`: exibir uma lista e hashear outra foi um
+       defeito real desta mesma semana. */
+    const hashDocumento = sha256(
+      conteudoCanonico({
+        empresa: parte_empresa(termo.snapshot),
+        cnpj: parte_cnpj(termo.snapshot),
+        decisao: decisaoFinal,
+        /* a MESMA lista que a página mostrou: congelada quando existe, a viva
+           só nos termos anteriores ao snapshot — que é exatamente o que
+           `/assinar` renderiza. Hashear uma lista diferente da exibida foi um
+           defeito real desta semana. */
+        clausulas: parte.clausulas ?? CLAUSULAS_CIENCIA,
+        recomendacao: recomendada,
+        tipo_decisao: corpo.tipo_decisao,
+        motivo,
+      })
+    );
+
     let metodo: MetodoAssinatura = "simples";
     let otpVerificado = false;
 
@@ -133,16 +198,21 @@ export async function POST(req: Request) {
       headers: req.headers,
       metodo,
       otp_verificado: otpVerificado,
-      hash_documento: termo.hash_documento ?? "",
+      hash_documento: hashDocumento,
       agora,
     });
-    const carimbo = await carimbar(termo.hash_documento ?? "", agora);
+    const carimbo = await carimbar(hashDocumento, agora);
 
     const { error: upErr } = await supabase
       .from("termos")
       .update({
         assinatura_status: "assinado",
         assinado_em: agora,
+        /* o que a EMPRESA declarou, e o selo do documento que ela assinou */
+        decisao: decisaoFinal,
+        tipo_decisao: corpo.tipo_decisao,
+        motivo_divergencia: motivo,
+        hash_documento: hashDocumento,
         assinante_nome: corpo.nome,
         assinante_cpf: corpo.cpf ?? null,
         assinante_email: corpo.email,
@@ -195,7 +265,7 @@ export async function POST(req: Request) {
       const dono = await donoDoTenant(supabase, analiseA?.tenant_id ?? null);
       const nomeEmpresa = (empresaA as { razao_social?: string } | null)?.razao_social ?? "a empresa";
       const escritorio = dono?.escritorio ?? "Seu contador";
-      const decisao = (termo.decisao === "optar" ? "optar" : "permanecer") as "optar" | "permanecer";
+      const decisao = decisaoFinal;
       const base = new URL(req.url).origin;
       /**
        * O BOTÃO DO E-MAIL DIZ "guardar uma cópia do termo" — então ele precisa
@@ -242,8 +312,27 @@ export async function POST(req: Request) {
       console.error("[assinar] falha ao avisar do termo assinado:", e instanceof Error ? e.message : e);
     }
 
-    return NextResponse.json({ ok: true, metodo, assinado_em: agora });
+    return NextResponse.json({
+      ok: true, metodo, assinado_em: agora,
+      decisao: decisaoFinal, tipo_decisao: corpo.tipo_decisao,
+      hash_documento: hashDocumento,
+    });
   }
 
   return NextResponse.json({ erro: "ação inválida" }, { status: 400 });
+}
+
+/**
+ * A empresa e o CNPJ vêm do SNAPSHOT porque é o que o signatário leu na tela.
+ * Buscar ao vivo faria o hash cobrir uma razão social que talvez tenha mudado
+ * entre a emissão e a assinatura — e aí o documento impresso não fecharia com
+ * o próprio selo.
+ */
+function parte_empresa(snapshot: unknown): string {
+  const s = (snapshot ?? {}) as { empresa?: { razao_social?: string } };
+  return s.empresa?.razao_social ?? "empresa";
+}
+function parte_cnpj(snapshot: unknown): string {
+  const s = (snapshot ?? {}) as { empresa?: { cnpj?: string } };
+  return s.empresa?.cnpj ?? "";
 }
