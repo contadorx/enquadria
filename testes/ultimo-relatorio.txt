@@ -162,6 +162,15 @@ ok    e as vencidas são apuradas pelo dia do Brasil
 ok    plano com identificador vazio é recusado
 ok    o destaque só é limpo depois de confirmar que o plano existe
 ok    limpar a data de acesso também espelha em valido_ate
+ok    o aviso é assinado com HMAC sobre timestamp+corpo
+ok    ...com timeout, para não segurar o cadastro
+ok    ...e nunca lança: devolve o motivo em vez de estourar
+ok    o cadastro ativo é avisado na confirmação do e-mail
+ok    ...com chave idempotente por escritório
+ok    ...dentro de try/catch, sem segurar o redirecionamento
+ok    quem paga vira 'Cliente', com evento próprio
+ok    existe reprocesso para quem se cadastrou antes do webhook
+ok    ...que respeita is_teste e pula escritório sem usuário
 ok    o contexto das réguas LÊ o erro da RPC em vez de descartá-lo
 ok    e fonte quebrada não vira fila vazia silenciosa
 ok    o cron não relata 0 planejados sem dizer nada
@@ -272,4 +281,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 235 verificações automáticas
+TUDO PASSOU — 244 verificações automáticas

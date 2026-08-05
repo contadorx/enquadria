@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { calcularMetricas, moedaBR, valorReal, ehPagante, type ContaMetrica } from "@/lib/cobranca";
 import { mesBr } from "@/lib/negocio-calc";
+import { ExcluirConta } from "@/components/ExcluirConta";
 
 /**
  * AS CONTAS — a tela onde uma conta vira teste, cortesia ou cancelada.
@@ -328,6 +329,21 @@ export default function ContasAdmin() {
               className="w-full rounded-sm border border-line px-3 py-2 text-[13px]"
             />
           </label>
+
+          <ExcluirConta
+            /* `key` pelo id: sem ele, trocar de conta com o painel aberto
+               reaproveitaria o estado do componente — a prévia da conta
+               anterior ficaria na tela ao lado do nome da nova. É exatamente o
+               engano que a confirmação por nome existe para impedir. */
+            key={sel.id}
+            tenantId={sel.id}
+            nome={sel.nome}
+            onExcluida={() => {
+              setSel(null);
+              void carregar();
+              router.refresh();
+            }}
+          />
         </div>
       )}
     </div>

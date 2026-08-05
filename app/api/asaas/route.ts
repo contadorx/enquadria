@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase-admin";
 import { statusDoAsaas } from "@/lib/faturas";
 import { decidirSucessao, validadeFinal, type AssinaturaResumo } from "@/lib/assinatura";
 import { encerrarAssinaturas } from "@/lib/assinatura-server";
+import { avisarContatia, chaveDe } from "@/lib/contatia";
 
 /**
  * Webhook do Asaas — chega SEM sessão de usuário, então usa service role
@@ -498,6 +499,41 @@ export async function POST(req: Request) {
     const r = await encerrarAssinaturas(supabase, encerradas);
     avisos = r.avisos;
     if (avisos.length) console.error("[asaas] sucessão de plano:", avisos.join(" · "));
+  }
+
+  /**
+   * VIROU CLIENTE — o segundo evento que o Contatia entende.
+   *
+   * `cadastro_ativo` tira da prospecção; `assinatura_ativa` marca quem paga.
+   * São tags diferentes de propósito: a conversa com quem testa e com quem
+   * paga não é a mesma, e misturar as duas na mesma lista é o jeito mais
+   * rápido de mandar pitch de conversão para quem já converteu.
+   *
+   * Aqui também não pode derrubar nada: o pagamento já foi processado e o
+   * acesso já foi liberado quando esta linha roda.
+   */
+  if (tenantId) {
+    try {
+      const { data: t } = await supabase
+        .from("tenants").select("nome").eq("id", tenantId).maybeSingle();
+      const { data: p } = await supabase
+        .from("profiles").select("email").eq("tenant_id", tenantId).order("email").limit(1);
+      const email = ((p ?? []) as { email?: string }[])[0]?.email;
+      if (email) {
+        const r = await avisarContatia({
+          evento: "assinatura_ativa",
+          /* a chave inclui a ASSINATURA: renovar no mês seguinte é um fato
+             novo, e o CRM deve saber que ele aconteceu de novo */
+          chave: chaveDe("assinatura_ativa", assinaturaId),
+          email,
+          empresa: (t as { nome?: string } | null)?.nome ?? null,
+          extra: { plano: planoId, valido_ate: validade },
+        });
+        if (!r.enviado) console.error(`[contatia] assinatura_ativa não avisada: ${r.motivo}`);
+      }
+    } catch (e) {
+      console.error("[contatia] aviso de assinatura falhou:", e instanceof Error ? e.message : e);
+    }
   }
 
   return NextResponse.json({

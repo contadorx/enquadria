@@ -915,6 +915,51 @@ secao("Contratação — o clique que não fazia nada");
        /"vencimento" in patch/.test(ng2));
   }
 
+  /**
+   * ═════════════════════════════════════════════════════════════════════════
+   * O AVISO AO CONTATIA — a costura que era manual.
+   *
+   * Sem ele, quem cria conta na terça recebe "você conhece o Enquadria?" na
+   * quarta, porque continua na cadência de prospecção até alguém aplicar a tag
+   * à mão. As guardas abaixo protegem as três propriedades que fazem isto
+   * poder existir num caminho crítico.
+   * ═════════════════════════════════════════════════════════════════════════
+   */
+  {
+    const ct = fs.readFileSync(path.join(RAIZ, "lib/contatia.ts"), "utf8");
+
+    /* o segredo não pode trafegar: assina-se `timestamp.corpo` */
+    ok("o aviso é assinado com HMAC sobre timestamp+corpo",
+       /createHmac\("sha256", segredo\)/.test(ct) && /\$\{ts\}\.\$\{corpo\}/.test(ct));
+    /* sem timeout, um CRM lento vira espera na cara de quem confirmou o e-mail */
+    ok("...com timeout, para não segurar o cadastro", /AbortController/.test(ct) && /TIMEOUT_MS/.test(ct));
+    /* a função NÃO pode lançar: ela roda no meio do login */
+    ok("...e nunca lança: devolve o motivo em vez de estourar",
+       /catch \(e\)/.test(ct) && !/throw /.test(ct));
+
+    const cb = fs.readFileSync(path.join(RAIZ, "app/auth/callback/route.ts"), "utf8");
+    ok("o cadastro ativo é avisado na confirmação do e-mail",
+       /avisarContatia/.test(cb) && /cadastro_ativo/.test(cb));
+    /* a chave é o TENANT: clicar duas vezes no link de confirmação não pode
+       inscrever a pessoa duas vezes na cadência do outro lado */
+    ok("...com chave idempotente por escritório",
+       /chaveDe\("cadastro_ativo", tenantId \?\? user\.id\)/.test(cb));
+    /* falha do CRM não pode impedir alguém de entrar no produto */
+    ok("...dentro de try/catch, sem segurar o redirecionamento",
+       /try \{[\s\S]{0,900}avisarContatia[\s\S]{0,600}\} catch/.test(cb));
+
+    const wh4 = fs.readFileSync(path.join(RAIZ, "app/api/asaas/route.ts"), "utf8");
+    ok("quem paga vira 'Cliente', com evento próprio",
+       /evento: "assinatura_ativa"/.test(wh4));
+
+    const ng3 = fs.readFileSync(path.join(RAIZ, "app/api/negocio/route.ts"), "utf8");
+    ok("existe reprocesso para quem se cadastrou antes do webhook",
+       /case "avisar_contatia"/.test(ng3));
+    /* conta de teste marcada no painel não pode entrar no CRM */
+    ok("...que respeita is_teste e pula escritório sem usuário",
+       /if \(t\.is_teste\)/.test(ng3) && /if \(!email\)/.test(ng3));
+  }
+
   const rg = fs.readFileSync(path.join(RAIZ, "lib/reguas.ts"), "utf8");
   /* olhar por "error" no arquivo inteiro casaria com qualquer coisa: a
      checagem é na desestruturação da RPC, que era exatamente o que faltava */

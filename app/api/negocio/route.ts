@@ -448,6 +448,117 @@ export async function POST(req: Request) {
       });
     }
 
+    /**
+     * ═════════════════════════════════════════════════════════════════════
+     * APAGAR UMA CONTA — em dois passos, e o primeiro não apaga nada.
+     *
+     * `previa_exclusao` é um ENSAIO: pergunta ao banco exatamente o que o
+     * delete faria e devolve as contagens, os avisos e os impedimentos. É a
+     * MESMA função que a exclusão chama depois, de propósito — se a prévia e a
+     * exclusão fossem dois códigos, o dia em que divergissem seria o dia em
+     * que a tela mostraria uma coisa e o banco faria outra.
+     *
+     * Reparar que a RPC é chamada com a sessão do usuário, NÃO com a chave de
+     * serviço. Parece detalhe e não é: a trava "esta é a sua própria conta"
+     * depende de `auth.uid()`, e para a service role `auth.uid()` é NULL. Com
+     * o cliente admin, essa trava sumiria em silêncio — o mesmo mecanismo que
+     * derrubou o cron das réguas em 0042. A função é SECURITY DEFINER, então
+     * ela não precisa de service role para escrever.
+     * ═════════════════════════════════════════════════════════════════════
+     */
+    case "previa_exclusao": {
+      const tenantId = String(corpo.tenant_id || "");
+      if (!tenantId) return NextResponse.json({ erro: "tenant_id" }, { status: 400 });
+      const { data, error } = await supabase.rpc("previa_exclusao_conta", { p_tenant: tenantId });
+      if (error) {
+        return NextResponse.json(
+          {
+            erro: /does not exist|not find|schema cache/i.test(error.message)
+              ? "A migration 0045 ainda não foi rodada neste banco."
+              : error.message,
+          },
+          { status: 500 }
+        );
+      }
+      return NextResponse.json({ ok: true, ...(data as object) });
+    }
+
+    case "excluir_conta": {
+      const tenantId = String(corpo.tenant_id || "");
+      const confirmacao = typeof corpo.confirmacao === "string" ? corpo.confirmacao : "";
+      const motivo = typeof corpo.motivo === "string" && corpo.motivo.trim() ? corpo.motivo.trim() : null;
+      if (!tenantId) return NextResponse.json({ erro: "tenant_id" }, { status: 400 });
+
+      /* o banco confere o nome, as três recusas e grava a auditoria na mesma
+         transação do delete. Aqui não se repete nenhuma dessas regras: regra
+         repetida é regra que um dia diverge. */
+      const { data, error } = await supabase.rpc("excluir_conta", {
+        p_tenant: tenantId,
+        p_confirmacao: confirmacao,
+        p_motivo: motivo,
+      });
+      if (error) {
+        return NextResponse.json(
+          {
+            erro: /does not exist|not find|schema cache/i.test(error.message)
+              ? "A migration 0045 ainda não foi rodada neste banco."
+              : error.message,
+          },
+          { status: 400 }
+        );
+      }
+
+      const r = (data ?? {}) as {
+        nome?: string;
+        total_linhas?: number;
+        contagens?: Record<string, number>;
+        usuarios?: { id: string; email?: string | null }[];
+      };
+
+      /**
+       * O LOGIN, que o banco não pode apagar.
+       *
+       * `profiles` some pelo cascade, mas a linha em `auth.users` continua. Sem
+       * apagar, a pessoa consegue entrar de novo, chega num app sem perfil e
+       * sem escritório — e o cadastro dela ficaria num limbo pior do que
+       * simplesmente não existir. Também é o que impede o e-mail de ser
+       * reaproveitado num cadastro novo.
+       *
+       * SÓ apaga quem ficou sem NENHUM perfil: um usuário que também pertence
+       * a outro escritório continua com o login dele.
+       */
+      const admin = createAdminClient();
+      const removidos: string[] = [];
+      const mantidos: string[] = [];
+      const falhas: string[] = [];
+
+      for (const u of r.usuarios ?? []) {
+        if (!u?.id) continue;
+        const rotulo = u.email || u.id;
+        const { data: aindaTem, error: eLer } = await supabase
+          .from("profiles").select("id").eq("id", u.id).maybeSingle();
+        if (eLer) { falhas.push(`${rotulo}: ${eLer.message}`); continue; }
+        if (aindaTem) { mantidos.push(rotulo); continue; }
+
+        if (!admin) { falhas.push(`${rotulo}: sem SUPABASE_SERVICE_ROLE_KEY, o login não pôde ser apagado`); continue; }
+        const { error: eDel } = await admin.auth.admin.deleteUser(u.id);
+        if (eDel) falhas.push(`${rotulo}: ${eDel.message}`);
+        else removidos.push(rotulo);
+      }
+
+      return NextResponse.json({
+        ok: true,
+        nome: r.nome ?? null,
+        total_linhas: r.total_linhas ?? 0,
+        contagens: r.contagens ?? {},
+        logins_apagados: removidos,
+        logins_mantidos: mantidos,
+        /* a conta foi apagada de qualquer jeito — o que falhou aqui é o login
+           sobrando, e isso tem de aparecer na tela em vez de virar sucesso */
+        falhas,
+      });
+    }
+
     case "reconciliar": {
       const assinaturaId = String(corpo.assinatura_id || "");
       if (!assinaturaId) return NextResponse.json({ erro: "assinatura" }, { status: 400 });
@@ -455,6 +566,66 @@ export async function POST(req: Request) {
       const { reconciliarAssinatura } = await import("@/lib/asaas");
       const r = await reconciliarAssinatura(db, assinaturaId);
       return r.erro ? NextResponse.json({ erro: r.erro }, { status: 502 }) : NextResponse.json({ ok: true, ...r });
+    }
+
+    /**
+     * ═════════════════════════════════════════════════════════════════════
+     * REPROCESSA OS CADASTROS NO CONTATIA.
+     *
+     * O aviso automático só existe a partir de agora — quem se cadastrou
+     * antes nunca foi avisado, e um envio que falhe (Contatia fora do ar,
+     * segredo trocado) também precisa de segunda chance.
+     *
+     * É SEGURO RODAR QUANTAS VEZES QUISER: a chave de idempotência é
+     * `cadastro_ativo:<tenant_id>`, então o Contatia reconhece o reenvio e
+     * responde "já recebi" em vez de inscrever a pessoa de novo na cadência.
+     * Sem essa garantia, um botão destes seria uma arma apontada para a
+     * própria base.
+     * ═════════════════════════════════════════════════════════════════════
+     */
+    case "avisar_contatia": {
+      const { avisarContatia, chaveDe } = await import("@/lib/contatia");
+      const db = dbEscrita(supabase);
+
+      const { data: contas, error: eLer } = await db
+        .from("tenants")
+        .select("id, nome, is_teste");
+      if (eLer) return NextResponse.json({ erro: eLer.message }, { status: 500 });
+
+      let enviados = 0;
+      let pulados = 0;
+      const falhas: string[] = [];
+
+      for (const t of ((contas ?? []) as { id: string; nome?: string; is_teste?: boolean }[])) {
+        /* conta de teste não entra no CRM: marcar "teste" tem que valer aqui
+           também, senão a régua do Contatia recebe o que o painel exclui */
+        if (t.is_teste) { pulados++; continue; }
+
+        const { data: p } = await db
+          .from("profiles").select("email").eq("tenant_id", t.id).order("email").limit(1);
+        const email = ((p ?? []) as { email?: string }[])[0]?.email;
+        /* escritório órfão (sem nenhum usuário) não tem e-mail para avisar —
+           é o mesmo entulho que trava a fila de réguas */
+        if (!email) { pulados++; continue; }
+
+        const r = await avisarContatia({
+          evento: "cadastro_ativo",
+          chave: chaveDe("cadastro_ativo", t.id),
+          email,
+          empresa: t.nome ?? null,
+          extra: { origem: "reprocesso_painel" },
+        });
+        if (r.enviado) enviados++;
+        else falhas.push(`${email}: ${r.motivo ?? "sem motivo"}`);
+      }
+
+      return NextResponse.json({
+        ok: true,
+        enviados,
+        pulados,
+        falhas: falhas.slice(0, 10),
+        total_falhas: falhas.length,
+      });
     }
 
     // ─────────────────────────────────────────────────────────────── Asaas
