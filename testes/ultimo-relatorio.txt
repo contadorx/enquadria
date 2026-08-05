@@ -3,12 +3,13 @@
 ok    compila sem erro
 
 ── Suítes de função pura ───────────────────────────────────────
-ok    21 suítes encontradas na pasta
+ok    23 suítes encontradas na pasta
 ok    suíte abertura (34 asserções)
 ok    suíte ajuda (41 asserções)
 ok    suíte assinatura (36 asserções)
 ok    suíte cnpj (47 asserções)
 ok    suíte cobranca (15 asserções)
+ok    suíte cobranca-fonte (28 asserções)
 ok    suíte cockpit (37 asserções)
 ok    suíte coleta (42 asserções)
 ok    suíte curso (9 asserções)
@@ -18,13 +19,14 @@ ok    suíte erros-auth (20 asserções)
 ok    suíte escritorio (12 asserções)
 ok    suíte faturas (35 asserções)
 ok    suíte janela (20 asserções)
-ok    suíte laudo-fundamentacao (35 asserções)
+ok    suíte laudo-fundamentacao (41 asserções)
 ok    suíte motor (79 asserções)
 ok    suíte muro (11 asserções)
 ok    suíte negocio (20 asserções)
 ok    suíte nps (40 asserções)
 ok    suíte reguas (52 asserções)
 ok    suíte roteiro (24 asserções)
+ok    suíte tabela-2027 (82 asserções)
 
 ── Auditoria de UX (percepção, não estética) ───────────────────
 ok    auditoria de UX (6 regras limpas)
@@ -33,7 +35,7 @@ ok    auditoria de UX (6 regras limpas)
 ok    auditoria de schema (24 tabelas com proveniência)
 
 ── Auditoria de upsert (o onConflict que o Postgres não consegue inferir) 
-ok    auditoria de upsert (11 conferidos)
+ok    auditoria de upsert (12 conferidos)
 
 ── Segurança do dado — o que a tela promete no momento da fricção 
 ok    a tela promete "separação no banco, não filtro de tela" e o documento sustenta
@@ -124,6 +126,8 @@ ok    a fila separa o que vai sair do que está travado sem destinatário
 ok    e a contagem por grupo conta só o que REALMENTE sai
 ok    o escritório órfão vira ação na fila do negócio, com conserto
 ok    cada execução do motor deixa um batimento
+ok    a rota do cron DELEGA para o módulo, em vez de ter cópia do corpo
+ok    e o painel chama a MESMA função (um gatilho a mais, não um caminho a mais)
 ok    e a tela mostra quando ele rodou pela última vez
 ok    existe a migration que deixa a service role ler os escritórios
 ok    a guarda nova aceita superadmin E service role
@@ -133,6 +137,7 @@ ok    existe a migration que deixa a plataforma ver todos os escritórios
 ok    a política nova é sobre tenants e usa a guarda de plataforma
 ok    ...e NÃO concede delete (as FK descem em cascade)
 ok    a tela de contas confirma a gravação pedindo a linha de volta
+ok    Faturas & régua não edita mais escritório (a fonte dupla acabou)
 ok    o contexto das réguas copia `termos` da RPC
 ok    ...e também is_teste / emails_optout, que decidem quem NÃO recebe
 ok    erro ao ler a config PARA o motor (senão as réguas religam sozinhas)
@@ -241,9 +246,9 @@ ok    G03 dDAS ponderado = 2.510%
 ok    G03 saída segregada S4 · pelo cadastro S4
 ok    G04 dDAS ponderado = 2.510%
 ok    G04 saída segregada S4 · pelo cadastro S3
-ok    G05 dDAS ponderado = 2.876%
+ok    G05 dDAS ponderado = 2.916%
 ok    G05 saída segregada S3 · pelo cadastro S3
-ok    G06 dDAS ponderado = 3.058%
+ok    G06 dDAS ponderado = 3.379%
 ok    G06 saída segregada S4 · pelo cadastro S4
 ok    G07 dDAS ponderado = 2.077%
 ok    G07 saída segregada S4 · pelo cadastro S4
@@ -282,4 +287,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 245 verificações automáticas
+TUDO PASSOU — 250 verificações automáticas

@@ -11,6 +11,7 @@ import {
   aulaPorSlug,
   materiaisDe,
   videoDaAula,
+  minutosDaAula,
 } from "@/lib/curso";
 
 /**
@@ -46,10 +47,12 @@ export default async function AulaPage({ params }: { params: { slug: string } })
   const supabase = createClient();
   const { data: linha } = await supabase
     .from("curso_videos")
-    .select("video_url")
+    .select("video_url, minutos")
     .eq("slug", aula.slug)
     .maybeSingle();
   const doBanco = (linha?.video_url as string | null) ?? null;
+  /* a duração medida vence a estimativa do código — ver migration 0046 */
+  const duracao = minutosDaAula(aula, { [aula.slug]: (linha as { minutos?: number | null } | null)?.minutos ?? null });
 
   const i = TODAS_AULAS.findIndex((a) => a.slug === aula.slug);
   const anterior = i > 0 ? TODAS_AULAS[i - 1] : null;
@@ -97,7 +100,7 @@ export default async function AulaPage({ params }: { params: { slug: string } })
           {aula.titulo}
         </h1>
         <p className="mt-3 max-w-[64ch] text-[16px] leading-relaxed text-slate2">{aula.resumo}</p>
-        <div className="mt-2 font-mono text-[12px] text-muted">{aula.minutos} minutos</div>
+        <div className="mt-2 font-mono text-[12px] text-muted">{duracao} minutos</div>
 
         {/* ---------------------------------------------------------- vídeo */}
         <div className="mt-6 overflow-hidden rounded-lg border border-line bg-ink">

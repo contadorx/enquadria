@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase-server";
 import { carregarContexto, planejar, separarFila, VARIAVEIS, type Envio } from "@/lib/reguas";
-import { ReguaCartao, RodarReguas, LiberarReenvio, ConfigChave, ConfigNumero, type RegraUI } from "@/components/NegocioUI";
+import { ReguaCartao, RodarReguas, ForcarCron, LiberarReenvio, ConfigChave, ConfigNumero, type RegraUI } from "@/components/NegocioUI";
 
 export const dynamic = "force-dynamic";
 
@@ -108,6 +108,7 @@ export default async function Emails() {
             </p>
           </div>
           <RodarReguas />
+          <ForcarCron />
         </div>
 
         <div className="mt-4 grid gap-4 border-t border-linesoft pt-4 md:grid-cols-4">

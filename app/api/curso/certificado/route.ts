@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { createAdminClient } from "@/lib/supabase-admin";
-import { TOTAL_AULAS, TOTAL_MINUTOS, CURSO } from "@/lib/curso";
+import { TOTAL_AULAS, TOTAL_MINUTOS, CURSO, totalMinutos } from "@/lib/curso";
 
 /**
  * EMISSÃO DO CERTIFICADO DO CURSO.
@@ -94,6 +94,25 @@ export async function POST(req: Request) {
     );
   }
 
+  /**
+   * A CARGA HORÁRIA DO CERTIFICADO É A MEDIDA, não a estimada.
+   *
+   * O certificado é um documento que o aluno põe no LinkedIn. Se ele disser
+   * "3h20" e o curso tiver 5h de player, quem confere é o próprio aluno, e o
+   * que fica em dúvida é o documento inteiro. `TOTAL_MINUTOS` fica como padrão
+   * para o caso de a leitura falhar — errar pela estimativa antiga é melhor
+   * que emitir certificado sem carga horária.
+   */
+  let minutosCurso = TOTAL_MINUTOS;
+  try {
+    const { data: durs } = await supabase.from("curso_videos").select("slug, minutos");
+    minutosCurso = totalMinutos(
+      Object.fromEntries(((durs ?? []) as { slug: string; minutos: number | null }[]).map((d) => [d.slug, d.minutos]))
+    );
+  } catch {
+    /* leitura de duração não pode impedir a emissão do certificado */
+  }
+
   const codigo = novoCodigo();
   const { data: criado, error } = await supabase
     .from("curso_certificados")
@@ -104,7 +123,7 @@ export async function POST(req: Request) {
       crc,
       curso: CURSO.nome,
       aulas: TOTAL_AULAS,
-      minutos: TOTAL_MINUTOS,
+      minutos: minutosCurso,
     })
     .select("emitido_em")
     .single();

@@ -173,10 +173,32 @@ export function baseDeCalculo(a: AnaliseGravada): string[] {
   linhas.push(
     `Parcela que sai do DAS ao optar: ${pct(d.sharePC)} da carga do Simples = ${pct(d.das)} da receita.`
   );
+  /**
+   * O TETO DE 5% DO ISS TEM DE APARECER, e por um motivo prático.
+   *
+   * Quando ele morde, o `sharePC` impresso NÃO é o da tabela do anexo — é maior.
+   * Um contador que confira a memória de cálculo contra a tabela vai encontrar
+   * dois números diferentes e concluir que o laudo errou. A explicação custa
+   * duas linhas e evita a única conversa que ninguém quer ter.
+   */
+  if (d.teto_iss) {
+    linhas.push(
+      `Teto de 5% do ISS aplicado: pela tabela do anexo o ISS efetivo seria ${pct(d.teto_iss.iss_sem_teto, 2)}, ` +
+        `acima do limite legal de 5%. A diferença é transferida aos tributos federais da mesma faixa — ` +
+        `inclusive à CBS e ao IBS —, o que eleva a parcela que sai do DAS de ${pct(d.teto_iss.sharePC_tabela)} ` +
+        `para ${pct(d.teto_iss.sharePC_aplicado)} da carga do Simples.`
+    );
+    linhas.push(
+      "Base: nota de rodapé dos Anexos XX e XXI da Lei Complementar nº 214/2025 — o ISS fica fixo em 5% e " +
+        "os demais tributos recebem (alíquota efetiva − 5%) × percentual de redistribuição da faixa."
+    );
+  }
+
   linhas.push(
     "Essa parcela corresponde às colunas de CBS e IBS da partilha do anexo (Anexos XVIII a XXII da " +
       "Lei Complementar nº 214/2025, art. 519, com efeitos a partir de 1º/01/2027), de soma idêntica " +
-      "à antiga partilha de Cofins e PIS/Pasep dos Anexos I a V da Lei Complementar nº 123/2006."
+      "à antiga partilha de Cofins e PIS/Pasep dos Anexos I a V da Lei Complementar nº 123/2006 nas " +
+      "cinco primeiras faixas. Na 6ª faixa não há coluna de IBS, e a parcela é menor que a de 2026."
   );
   return linhas;
 }

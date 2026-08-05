@@ -163,15 +163,52 @@ export function carimboAliquota(aliquota: number, consultadoEm: string): Carimbo
 }
 
 /**
- * TABELA LEGAL DO SIMPLES NACIONAL — LC 123, Anexos I a V.
- * Conferida contra as tabelas oficiais da Receita Federal (jul/2026).
+ * TABELA DO SIMPLES DE 2027–2028 — Anexos XVIII a XXII da LC 214/2025.
  *
- * Cada faixa carrega o que a alíquota EFETIVA precisa:
+ * ═══════════════════════════════════════════════════════════════════════════
+ * ESTA TABELA MUDOU EM 05/08/2026, e é a correção mais cara desta base.
+ *
+ * Até aqui o motor usava a tabela VIGENTE HOJE (Anexos I a V da LC 123). Isso
+ * está errado por construção: a decisão é de setembro de 2026 e vale para 2027,
+ * e a partir de 1º/01/2027 vale a tabela dos Anexos XVIII a XXII, que o art. 519
+ * da LC 214/2025 põe no lugar dos antigos.
+ *
+ * Nas faixas 1 a 5 a troca é invisível: as colunas "Cofins" e "PIS/Pasep" viram
+ * "CBS" e "IBS" e a soma é a mesma (Anexo I: 12,74 + 2,76 = 15,50 = 15,33 +
+ * 0,17). Foi por isso que passou tanto tempo sem aparecer.
+ *
+ * NA 6ª FAIXA A TROCA É VISÍVEL, DE DUAS FORMAS:
+ *
+ *   1. a ALÍQUOTA NOMINAL cai 0,10 ponto em todos os cinco anexos (19,00 →
+ *      18,90 no Anexo I, e assim por diante), voltando ao valor de hoje em
+ *      2029. É o espelho da CBS na alíquota de referência reduzida em 0,1 p.p.
+ *      (art. 347);
+ *
+ *   2. NÃO HÁ COLUNA DE IBS. Acima do sublimite o ICMS e o ISS já não estão no
+ *      DAS, e o legislador não criou fatia de IBS ali: os ~1,1% que seriam dele
+ *      foram para IRPJ, CSLL, CPP e IPI. No Anexo I: IRPJ 13,50 → 13,58, CSLL
+ *      10,00 → 10,06, CPP 42,10 → 42,34 — e a soma dos três acréscimos é
+ *      exatamente 0,38, que é o que saiu da antiga fatia de 34,40.
+ *
+ * Resultado: `sharePC` da 6ª faixa cai entre 0,21 e 0,38 ponto. O motor usava o
+ * valor de hoje e superestimava em ~1,1% o que sai do DAS de toda empresa entre
+ * R$ 3,6 e R$ 4,8 milhões.
+ *
+ * Extraído do texto compilado da LC 214/2025 no Planalto (PDF, 178 páginas,
+ * consultado em 05/08/2026). As 30 linhas foram conferidas por soma (toda linha
+ * de partilha fecha 100%) e pela razão IBS/(CBS+IBS), que fica entre 1,07% e
+ * 1,14% nas faixas 1 a 5 — coerente com IBS de 0,1% contra CBS de ~8,7%. Duas
+ * consultas anteriores afirmaram valores em que essa razão dava 17,8%, que é a
+ * razão PIS/(Cofins+PIS) de hoje: tinham renomeado as colunas. Ver
+ * ferramentas/conferir-partilha.mjs.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Cada faixa carrega:
  *   teto      · teto de RBT12 da faixa, em R$
- *   nominal   · alíquota nominal da faixa (fração)
+ *   nominal   · alíquota nominal em 2027–2028 (fração)
  *   deduzir   · parcela a deduzir da faixa, em R$
- *   sharePC   · (Cofins% + PIS/Pasep%) da partilha OFICIAL daquela faixa —
- *               a fatia da carga que vira CBS e SAI do DAS no regime híbrido.
+ *   sharePC   · (CBS% + IBS%) da partilha — a fatia que SAI do DAS ao optar
+ *   shareISS  · participação do ISS na partilha, necessária para o teto de 5%
  *
  * A alíquota efetiva do Simples é (RBT12 × nominal − deduzir) / RBT12: sempre
  * ≤ nominal, e bem abaixo nas faixas baixas. Usar a nominal superestima o
@@ -182,54 +219,98 @@ export interface FaixaSimples {
   nominal: number;
   deduzir: number;
   sharePC: number;
+  /** participação do ISS na partilha da faixa; ausente quando o anexo não tem ISS */
+  shareISS?: number;
 }
 
 export const ANEXOS_SIMPLES: Record<number, FaixaSimples[]> = {
   // Anexo I — Comércio
+  // Anexo XVIII (= I) — Comércio · sharePC = CBS + IBS
   1: [
-    { teto: 180000, nominal: 0.04, deduzir: 0, sharePC: 0.155 },
+    { teto: 180000, nominal: 0.04, deduzir: 0, sharePC: 0.155 },       // 15,33 + 0,17
     { teto: 360000, nominal: 0.073, deduzir: 5940, sharePC: 0.155 },
     { teto: 720000, nominal: 0.095, deduzir: 13860, sharePC: 0.155 },
     { teto: 1800000, nominal: 0.107, deduzir: 22500, sharePC: 0.155 },
     { teto: 3600000, nominal: 0.143, deduzir: 87300, sharePC: 0.155 },
-    { teto: 4800000, nominal: 0.19, deduzir: 378000, sharePC: 0.344 },
+    { teto: 4800000, nominal: 0.189, deduzir: 378000, sharePC: 0.3402 }, // 6ª: 18,90% · CBS 34,02, sem IBS
   ],
-  // Anexo II — Indústria
+  // Anexo XIX (= II) — Indústria
   2: [
-    { teto: 180000, nominal: 0.045, deduzir: 0, sharePC: 0.14 },
+    { teto: 180000, nominal: 0.045, deduzir: 0, sharePC: 0.14 },        // 13,85 + 0,15
     { teto: 360000, nominal: 0.078, deduzir: 5940, sharePC: 0.14 },
     { teto: 720000, nominal: 0.1, deduzir: 13860, sharePC: 0.14 },
     { teto: 1800000, nominal: 0.112, deduzir: 22500, sharePC: 0.14 },
     { teto: 3600000, nominal: 0.147, deduzir: 85500, sharePC: 0.14 },
-    { teto: 4800000, nominal: 0.3, deduzir: 720000, sharePC: 0.255 },
+    { teto: 4800000, nominal: 0.299, deduzir: 720000, sharePC: 0.2522 }, // 6ª: 29,90% · CBS 25,22
   ],
-  // Anexo III — Serviços (fator R ≥ 28% e serviços do §5º-B)
+  // Anexo XX (= III) — Serviços (fator R ≥ 28% e serviços do §5º-B)
   3: [
-    { teto: 180000, nominal: 0.06, deduzir: 0, sharePC: 0.156 },
-    { teto: 360000, nominal: 0.112, deduzir: 9360, sharePC: 0.171 },
-    { teto: 720000, nominal: 0.135, deduzir: 17640, sharePC: 0.166 },
-    { teto: 1800000, nominal: 0.16, deduzir: 35640, sharePC: 0.166 },
-    { teto: 3600000, nominal: 0.21, deduzir: 125640, sharePC: 0.156 },
-    { teto: 4800000, nominal: 0.33, deduzir: 648000, sharePC: 0.195 },
+    { teto: 180000, nominal: 0.06, deduzir: 0, sharePC: 0.156, shareISS: 0.335 },      // 15,43 + 0,17
+    { teto: 360000, nominal: 0.112, deduzir: 9360, sharePC: 0.171, shareISS: 0.32 },   // 16,91 + 0,19
+    { teto: 720000, nominal: 0.135, deduzir: 17640, sharePC: 0.166, shareISS: 0.325 }, // 16,41 + 0,19 (redação da LC 227/2026)
+    { teto: 1800000, nominal: 0.16, deduzir: 35640, sharePC: 0.166, shareISS: 0.325 },
+    { teto: 3600000, nominal: 0.21, deduzir: 125640, sharePC: 0.156, shareISS: 0.335 },
+    { teto: 4800000, nominal: 0.329, deduzir: 648000, sharePC: 0.1929 }, // 6ª: 32,90% · CBS 19,29, sem ISS
   ],
-  // Anexo IV — Serviços (construção, limpeza, advocacia; sem CPP no DAS)
+  // Anexo XXI (= IV) — Serviços (construção, limpeza, advocacia; sem CPP no DAS)
   4: [
-    { teto: 180000, nominal: 0.045, deduzir: 0, sharePC: 0.215 },
-    { teto: 360000, nominal: 0.09, deduzir: 8100, sharePC: 0.25 },
-    { teto: 720000, nominal: 0.102, deduzir: 12420, sharePC: 0.24 },
-    { teto: 1800000, nominal: 0.14, deduzir: 39780, sharePC: 0.23 },
-    { teto: 3600000, nominal: 0.22, deduzir: 183780, sharePC: 0.22 },
-    { teto: 4800000, nominal: 0.33, deduzir: 828000, sharePC: 0.25 },
+    { teto: 180000, nominal: 0.045, deduzir: 0, sharePC: 0.215, shareISS: 0.445 },     // 21,26 + 0,24
+    { teto: 360000, nominal: 0.09, deduzir: 8100, sharePC: 0.25, shareISS: 0.4 },      // 24,73 + 0,27
+    { teto: 720000, nominal: 0.102, deduzir: 12420, sharePC: 0.24, shareISS: 0.4 },
+    { teto: 1800000, nominal: 0.14, deduzir: 39780, sharePC: 0.23, shareISS: 0.4 },
+    { teto: 3600000, nominal: 0.22, deduzir: 183780, sharePC: 0.22, shareISS: 0.4 },
+    { teto: 4800000, nominal: 0.329, deduzir: 828000, sharePC: 0.247 }, // 6ª: 32,90% · CBS 24,70, sem ISS
   ],
-  // Anexo V — Serviços intensivos em conhecimento (fator R < 28%)
+  // Anexo XXII (= V) — Serviços intensivos em conhecimento (fator R < 28%)
   5: [
-    { teto: 180000, nominal: 0.155, deduzir: 0, sharePC: 0.1715 },
-    { teto: 360000, nominal: 0.18, deduzir: 4500, sharePC: 0.1715 },
-    { teto: 720000, nominal: 0.195, deduzir: 9900, sharePC: 0.1815 },
-    { teto: 1800000, nominal: 0.205, deduzir: 17100, sharePC: 0.1915 },
-    { teto: 3600000, nominal: 0.23, deduzir: 62100, sharePC: 0.1715 },
-    { teto: 4800000, nominal: 0.305, deduzir: 540000, sharePC: 0.2 },
+    { teto: 180000, nominal: 0.155, deduzir: 0, sharePC: 0.1715, shareISS: 0.14 },     // 16,96 + 0,19
+    { teto: 360000, nominal: 0.18, deduzir: 4500, sharePC: 0.1715, shareISS: 0.17 },
+    { teto: 720000, nominal: 0.195, deduzir: 9900, sharePC: 0.1815, shareISS: 0.19 },  // 17,95 + 0,20
+    { teto: 1800000, nominal: 0.205, deduzir: 17100, sharePC: 0.1915, shareISS: 0.21 },// 18,94 + 0,21
+    { teto: 3600000, nominal: 0.23, deduzir: 62100, sharePC: 0.1715, shareISS: 0.235 },
+    { teto: 4800000, nominal: 0.304, deduzir: 540000, sharePC: 0.1978 }, // 6ª: 30,40% · CBS 19,78, sem ISS
   ],
+};
+
+/**
+ * O TETO DE 5% DO ISS — a regra que faltava, e que muda `das` em até 16%.
+ *
+ * Nota de rodapé dos Anexos XX e XXI da LC 214/2025, em texto literal:
+ *
+ *   "(*) O percentual efetivo máximo devido ao ISS será de 5%, transferindo-se
+ *   a diferença, de forma proporcional, aos tributos federais da mesma faixa de
+ *   receita bruta anual."
+ *
+ * E a nota traz a repartição fechada: cada tributo recebe
+ * `(alíquota efetiva − 5%) × percentual`, com o ISS travado em 5 pontos.
+ *
+ * O QUE ISSO SIGNIFICA AQUI: o excedente **alcança a CBS e o IBS**. Uma consulta
+ * afirmou o contrário (que iria só para IRPJ, CSLL e CPP) citando um dispositivo
+ * inexistente — a lei diz o oposto, com número. Logo a fatia que sai do DAS
+ * SOBE para prestador de serviço de porte médio, e o motor a subestimava.
+ *
+ * ONDE MORDE. Só na 5ª faixa, e a própria lei diz isso: é onde a alíquota
+ * efetiva ultrapassa o gatilho. Nas faixas 1 a 4 o ISS efetivo não chega a 5%
+ * (Anexo III faixa 4, no teto: 14,02% × 32,5% = 4,56%), e na 6ª não há ISS.
+ *
+ * ANEXO V NÃO TEM A NOTA — e não precisa: a efetiva máxima da 5ª faixa é
+ * 21,275% (a R$ 3,6 mi), que × 23,5% dá exatamente 5,00%. O teto nunca morde.
+ * Isso é conferido por teste, não por confiança.
+ */
+export interface TetoISS {
+  /** alíquota efetiva a partir da qual o ISS efetivo passaria de 5% */
+  gatilho: number;
+  /** CBS% + IBS% da tabela de redistribuição da nota — substitui o sharePC */
+  sharePCredistribuido: number;
+  /** a faixa em que a nota se aplica */
+  faixa: number;
+}
+
+export const TETO_ISS: Record<number, TetoISS | undefined> = {
+  // Anexo XX: CBS 23,20% + IBS 0,26%
+  3: { gatilho: 0.1492537, sharePCredistribuido: 0.2346, faixa: 5 },
+  // Anexo XXI: CBS 36,27% + IBS 0,40%
+  4: { gatilho: 0.125, sharePCredistribuido: 0.3667, faixa: 5 },
 };
 
 /** normaliza o índice do anexo; cai no Anexo I quando ausente ou inválido */
@@ -279,14 +360,69 @@ export interface DDAS {
    * Quem consome precisa avisar em vez de calcular.
    */
   acimaDoTeto?: boolean;
+  /**
+   * Preenchido quando o teto de 5% do ISS mordeu. Vai para o laudo: a memória
+   * de cálculo não pode mostrar um `sharePC` diferente do da tabela sem
+   * explicar de onde ele veio.
+   */
+  teto_iss?: {
+    gatilho: number;
+    sharePC_tabela: number;
+    sharePC_aplicado: number;
+    /** ISS efetivo que a tabela produziria sem o teto */
+    iss_sem_teto: number;
+  };
+}
+
+/**
+ * O TETO DE 5% DO ISS aplicado a uma faixa — devolve null quando não morde.
+ *
+ * A conta da lei não é "reduzir o ISS e reescalar tudo": é literal —
+ *   ISS = 5 pontos percentuais
+ *   demais = (alíquota efetiva − 5%) × percentual da tabela de redistribuição
+ *
+ * Então `das` deixa de ser `efetiva × sharePC` e passa a ser
+ * `(efetiva − 0,05) × sharePCredistribuido`.
+ */
+function aplicarTetoISS(anexo: number, faixa: number, efetiva: number, sharePCtabela: number) {
+  const regra = TETO_ISS[anexo];
+  const shareISS = ANEXOS_SIMPLES[anexo]?.[faixa - 1]?.shareISS;
+  /**
+   * `regra.faixa !== faixa` é REDUNDANTE hoje, e fica de propósito.
+   *
+   * Medido: desligar essa condição não muda nenhum resultado, porque o gatilho
+   * de alíquota efetiva já sozinho impede que o teto morda fora da 5ª faixa
+   * (Anexo III faixa 4, no topo: 14,02% contra gatilho de 14,92537%). Ou seja,
+   * ela não detecta nada — hoje.
+   *
+   * Continua aqui porque a redundância é entre uma condição ESTRUTURAL (a nota
+   * de rodapé fala da 5ª faixa) e uma NUMÉRICA (o gatilho). No dia em que a
+   * tabela mudar — e ela muda em 2029 —, a numérica pode deixar de proteger e a
+   * estrutural continua. Guarda barata contra mudança futura, não código morto.
+   */
+  if (!regra || regra.faixa !== faixa || shareISS == null) return null;
+  const issSemTeto = efetiva * shareISS;
+  if (!(issSemTeto > 0.05) || !(efetiva > regra.gatilho)) return null;
+  return {
+    das: Math.max(efetiva - 0.05, 0) * regra.sharePCredistribuido,
+    teto_iss: {
+      gatilho: regra.gatilho,
+      sharePC_tabela: sharePCtabela,
+      /* o sharePC EQUIVALENTE, para o laudo poder mostrar um número comparável
+         com o da tabela em vez de duas fórmulas diferentes */
+      sharePC_aplicado: efetiva > 0 ? (Math.max(efetiva - 0.05, 0) * regra.sharePCredistribuido) / efetiva : 0,
+      iss_sem_teto: issSemTeto,
+    },
+  };
 }
 
 /**
  * dDAS EFETIVO por empresa — o número que entra no motor como `das`.
  *
- * Com RBT12 real → alíquota efetiva daquela RBT12 × sharePC da faixa.
+ * Com RBT12 real → alíquota efetiva daquela RBT12 × sharePC da faixa, com o
+ *                  teto de 5% do ISS aplicado quando ele morde.
  * Sem RBT12     → FALLBACK CONSERVADOR: alíquota nominal (topo da faixa) ×
- *                 sharePC, na faixa informada (ou faixa 3 se nada vier). Nunca
+ *                 sharePC, na faixa informada (ou faixa 1 se nada vier). Nunca
  *                 subestima o custo, e o laudo marca a premissa como estimada.
  */
 export function dDASefetivo(
@@ -302,7 +438,20 @@ export function dDASefetivo(
     const faixa = tabela[f - 1];
     const efetiva = Math.max((rbt12 * faixa.nominal - faixa.deduzir) / rbt12, 0);
     const acimaDoTeto = rbt12 > tabela[tabela.length - 1].teto;
-    return { das: efetiva * faixa.sharePC, faixa: f, anexo: a, aliquota: efetiva, sharePC: faixa.sharePC, rbt12, fonte: "efetiva", acimaDoTeto };
+    const teto = aplicarTetoISS(a, f, efetiva, faixa.sharePC);
+    return {
+      das: teto ? teto.das : efetiva * faixa.sharePC,
+      faixa: f,
+      anexo: a,
+      aliquota: efetiva,
+      /* o sharePC devolvido é o EFETIVAMENTE usado: quem imprime o laudo não
+         pode receber um número e ver outro na conta */
+      sharePC: teto ? teto.teto_iss.sharePC_aplicado : faixa.sharePC,
+      rbt12,
+      fonte: "efetiva",
+      acimaDoTeto,
+      ...(teto ? { teto_iss: teto.teto_iss } : {}),
+    };
   }
 
   // FALLBACK — mudou em 26/07/2026, depois da validação externa.

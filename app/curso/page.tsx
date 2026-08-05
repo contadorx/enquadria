@@ -9,7 +9,7 @@ import {
   MODULOS,
   RESSALVA,
   TOTAL_AULAS,
-  TOTAL_MINUTOS,
+  totalMinutos,
   AULAS_NO_AR,
 } from "@/lib/curso";
 
@@ -35,8 +35,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: true },
 };
 
-const horas = Math.floor(TOTAL_MINUTOS / 60);
-const minutos = TOTAL_MINUTOS % 60;
+
 
 /**
  * O VÍDEO VEM DO BANCO (migration 0038): publicar aula não exige deploy.
@@ -48,16 +47,25 @@ export const revalidate = 60;
 
 export default async function CursoPage() {
   const supabase = createClient();
-  const { data: linhas } = await supabase.from("curso_videos").select("slug, video_url");
+  const { data: linhas } = await supabase.from("curso_videos").select("slug, video_url, minutos");
+  const lidas = (linhas ?? []) as { slug: string; video_url: string | null; minutos: number | null }[];
+  /**
+   * A DURAÇÃO TAMBÉM VEM DO BANCO (migration 0046).
+   *
+   * O minuto do código é estimativa feita antes de gravar, e estimativa de
+   * duração erra sempre. O aluno confere no player em três segundos — uma
+   * grade que promete 8 minutos numa aula de 16 queima a credibilidade da
+   * grade inteira, inclusive das partes certas.
+   */
+  const mapaMin = Object.fromEntries(lidas.map((l) => [l.slug, l.minutos]));
   const modulos = comVideos(
     MODULOS,
-    Object.fromEntries(
-      ((linhas ?? []) as { slug: string; video_url: string | null }[]).map((l) => [
-        l.slug,
-        l.video_url,
-      ])
-    )
+    Object.fromEntries(lidas.map((l) => [l.slug, l.video_url])),
+    mapaMin
   );
+  const total = totalMinutos(mapaMin);
+  const horas = Math.floor(total / 60);
+  const minutos = total % 60;
   const primeira = modulos[0].aulas[0];
 
   return (

@@ -683,8 +683,26 @@ secao("Contratação — o clique que não fazia nada");
 
   /* sem batimento, "o motor não rodou" e "rodou e não tinha nada" são
      indistinguíveis — e foi assim que a fila ficou dias parecendo entupida */
-  const cron = fs.readFileSync(path.join(RAIZ, "app/api/cron/negocio/route.ts"), "utf8");
+  /**
+   * O CORPO DO CRON MUDOU DE ARQUIVO em 05/08/2026, e estas duas guardas
+   * quebraram — o que é o comportamento certo delas.
+   *
+   * O que rodava dentro da rota foi para `lib/cron-negocio.ts`, porque agora
+   * existem dois gatilhos: o Vercel Cron e o botão do painel. Enquanto eram
+   * códigos diferentes, apertar o botão para reproduzir um problema do cron
+   * reproduzia outra coisa — o botão só chamava as réguas.
+   *
+   * As guardas passam a ler o módulo, e ganharam uma terceira: a rota TEM de
+   * delegar. Sem ela, alguém reimplementa o corpo na rota e os dois caminhos
+   * divergem de novo, em silêncio.
+   */
+  const cronRota = fs.readFileSync(path.join(RAIZ, "app/api/cron/negocio/route.ts"), "utf8");
+  const cron = fs.readFileSync(path.join(RAIZ, "lib/cron-negocio.ts"), "utf8");
   ok("cada execução do motor deixa um batimento", /reguas_execucao/.test(cron));
+  ok("a rota do cron DELEGA para o módulo, em vez de ter cópia do corpo",
+     /rodarCronNegocio\(/.test(cronRota) && !/executarReguas/.test(cronRota));
+  ok("e o painel chama a MESMA função (um gatilho a mais, não um caminho a mais)",
+     /rodarCronNegocio/.test(fs.readFileSync(path.join(RAIZ, "app/api/negocio/route.ts"), "utf8")));
   ok("e a tela mostra quando ele rodou pela última vez", /ultimaExec/.test(telaEmails));
 
   /**
@@ -742,12 +760,18 @@ secao("Contratação — o clique que não fazia nada");
        (sql43.match(/for (all|delete)/i) || ["ok"])[0]);
   }
 
-  const telaContas = fs.readFileSync(path.join(RAIZ, "app/painel/negocio/contas/page.tsx"), "utf8");
-  /* RLS que recusa escrita não devolve erro: devolve zero linhas. Sem pedir a
-     linha de volta, a tela diz "salvo" tendo salvo nada. */
+  /* A tela de Contas virou server component em 05/08/2026 e a gravação foi
+     para `components/ContaLinha.tsx` — esta guarda seguiu o código, como a do
+     cron. RLS que recusa escrita não devolve erro: devolve ZERO LINHAS. Sem
+     pedir a linha de volta, a tela diz "salvo" tendo salvo nada. */
+  const telaContas = fs.readFileSync(path.join(RAIZ, "components/ContaLinha.tsx"), "utf8");
   ok("a tela de contas confirma a gravação pedindo a linha de volta",
-     /\.update\(campos\)[\s\S]{0,80}\.select\("id"\)/.test(telaContas) &&
-     /!alterado\?\.length/.test(telaContas));
+     /\.update\(campos\)[\s\S]{0,120}\.select\("id"\)/.test(telaContas) &&
+     /!data\?\.length/.test(telaContas));
+  /* e a tela é UMA: a de cobranças não pode voltar a editar assinatura por
+     fora, que era a origem da divergência */
+  ok("Faturas & régua não edita mais escritório (a fonte dupla acabou)",
+     !/LinhaEscritorio/.test(fs.readFileSync(path.join(RAIZ, "app/painel/negocio/cobrancas/page.tsx"), "utf8")));
 
   /**
    * ═════════════════════════════════════════════════════════════════════════
@@ -1124,10 +1148,28 @@ const SEG = [
    { b2b: .8, qual: .85, cred: .4, folha: .32, preco: 2, conc: 1, exig: 0 }, 0.018449, "S4", "S4"],
   ["G03", [{ anexo: 5, share: .5 }, { anexo: 1, share: .5 }], 5, 1200000, R_G, 0.025104, "S4", "S4"],
   ["G04", [{ anexo: 5, share: .5 }, { anexo: 1, share: .5 }], 1, 1200000, R_G, 0.025104, "S4", "S3"],
+  /**
+   * G05 e G06 MUDARAM em 05/08/2026, e não por conveniência de teste.
+   *
+   * São os dois únicos cenários deste gabarito com receita de serviço na 5ª
+   * faixa — ou seja, os dois em que o TETO DE 5% DO ISS morde (nota de rodapé
+   * dos Anexos XX e XXI da LC 214/2025). O excedente do ISS é redistribuído aos
+   * tributos federais INCLUSIVE à CBS, então sai MAIS do DAS do que a tabela
+   * sozinha sugeriria.
+   *
+   *   G05: anexo 3 a 2,4 mi · efetiva 15,7650% > gatilho 14,92537% → morde
+   *        0,028759 → 0,029156   (+1,38%)
+   *   G06: anexo 4 a 3,0 mi · efetiva 15,8740% > gatilho 12,5%     → morde
+   *        anexo 3 a 3,0 mi · efetiva 16,8120% > gatilho 14,92537% → morde
+   *        0,030575 → 0,033793   (+10,52%, os dois segmentos afetados)
+   *
+   * Os outros oito cenários não mudaram um dígito. É assim que se sabe que o
+   * que mudou foi a regra do ISS, e não a tabela inteira desandando.
+   */
   ["G05", [{ anexo: 3, share: .6 }, { anexo: 5, share: .4 }], 3, 2400000,
-   { b2b: .75, qual: .85, cred: .3, folha: .30, preco: 2, conc: 1, exig: 0 }, 0.028759, "S3", "S3"],
+   { b2b: .75, qual: .85, cred: .3, folha: .30, preco: 2, conc: 1, exig: 0 }, 0.029156, "S3", "S3"],
   ["G06", [{ anexo: 4, share: .5 }, { anexo: 3, share: .5 }], 4, 3000000,
-   { b2b: .9, qual: .9, cred: .45, folha: .34, preco: 2, conc: 1, exig: 0 }, 0.030575, "S4", "S4"],
+   { b2b: .9, qual: .9, cred: .45, folha: .34, preco: 2, conc: 1, exig: 0 }, 0.033793, "S4", "S4"],
   ["G07", [{ anexo: 1, share: .4 }, { anexo: 2, share: .3 }, { anexo: 5, share: .3 }], 1, 2000000,
    { b2b: .85, qual: .9, cred: .5, folha: .18, preco: 2, conc: 1, exig: 0 }, 0.020774, "S4", "S4"],
   ["G08", [{ anexo: 5, share: .5 }, { anexo: 1, share: .5 }], 1, 1200000,

@@ -156,7 +156,10 @@ export const ABAS_ESTUDOS: ItemNav[] = [
 export const ABAS_NEGOCIO: ItemNav[] = [
   { href: "/painel/negocio", label: "Visão" },
   { href: "/painel/negocio/contas", label: "Contas" },
-  { href: "/painel/negocio/cobrancas", label: "Cobranças" },
+  /* a tabela de escritórios saiu daqui e foi para Contas em 05/08/2026: as duas
+     liam fontes diferentes do mesmo escritório. Aqui ficou o que é só cobrança —
+     a régua e o extrato de faturas. */
+  { href: "/painel/negocio/cobrancas", label: "Faturas & régua" },
   { href: "/painel/negocio/planos", label: "Planos & Asaas" },
   { href: "/painel/negocio/emails", label: "E-mails proativos" },
   { href: "/painel/negocio/chamados", label: "Suporte" },

@@ -339,9 +339,27 @@ export const RESSALVA =
 export type MapaVideos = Record<string, string | null | undefined>;
 
 /**
- * Devolve os módulos com o vídeo do banco aplicado.
+ * { slug → duração REAL medida depois de gravar }.
  *
- * Função pura: recebe o mapa já lido, não consulta nada. É isso que a torna
+ * O `minutos` que está lá em cima, em cada aula, é ESTIMATIVA de planejamento —
+ * e as estimativas deste curso estão erradas: a ementa publica 9, 9 e 8 minutos
+ * para as aulas 4, 5 e 6, e o roteiro delas, a 155 palavras por minuto, mede
+ * cerca de 16 cada. Ninguém acerta a duração antes de gravar, e insistir nisso
+ * só produz um número que o aluno confere no player e desmente.
+ *
+ * O banco tem precedência porque é onde está o número medido.
+ */
+export type MapaMinutos = Record<string, number | null | undefined>;
+
+/** aceita só duração plausível — o mesmo limite da trava do banco (0046) */
+function minutosValidos(m: unknown): number | null {
+  return typeof m === "number" && Number.isFinite(m) && m > 0 && m <= 600 ? Math.round(m) : null;
+}
+
+/**
+ * Devolve os módulos com o vídeo e a duração do banco aplicados.
+ *
+ * Função pura: recebe os mapas já lidos, não consulta nada. É isso que a torna
  * testável e que impede a página do curso de virar um lugar onde regra de
  * negócio se esconde atrás de uma consulta.
  *
@@ -349,14 +367,20 @@ export type MapaVideos = Record<string, string | null | undefined>;
  * "cadastrei e depois limpei o campo", que não deve derrubar uma aula no ar
  * por acidente. Para tirar do ar, apaga-se a linha.
  */
-export function comVideos(modulos: Modulo[], mapa: MapaVideos | null | undefined): Modulo[] {
-  if (!mapa) return modulos;
+export function comVideos(
+  modulos: Modulo[],
+  mapa: MapaVideos | null | undefined,
+  minutos?: MapaMinutos | null
+): Modulo[] {
+  if (!mapa && !minutos) return modulos;
   return modulos.map((m) => ({
     ...m,
     aulas: m.aulas.map((a) => {
-      const doBanco = mapa[a.slug];
+      const doBanco = mapa?.[a.slug];
       const url = typeof doBanco === "string" ? doBanco.trim() : "";
-      return url ? { ...a, video: url } : a;
+      const min = minutosValidos(minutos?.[a.slug]);
+      if (!url && min == null) return a;
+      return { ...a, ...(url ? { video: url } : {}), ...(min != null ? { minutos: min } : {}) };
     }),
   }));
 }
@@ -366,4 +390,21 @@ export function videoDaAula(aula: Aula, mapa: MapaVideos | null | undefined): st
   const doBanco = mapa?.[aula.slug];
   const url = typeof doBanco === "string" ? doBanco.trim() : "";
   return url || aula.video || null;
+}
+
+/** a duração que vale: a medida, se houver; senão a estimativa do código */
+export function minutosDaAula(aula: Aula, minutos: MapaMinutos | null | undefined): number {
+  return minutosValidos(minutos?.[aula.slug]) ?? aula.minutos;
+}
+
+/**
+ * O TOTAL DO CURSO com as durações medidas — usado na grade e no certificado.
+ *
+ * `TOTAL_MINUTOS` (a constante lá em cima) continua existindo como padrão para
+ * quem não tem o mapa em mãos, mas quem imprime número para o aluno deve usar
+ * esta função: um certificado que diz "3h20" quando o curso tem 5h é um
+ * documento que o próprio aluno desmente somando os players.
+ */
+export function totalMinutos(minutos: MapaMinutos | null | undefined): number {
+  return TODAS_AULAS.reduce((s, a) => s + minutosDaAula(a, minutos), 0);
 }

@@ -236,6 +236,33 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
 
+    /**
+     * FORÇAR O CRON — o mesmo código que roda sozinho, com o dedo.
+     *
+     * "Enviar agora" (abaixo) chama só as réguas. O cron faz mais três coisas:
+     * conta as assinaturas vencidas, respeita a trava de horário comercial e
+     * tira a foto da receita. Duas execuções com nomes parecidos e
+     * comportamentos diferentes é como se investiga o problema errado.
+     *
+     * `forcar` atravessa a trava de horário. É o que o botão usa às 22h, e o
+     * nome admite que está passando por cima de uma regra — o resultado diz
+     * "envio FORÇADO fora do horário comercial", para o batimento não mentir
+     * depois.
+     *
+     * Reparar que aqui NÃO se exige CRON_SECRET: quem autoriza é o guard de
+     * superadmin no topo desta rota. O segredo existe para a porta pública do
+     * Vercel, não para quem já está logado como dono da plataforma.
+     */
+    case "rodar_cron": {
+      const { rodarCronNegocio } = await import("@/lib/cron-negocio");
+      const db = dbEscrita(supabase);
+      const r = await rodarCronNegocio(db, {
+        simular: corpo.simular === true,
+        forcar: corpo.forcar === true,
+      });
+      return NextResponse.json(r);
+    }
+
     case "rodar_reguas": {
       const simular = corpo.simular === true;
       const { executarReguas } = await import("@/lib/reguas");

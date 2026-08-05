@@ -1,5 +1,5 @@
 import { carregarNegocio, brl } from "@/lib/negocio";
-import { LinhaEscritorio, RodarReguas } from "@/components/NegocioUI";
+import { RodarReguas } from "@/components/NegocioUI";
 import { createClient } from "@/lib/supabase-server";
 import {
   ROTULO_STATUS,
@@ -134,46 +134,20 @@ export default async function Cobrancas() {
         </div>
       </section>
 
-      <section>
-        <h2 className="mb-2 text-[15px] font-bold">Escritórios e assinaturas</h2>
-        {!temServiceRole && (
-          <div className="mb-2 rounded border border-line bg-accentwash p-3 text-[11.5px] text-accentdeep">
-            Sem <b>SUPABASE_SERVICE_ROLE_KEY</b> no ambiente. A leitura funciona (função do banco), mas gravar
-            assinatura de outro escritório depende dessa chave — a RLS bloqueia a escrita cruzada.
-          </div>
-        )}
-        <div className="overflow-x-auto rounded border border-line bg-surface">
-          <table className="w-full text-[13px]">
-            <thead className="border-b border-line text-left text-[11px] uppercase tracking-wide text-muted">
-              <tr>
-                <th className="px-3 py-2.5 font-semibold">Escritório</th>
-                <th className="px-3 py-2.5 font-semibold">Plano</th>
-                <th className="px-3 py-2.5 font-semibold">Status</th>
-                <th className="px-3 py-2.5 font-semibold">Valor</th>
-                <th className="px-3 py-2.5 font-semibold">Acesso até</th>
-                <th className="px-3 py-2.5 font-semibold">Uso</th>
-                <th className="px-3 py-2.5 font-semibold"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {n.escritorios.map((e) => (
-                <LinhaEscritorio key={e.id} e={e} planos={planos} temAsaas={temAsaas && temServiceRole} />
-              ))}
-              {!n.escritorios.length && (
-                <tr><td colSpan={7} className="px-3 py-8 text-center text-muted">Nenhum escritório cadastrado ainda.</td></tr>
-              )}
-            </tbody>
-          </table>
+      {!temServiceRole && (
+        <div className="rounded border border-line bg-accentwash p-3 text-[11.5px] text-accentdeep">
+          Sem <b>SUPABASE_SERVICE_ROLE_KEY</b> no ambiente. A leitura funciona (função do banco), mas gravar
+          assinatura de outro escritório depende dessa chave — a RLS bloqueia a escrita cruzada.
         </div>
-      </section>
+      )}
 
       <p className="text-[11.5px] leading-relaxed text-muted">
-        O webhook do Asaas (<code>/api/asaas</code>) ativa a assinatura sozinho quando o pagamento confirma, e agora
-        concede exatamente os dias declarados no plano — antes eram 365 para qualquer pagamento, inclusive o mensal
-        de R$ 47. &ldquo;Sincronizar&rdquo; existe para o dia em que o webhook falhar: pergunta ao Asaas o que
-        aconteceu com aquela cobrança e alinha o banco, sem apagar nada.
+        O webhook do Asaas (<code>/api/asaas</code>) ativa a assinatura sozinho quando o pagamento confirma, e
+        concede exatamente os dias declarados no plano. Para gerir uma assinatura, sincronizar com o Asaas ou
+        gerar cobrança, abra a conta em <b>Contas</b> — desde 05/08/2026 existe uma tela só, porque as duas
+        liam fontes diferentes do mesmo escritório e podiam discordar sem que ninguém visse.
       </p>
-    
+
       {/* ------------------------------------------------ EXTRATO DE FATURAS */}
       <section>
         <h2 className="text-[15px] font-bold">Últimas faturas</h2>

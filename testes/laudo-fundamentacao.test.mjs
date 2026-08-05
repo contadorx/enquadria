@@ -156,5 +156,27 @@ ok(/não decorrem de norma/.test(NOTA_PARAMETROS),
 ok(/menos\s+de 3%/.test(NOTA_PARAMETROS) && /3,6%/.test(NOTA_PARAMETROS),
    "com a sensibilidade medida, não com adjetivo");
 
+
+/* ═══════════════════════════════ 5 · o teto de 5% do ISS no laudo ═══════ */
+const comTeto = baseDeCalculo({
+  saida: "S4",
+  parametros: { ddas: {
+    anexo: 3, faixa: 5, aliquota: 0.17227, sharePC: 0.16651, das: 0.028685, rbt12: 3_330_000,
+    fonte: "efetiva",
+    teto_iss: { gatilho: 0.1492537, sharePC_tabela: 0.156, sharePC_aplicado: 0.16651, iss_sem_teto: 0.05771 },
+  } },
+}).join(" \n ");
+
+ok(/Teto de 5% do ISS aplicado/.test(comTeto), "o laudo avisa quando o teto do ISS mordeu");
+ok(/5,77%/.test(comTeto), "e diz qual seria o ISS sem o teto", comTeto.slice(0, 300));
+ok(/15,6%/.test(comTeto) && /16,7%/.test(comTeto),
+   "mostrando a parcela da tabela E a aplicada, lado a lado");
+ok(/Anexos XX e XXI/.test(comTeto), "com a base — a nota de rodapé dos Anexos XX e XXI");
+ok(/alíquota efetiva − 5%/.test(comTeto), "e a fórmula da lei, para o contador refazer a conta");
+
+/* e some quando não morde — ausência de aviso também é informação */
+ok(!/Teto de 5% do ISS/.test(base),
+   "quem não sofre o teto não recebe o aviso");
+
 console.log(f === 0 ? "\nOK" : `\n${f} FALHA(S)`);
 process.exit(f === 0 ? 0 : 1);

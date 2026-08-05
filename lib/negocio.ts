@@ -59,6 +59,13 @@ export async function carregarNegocio(): Promise<Negocio> {
     laudos: Number(e.laudos || 0),
     termos: Number(e.termos || 0),
     assinados: Number(e.assinados || 0),
+    /* os campos novos da 0047 — numéricos do Postgres chegam como string em
+       `numeric`, e um `numeric` não convertido vira "297" na conta do MRR */
+    pago_valor_centavos: e.pago_valor_centavos == null ? null : Number(e.pago_valor_centavos),
+    pagas: Number(e.pagas || 0),
+    fatura_aberta_centavos: e.fatura_aberta_centavos == null ? null : Number(e.fatura_aberta_centavos),
+    t_valor_mensal: e.t_valor_mensal == null ? null : Number(e.t_valor_mensal),
+    t_ultimo_pagamento_valor: e.t_ultimo_pagamento_valor == null ? null : Number(e.t_ultimo_pagamento_valor),
   })) as Escritorio[];
 
   const [

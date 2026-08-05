@@ -33,6 +33,37 @@ export interface Escritorio {
   assinados: number;
   ultima_analise: string | null;
   ultimo_laudo: string | null;
+
+  /* ── marcações da conta (0044) ─────────────────────────────────────────── */
+  is_teste?: boolean;
+  emails_optout?: boolean;
+  /** status COMERCIAL da conta, em `tenants` — não confundir com o `status` do
+   *  contrato, logo acima, que vem de `assinaturas` */
+  status_conta?: string;
+
+  /* ── o pagamento REAL, vindo de `faturas` (0047) ───────────────────────── */
+  /** data da última fatura PAGA — o único registro que ninguém digita */
+  pago_em?: string | null;
+  pago_valor_centavos?: number | null;
+  pagas?: number;
+  fatura_aberta_centavos?: number | null;
+  fatura_aberta_vence?: string | null;
+
+  /* ── a conta, do lado que não é contrato (0047) ────────────────────────── */
+  crc?: string | null;
+  acesso_cortesia?: boolean;
+  cortesia_ate?: string | null;
+  cortesia_motivo?: string | null;
+  obs_admin?: string | null;
+  cancelado_em?: string | null;
+  cancelado_motivo?: string | null;
+
+  /* ── o que foi DIGITADO em `tenants`, para comparar (0047) ─────────────── */
+  t_valor_mensal?: number | null;
+  t_ultimo_pagamento?: string | null;
+  t_ultimo_pagamento_valor?: number | null;
+  t_ciclo?: string | null;
+  t_proximo_vencimento?: string | null;
 }
 
 export interface Plano {

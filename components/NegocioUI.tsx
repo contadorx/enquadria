@@ -293,6 +293,81 @@ export function RodarReguas() {
   );
 }
 
+/**
+ * FORÇAR O CRON — o botão que roda o que roda sozinho.
+ *
+ * "Enviar agora", acima, chama só as réguas. O cron faz mais três coisas:
+ * conta as assinaturas vencidas, respeita a trava de horário comercial e tira
+ * a foto da receita. Enquanto o botão fazia menos que o cron, apertá-lo para
+ * investigar um problema do cron investigava outra coisa.
+ *
+ * Este chama `lib/cron-negocio.ts`, a MESMA função da rota /api/cron/negocio.
+ * Também não precisa do CRON_SECRET: quem autoriza é a sessão de superadmin —
+ * o segredo existe para a porta pública do Vercel, não para quem já está
+ * logado como dono da plataforma. É por isso que ele funciona mesmo com a
+ * variável faltando, que é exatamente o momento em que você mais precisa dele.
+ *
+ * O rótulo diz "forçar" porque ele atravessa a trava de horário. Um botão que
+ * chamasse isso de "rodar" esconderia que está passando por cima de uma regra —
+ * e o resultado devolve "envio FORÇADO fora do horário comercial" para o
+ * batimento não mentir depois.
+ */
+export function ForcarCron() {
+  const [pend, start] = useTransition();
+  const [r, setR] = useState<Record<string, unknown> | null>(null);
+  const router = useRouter();
+
+  const rodar = (opts: { simular?: boolean; forcar?: boolean }) =>
+    start(async () => {
+      const res = await acao({ acao: "rodar_cron", ...opts });
+      setR(res);
+      if (!opts.simular && !res.erro) router.refresh();
+    });
+
+  return (
+    <div className="mt-3 rounded-sm border border-line bg-surface2 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[12.5px] font-semibold">Rodar o cron inteiro</span>
+        <button className={btnClaro} disabled={pend} onClick={() => rodar({ simular: true })}>
+          Só prever
+        </button>
+        <button className={btnClaro} disabled={pend} onClick={() => rodar({})}>
+          Rodar como o cron
+        </button>
+        <button className={btnEscuro} disabled={pend} onClick={() => rodar({ forcar: true })}>
+          {pend ? "Rodando…" : "Forçar fora do horário"}
+        </button>
+      </div>
+      <p className="mt-1.5 text-[11.5px] leading-relaxed text-muted">
+        O mesmo código que roda de hora em hora: vencidas, réguas, batimento e foto da receita.
+        Não depende do <code>CRON_SECRET</code> — funciona mesmo quando ele falta, que é quando
+        você mais precisa. “Forçar” atravessa a trava de horário comercial, e o batimento registra
+        que foi forçado.
+      </p>
+      {r && (
+        <p className="mt-2 rounded-sm bg-surface px-2.5 py-1.5 font-mono text-[11.5px] leading-relaxed">
+          {r.erro ? (
+            <span className="text-vermelho">{String(r.erro)}</span>
+          ) : (
+            <>
+              {String(r.modo)} · {String(r.horario_br)}
+              {r.dentro_do_horario === false && " (fora do horário)"}
+              {" · "}
+              {String((r.reguas as { planejados?: number } | undefined)?.planejados ?? 0)} planejado(s) ·{" "}
+              {String((r.reguas as { enviados?: number } | undefined)?.enviados ?? 0)} enviado(s) ·{" "}
+              {String(r.vencidas_encontradas ?? 0)} vencida(s)
+              {Number(r.vencidas_marcadas) > 0 && ` (${String(r.vencidas_marcadas)} marcada(s))`}
+              {Array.isArray(r.erros) && r.erros.length > 0 && (
+                <span className="block text-amarelo">{(r.erros as string[]).slice(0, 3).join(" · ")}</span>
+              )}
+            </>
+          )}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function LiberarReenvio({ chaveUnica }: { chaveUnica: string }) {
   const [pend, start] = useTransition();
   const [feito, setFeito] = useState(false);
