@@ -71,7 +71,7 @@ try {
   // `await import("@/lib/email")` e o alias "@/" só existe com baseUrl+paths.
   // Sem isto o compilador para na primeira linha e nenhuma suíte roda.
   const ARQUIVOS = [
-    "lib/motor.ts", "lib/laudo.ts", "lib/triagem.ts", "lib/cockpit.ts",
+    "lib/motor.ts", "lib/laudo.ts", "lib/termo.ts", "lib/triagem.ts", "lib/cockpit.ts",
     "lib/premissas-padrao.ts", "lib/coleta.ts", "lib/csv.ts", "lib/cnpj.ts",
     "lib/plano.ts", "lib/potencial.ts", "lib/reguas.ts", "lib/reguas-indicacao.ts", "lib/janela.ts",
     "lib/emails-cliente.ts", "lib/erros-auth.ts", "lib/ajuda.ts", "lib/cobranca.ts", "lib/nps.ts",

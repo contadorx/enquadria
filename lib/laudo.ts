@@ -488,9 +488,19 @@ export function dDASestimado(a: AnaliseGravada): boolean {
   return a.parametros?.ddas?.fonte === "conservador";
 }
 
-export function decisaoSugerida(a: AnaliseGravada): "optar" | "permanecer" {
-  return a.saida === "S4" ? "optar" : "permanecer";
-}
+/**
+ * REMOVIDA EM 05/08/2026 — ela estava ERRADA e sem uso, que é a pior
+ * combinação: ninguém foi mordido ainda, e ela era exatamente a função que
+ * alguém pegaria ao montar o bloco de recomendação do termo.
+ *
+ * `decisaoSugerida()` devolvia "optar" só para S4. S5 — custo líquido
+ * NEGATIVO, a empresa paga menos no regime regular sem depender de negociar
+ * com ninguém — voltava como "permanecer". É o caso mais forte de optar do
+ * produto inteiro.
+ *
+ * A fonte é `ehOptar()` do motor (S4 ou S5), e agora existe uma só. Quem
+ * precisa da recomendação do termo usa `recomendacaoDoTermo()` em lib/termo.ts.
+ */
 
 /* ==========================================================================
  * FATIA 6 — as dez seções.

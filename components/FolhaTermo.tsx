@@ -1,6 +1,10 @@
 import { formatarCnpj } from "@/lib/cnpj";
 import { assinaturaTecnica, mostrarNomeEscrito, type Escritorio } from "@/lib/escritorio";
 import { CSS_IMPRESSAO } from "@/lib/impressao";
+import {
+  CIENCIA_DOS_EFEITOS, ROTULO_TIPO, fraseDaDecisao,
+  type Recomendacao, type TipoDecisao,
+} from "@/lib/termo";
 
 /**
  * A FOLHA DO TERMO — o documento em si, separado de quem o abre.
@@ -23,6 +27,19 @@ export interface DadosFolhaTermo {
   empresa: { razao_social?: string | null; cnpj?: string | null } | null;
   escritorio: Escritorio | null;
   decisao: "optar" | "permanecer";
+  /**
+   * A RECOMENDAÇÃO — congelada na emissão, nunca recalculada. Ausente nos
+   * termos anteriores a 05/08/2026, e a folha continua saindo sem ela: termo
+   * antigo é prova do que foi assinado, não rascunho para completar.
+   */
+  recomendacao?: Recomendacao | null;
+  tipo_decisao?: TipoDecisao | null;
+  motivo_divergencia?: string | null;
+  /** o link do laudo que embasa — o documento sem ele é opinião */
+  laudo_url?: string | null;
+  laudo_numero?: number | null;
+  /** o que a empresa precisa observar; derivado, nunca genérico */
+  pontos?: string[];
   assinado: boolean;
   assinante_nome?: string | null;
   assinado_em?: string | null;
@@ -35,6 +52,12 @@ export function FolhaTermo({
   empresa,
   escritorio: t,
   decisao,
+  recomendacao,
+  tipo_decisao,
+  motivo_divergencia,
+  laudo_url,
+  laudo_numero,
+  pontos = [],
   assinado,
   assinante_nome,
   assinado_em,
@@ -77,7 +100,70 @@ export function FolhaTermo({
           IBS e CBS a partir de 2027.
         </p>
 
+        {/**
+          * A ORDEM É O DESENHO: recomendação → laudo → pontos → DECISÃO.
+          *
+          * A recomendação vem primeiro porque informa a decisão, e vem em corpo
+          * NORMAL, não em destaque. O documento é o termo da decisão do
+          * empresário; se a recomendação virar o título, o papel passa a
+          * parecer que quem decidiu foi o contador — o oposto do objetivo.
+          */}
+        {recomendacao && (
+          <>
+            <div className="sec">Recomendação técnica</div>
+            <p className="txt">
+              A análise recomenda{" "}
+              <b>
+                {recomendacao.decisao === "optar"
+                  ? "OPTAR pelo regime híbrido"
+                  : "PERMANECER no regime tradicional"}
+              </b>{" "}
+              — {recomendacao.titulo}.
+            </p>
+            {!!recomendacao.baseado_em.length && (
+              <>
+                <p className="txt" style={{ marginBottom: 2 }}>Baseado em:</p>
+                <ul>
+                  {recomendacao.baseado_em.map((b, i) => (
+                    <li key={i}>{b}</li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {laudo_url && (
+              <p className="txt">
+                A memória de cálculo completa — os números, a fórmula e o resultado — está no{" "}
+                <a href={laudo_url}>
+                  laudo nº {String(laudo_numero ?? 0).padStart(4, "0")}
+                </a>
+                , que é parte integrante deste termo.
+              </p>
+            )}
+          </>
+        )}
+
+        {!!pontos.length && (
+          <>
+            <div className="sec">Pontos que a empresa deve observar</div>
+            <p className="txt">
+              A recomendação acima vale enquanto os pontos abaixo se mantiverem. Se algum deles
+              mudar, a conta muda — e a decisão merece ser revista na janela seguinte.
+            </p>
+            <ul>
+              {pontos.map((x, i) => (
+                <li key={i}>{x}</li>
+              ))}
+            </ul>
+          </>
+        )}
+
         <div className="sec">Decisão da empresa</div>
+        {tipo_decisao && recomendacao && (
+          <p className="txt">
+            <b>{ROTULO_TIPO[tipo_decisao]}.</b>{" "}
+            {fraseDaDecisao({ tipo: tipo_decisao, decisao, motivo: motivo_divergencia }, recomendacao)}
+          </p>
+        )}
         <ul>
           <li>
             {optou ? "☑" : "☐"} <b>Optar pelo regime híbrido</b> — recolhimento fora do DAS
@@ -87,39 +173,46 @@ export function FolhaTermo({
           </li>
         </ul>
 
+        {/**
+          * O MOTIVO DA DIVERGÊNCIA, em destaque e com a autoria declarada.
+          *
+          * "O cliente preferiu não optar por razões comerciais" escrito pelo
+          * CONTADOR é o contador caracterizando a razão do cliente — e é
+          * exatamente essa frase que se contesta depois. O quadro diz de quem
+          * são as palavras.
+          */}
+        {tipo_decisao === "divergir" && (
+          <div className="box">
+            <b>Motivo da decisão, nas palavras da empresa:</b>
+            <br />
+            {motivo_divergencia || "—"}
+            <br />
+            <span style={{ fontSize: "0.9em" }}>
+              Razão declarada pela empresa. A análise técnica permanece como emitida e não foi
+              alterada por esta decisão.
+            </span>
+          </div>
+        )}
+        {tipo_decisao === "adiar" && motivo_divergencia && (
+          <div className="box">
+            <b>Observação da empresa:</b> {motivo_divergencia}
+          </div>
+        )}
+
         <div className="sec">Ciência dos efeitos</div>
+        {/**
+          * A LISTA MORA EM `lib/termo.ts` porque ela é conteúdo jurídico, não
+          * layout — e porque o item do art. 41 § 5º (o cadeado do ressarcimento)
+          * precisa estar aqui E no laudo, sem chance de os dois divergirem.
+          *
+          * "Vale por semestre e não pode ser alterada" era verdade pela metade:
+          * quem pede ressarcimento de crédito não volta ao DAS no ano corrente
+          * nem no seguinte. É justamente o perfil que a conta mais manda optar.
+          */}
         <ul>
-          <li>A opção vale por semestre e não pode ser alterada no período.</li>
-          <li>Quem não optar dentro do prazo permanece no regime tradicional.</li>
-          <li>A decisão afeta preço, crédito ao cliente e competitividade.</li>
-          {/**
-            * AS TRÊS LINHAS ABAIXO SÃO O QUE SEPARA "EU RECOMENDEI" DE "EU
-            * INFORMEI, ELE DECIDIU".
-            *
-            * A primeira é a assimetria de sequência: ao exercer a opção o
-            * crédito integral passa ao cliente na hora, sem depender de acordo
-            * de preço. Quem opta e negocia depois negocia sem nada para trocar.
-            * É o ponto em que a recomendação do contador vira problema
-            * comercial do empresário — e onde, sem registro, ele volta como
-            * reclamação contra quem assinou o laudo.
-            */}
-          <li>
-            <b>
-              Ao exercer a opção, o crédito integral passa ao cliente
-              automaticamente, independentemente de acordo de preço.
-            </b>{" "}
-            O reajuste, se houver, depende de negociação — e ela deve ser fechada
-            <b> antes</b> de a opção ser exercida.
-          </li>
-          <li>
-            A empresa declara ciência da faixa de negociação apresentada no laudo e do valor que
-            passará a absorver caso o repasse não seja aceito.
-          </li>
-          <li>
-            <b>Os cálculos são de responsabilidade técnica do profissional que assina o laudo; o
-            resultado comercial da negociação de preço é decisão e risco da empresa.</b>{" "}
-            Nenhum número do laudo garante que o repasse será aceito pelos clientes.
-          </li>
+          {CIENCIA_DOS_EFEITOS.map((x, i) => (
+            <li key={i}>{x}</li>
+          ))}
         </ul>
 
         <div className="box">
