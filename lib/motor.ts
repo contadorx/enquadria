@@ -922,30 +922,66 @@ export function decidir(r: Respostas, p: Parametros = PARAMETROS_2027): Resultad
   let motivo: string;
   let absorcaoCabe = false;
 
-  if (rq < rqMin) {
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * EPSILON NAS BORDAS — e o que a medição REALMENTE mostrou.
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * Uma auditoria externa levantou, em 05/08/2026, que as comparações da árvore
+   * rodam em ponto flutuante sem folga, e não mediu a probabilidade. Medimos.
+   *
+   * O QUE ACHAMOS PRIMEIRO, e parecia grave: existem exatamente SEIS pares
+   * (b2b, qual) de duas casas decimais cujo produto é 0,30 — entre eles
+   * (0,50 · 0,60) e (0,75 · 0,40), que um contador digita toda semana. Eles
+   * caem em cima do piso `rqMin`, e o resultado certo (rq = 0,30 NÃO é S1,
+   * porque o teste é `<`) dependeria de o produto fechar exatamente no double
+   * de 0,3.
+   *
+   * O QUE A MEDIÇÃO MOSTROU: ele fecha. Nos 10.000 pares de duas casas, o
+   * número de casos em que o produto decimal é ≥ 0,30 e o float cai abaixo de
+   * 0,3 é ZERO. Três dos seis pares dão exatamente o double de 0,3; os outros
+   * três dão 5,55e-17 ACIMA. Nenhum abaixo. A borda não morde hoje.
+   *
+   * ENTÃO POR QUE O EPSILON FICA. Porque a ausência de defeito aqui é
+   * propriedade de três coisas que podem mudar sem ninguém reparar: as entradas
+   * terem duas casas, o piso ser 0,30, e a conta ser um produto de dois
+   * fatores. Mude `rqMin` para 0,33 e a conta muda de sinal em pares que hoje
+   * não existem. O epsilon custa nada e remove a dependência.
+   *
+   * O QUE ELE NÃO É: conserto de um defeito ao vivo. Medido contra a árvore sem
+   * epsilon em 6.000.000 de casos: ZERO saídas mudaram. Quem ler isto daqui a
+   * um ano não deve concluir que havia laudo errado no ar — não havia.
+   *
+   * 1e-9 é grande o bastante para cobrir o erro de representação (~1e-17 nessa
+   * escala) e pequeno o bastante para não alcançar nenhuma entrada real: 1e-9
+   * de receita qualificada é um centésimo de centavo por milhão de faturamento.
+   */
+  const EPS = 1e-9;
+
+  if (rq < rqMin - EPS) {
     // Sem receita qualificada não há a quem transferir crédito. Vale inclusive
     // quando o híbrido sairia mais barato: o ganho não compensa a apuração por
     // fora numa empresa que vende para consumidor final ou para o Simples.
     saida = "S1";
     motivo = `Receita qualificada de ${pct(rq)} — abaixo do piso de ${pct(rqMin)}. Não há a quem transferir crédito em volume que justifique apurar por fora.`;
-  } else if (cl <= 0) {
+  } else if (cl <= EPS) {
     // O híbrido custa MENOS em termos absolutos. Optar não depende de
     // renegociar preço nenhum — e por isso não é o mesmo conselho que o S4.
     saida = "S5";
     motivo = `Custo líquido negativo (${pct(cl)}): no regime regular a empresa paga menos pelos créditos das próprias compras, sem depender de renegociar preço.`;
-  } else if (fc <= 0) {
+  } else if (fc <= EPS) {
     // Guarda para exercícios futuros: se o que sai do DAS alcançar a alíquota,
     // o comprador não ganha crédito extra e as bandas de fronteira se invertem.
     saida = "S1";
     motivo = "O que sai do DAS alcança a alíquota do regime regular: o comprador não teria crédito adicional a ganhar.";
-  } else if (reLiquido > fc * fMax) {
+  } else if (reLiquido > fc * fMax * (1 + EPS)) {
     // O repasse necessário estoura o ganho do comprador. Não fecha para ninguém.
     saida = "S1";
     motivo =
       `Repasse necessário de ${pct(re)} no preço. Descontado o crédito que o próprio reajuste gera ` +
       `para o comprador, ele sente ${pct(reLiquido)} — ainda acima do ganho de ${pct(fc)} que teria. ` +
       "A conta não fecha para nenhum dos dois lados.";
-  } else if (r.preco <= 1 && cl > absorcaoMax) {
+  } else if (r.preco <= 1 && cl > absorcaoMax * (1 + EPS)) {
     // A conta fecha, a negociação não, e o custo de simplesmente engolir é
     // grande demais. Preparar a janela seguinte.
     saida = "S2";
@@ -989,7 +1025,7 @@ export function decidir(r: Respostas, p: Parametros = PARAMETROS_2027): Resultad
       `dentro do teto de ${pct(absorcaoMax, 2)} deste laudo. Em troca, o comprador passa a receber ` +
       `${pct(fc)} de crédito sem nenhum aumento de preço. Quanto ${pct(cl, 2)} da receita pesa na ` +
       "margem é conta que este laudo não faz: a decisão é do empresário.";
-  } else if (reLiquido >= fc * fMin) {
+  } else if (reLiquido >= fc * fMin * (1 - EPS)) {
     // Cabe, mas por pouco: o motor não decide, o empresário decide.
     saida = "S3";
     motivo =
@@ -1195,7 +1231,12 @@ export const SAIDAS: Record<Saida, { titulo: string; descricao: string; cor: str
     cor: "vermelho",
   },
   S2: {
-    titulo: "Não optar nesta janela — preparar março",
+    /* o MÊS saiu do rótulo em 05/08/2026, apontado por auditoria externa. Dizia
+       "preparar março"; a Resolução CGSN 186/2026 fixa a segunda janela em ABRIL.
+       E o mês é o tipo de dado que muda por resolução anual — o rótulo, que é
+       impresso em documento assinado, não é o lugar de carimbá-lo. A data vai ao
+       laudo, com a citação, onde pode ser corrigida sem reescrever a saída. */
+    titulo: "Não optar nesta janela — preparar a próxima",
     descricao:
       "A conta fecha, a negociação não. Plano de renegociação nos próximos meses e decisão na janela seguinte.",
     cor: "amarelo",

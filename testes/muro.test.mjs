@@ -23,7 +23,12 @@ ok(!/limite/i.test(m.titulo + m.linhas.join(" ")), "não usa linguagem de puniç
 ok(m.conta?.anual === 470, "preço vem em reais, não centavos", m.conta?.anual);
 ok(m.conta?.honorario === 600, "usa o honorário de referência", m.conta?.honorario);
 ok(m.garantia.includes("continuam válidos"), "garante o que ele já produziu");
-ok(m.nota_anual.includes("março de 2027"), "o argumento do anual está escrito");
+/* o MÊS saiu do texto em 05/08/2026: o art. 41 traz março no § 10 e abril no
+   § 11, e o produto não escolhe por conta própria. O argumento do anual não
+   depende do mês — depende de a janela voltar. */
+ok(m.nota_anual.includes("primeiro semestre de 2027"), "o argumento do anual está escrito");
+ok(!/\bmarço\b|\babril\b/.test(m.nota_anual),
+   "e NÃO carimba o mês da segunda janela — a norma traz dois", m.nota_anual);
 
 // sem preço no banco, o muro não inventa cifra
 const semPreco = montarMuro(s, 600, null);

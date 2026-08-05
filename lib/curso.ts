@@ -233,7 +233,7 @@ export const MODULOS: Modulo[] = [
         // cole aqui o link do YouTube desta aula (o do botão compartilhar serve)
         video: null,
         resumo:
-          "O calendário operacional semana a semana, o que fica para novembro e o que volta em março.",
+          "O calendário operacional semana a semana, o que fica para novembro e o que volta na janela seguinte.",
         topicos: [
           "Semana 1 a 4: o que precisa estar pronto ao fim de cada uma",
           "As datas que não se movem",

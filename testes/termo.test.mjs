@@ -24,9 +24,9 @@ import {
   fraseDaDecisao, CIENCIA_DOS_EFEITOS, ROTULO_TIPO,
   nomeCorrompido, AVISO_NOME_CORROMPIDO,
   blocoDoTermo, ehTipoDecisao, decisaoDoSnapshot,
-  cienciaDefasada, avisoCienciaDefasada,
+  cienciaDefasada, avisoCienciaDefasada, faltamEssenciais,
 } from "./termo.js";
-import { PARAMETROS_2027, ehOptar } from "./motor.js";
+import { PARAMETROS_2027, ehOptar, SAIDAS } from "./motor.js";
 /* o conteúdo canônico é o que vira hash e vira assinatura — testar o termo sem
    testar o texto assinado é testar a metade que não é prova */
 import { conteudoCanonico, conteudoDaProposta, sha256 } from "./esign.js";
@@ -392,8 +392,10 @@ ok(/não que ele estava certo/.test(AVISO_NOME_CORROMPIDO),
      "pendente: o conselho é emitir de novo ANTES da assinatura");
   ok(/não deve ser substituído nem reescrito/.test(assinadoJa),
      "assinado: o documento continua valendo e NÃO se reescreve — reescrever prova é destruí-la");
-  ok(/art\. 41, § 5º/.test(pendente) && /art\. 41, § 5º/.test(assinadoJa),
+  ok(/cadeado do ressarcimento/.test(pendente) && /cadeado do ressarcimento/.test(assinadoJa),
      "e os dois dizem O QUE ficou de fora, senão o aviso não ajuda a decidir");
+  ok(!/\d+ itens/.test(pendente),
+     "e NÃO contam itens: '5 de 8' não ajuda ninguém a decidir se vale reemitir");
   ok(avisoCienciaDefasada(CIENCIA_DOS_EFEITOS, false) === null &&
      avisoCienciaDefasada(null, true) === null,
      "sem defasagem não há aviso — alerta que aparece sempre não é lido");
@@ -449,6 +451,73 @@ ok(/não que ele estava certo/.test(AVISO_NOME_CORROMPIDO),
      "seguir, adiar e divergir produzem TRÊS selos distintos — inclusive adiar, que dá o mesmo regime de permanecer");
   ok(resolverDecisao("adiar", rec) === resolverDecisao("divergir", rec),
      "…e é justamente por isso que o tipo precisa entrar no texto: os dois resolvem para permanecer");
+}
+
+
+/* ═══════════ 15 · O QUE TORNA UM TERMO DEFEITUOSO ════════════════════════
+ *
+ * A auditoria externa de 05/08 pediu a cláusula do cancelamento até 30/11. Ela
+ * entrou — e quase levou junto um efeito colateral ruim: o critério de "ciência
+ * defasada" era o TAMANHO da lista, então a oitava cláusula marcaria como
+ * defeituosos 6 termos que já avisam do cadeado do art. 41 § 5º e da ordem de
+ * negociar antes de optar.
+ *
+ * Alarme que acende no documento certo é o que faz ninguém ler o alarme. O
+ * critério passou a ser PRESENÇA das cláusulas sem as quais o signatário não
+ * podia ter decidido informado — e as duas são sobre coisas irreversíveis.
+ * ══════════════════════════════════════════════════════════════════════════ */
+{
+  const ATUAL = CIENCIA_DOS_EFEITOS;
+  ok(ATUAL.length === 8, "a lista atual tem 8 cláusulas", ATUAL.length);
+  ok(ATUAL.some((c) => /CANCELADA at\u00e9 30 de novembro de 2026/.test(c)),
+     "a do cancelamento até 30/11 entrou — era o achado 06 da auditoria");
+  ok(ATUAL.some((c) => /31\/10\/2026/.test(c)),
+     "e ela explica POR QUE a data importa: a alíquota é fixada dentro dessa janela");
+
+  /* os 6 termos com 7 cláusulas do banco: têm as duas essenciais */
+  const SETE = ATUAL.slice(0, 7);
+  ok(!cienciaDefasada(SETE),
+     "termo de 7 cláusulas NÃO vira defeituoso quando a 8ª entra — o efeito colateral que quase passou");
+  ok(avisoCienciaDefasada(SETE, false) === null, "e não gera aviso nenhum");
+
+  /* os 17 termos com 4 cláusulas do banco: não têm nenhuma das duas */
+  const QUATRO = [ATUAL[0], ATUAL[1], ATUAL[4], ATUAL[5]];
+  ok(cienciaDefasada(QUATRO), "termo de 4 cláusulas CONTINUA defeituoso — e é o certo");
+  ok(faltamEssenciais(QUATRO).length === 2, "faltam as duas essenciais", faltamEssenciais(QUATRO).length);
+
+  /* o critério é PRESENÇA, não contagem: lista curta com as duas essenciais passa */
+  const CURTA = [ATUAL[2], ATUAL[3]];
+  ok(!cienciaDefasada(CURTA),
+     "lista de 2 itens com as DUAS essenciais não é defeituosa — o critério não conta, verifica");
+  ok(cienciaDefasada([ATUAL[2]]) && faltamEssenciais([ATUAL[2]])[0].ancora.includes("Negocie"),
+     "e falta uma só quando falta uma só");
+
+  const av = avisoCienciaDefasada(QUATRO, true);
+  ok(/cadeado do ressarcimento/.test(av) && /ordem da negocia\u00e7\u00e3o/.test(av),
+     "o aviso NOMEIA o que falta");
+  ok(/n\u00e3o deve ser substitu\u00eddo nem reescrito/.test(av),
+     "e em termo já assinado manda NÃO reescrever — reescrever prova é destruí-la");
+  ok(cienciaDefasada(null) === false && cienciaDefasada([]) === false,
+     "termo anterior ao snapshot não é acusado: não há lista para julgar");
+}
+
+/* ═══════════ 16 · O MÊS DA SEGUNDA JANELA NÃO É CARIMBADO ════════════════
+ *
+ * A auditoria apontou que o rótulo do S2 dizia "preparar março" e a janela seria
+ * abril. Fomos ao texto: o art. 41 da LC 123/2006, na consolidação da LC 214/2025
+ * com a redação da LC 227/2026, traz DOIS parágrafos consecutivos com meses
+ * DIFERENTES — § 10 diz março, § 11 diz abril.
+ *
+ * Ou seja: nem o produto nem o auditor estavam errados. O texto é que é
+ * contraditório, e documento assinado não escolhe entre duas redações da lei.
+ * ══════════════════════════════════════════════════════════════════════════ */
+{
+  ok(SAIDAS.S2.titulo === "Não optar nesta janela — preparar a próxima",
+     "o rótulo do S2 não carimba mês nenhum", SAIDAS.S2.titulo);
+  for (const s of ["S1","S2","S3","S4","S5"]) {
+    ok(!/mar\u00e7o|abril/i.test(SAIDAS[s].titulo + " " + SAIDAS[s].descricao),
+       `${s}: nenhum mês de segunda janela no rótulo nem na descrição`);
+  }
 }
 
 

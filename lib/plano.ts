@@ -129,7 +129,7 @@ export function montarMuro(
       : ["Uma única análise cobrada do seu cliente paga o Enquadria por um ano inteiro."],
     conta,
     nota_anual:
-      "A opção é semestral: esta janela fecha em 30/09 e a mesma carteira volta à mesa em março de 2027. O anual cobre as duas.",
+      "A opção é semestral: esta janela fecha em 30/09 e a mesma carteira volta à mesa na janela do primeiro semestre de 2027. O anual cobre as duas.",
     garantia: `Os ${s.usados} laudos que você já emitiu continuam válidos e verificáveis, com ou sem assinatura.`,
   };
 }

@@ -225,6 +225,44 @@ export const CIENCIA_DOS_EFEITOS: string[] = [
     "do Senado até 31/10/2026, depois do fim desta janela.",
   "Os cálculos são de responsabilidade técnica do profissional que assina o laudo. O resultado " +
     "comercial da negociação de preço é decisão e risco da empresa.",
+  /* acrescentada em 05/08/2026, apontada por auditoria externa. Informação de
+     PRAZO, não de risco: quem opta ainda tem até 30/11 para desistir, e essa
+     porta é a única resposta possível a "e se a alíquota de referência sair
+     pior do que a estimada?" — ela é fixada em 31/10, dentro dessa janela. */
+  "A opção exercida em setembro pode ser CANCELADA até 30 de novembro de 2026. Como a alíquota de " +
+    "referência de IBS/CBS só é fixada até 31/10/2026, essa é a janela em que a decisão pode ser " +
+    "revista à luz do número definitivo.",
+];
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * O QUE FALTAR AQUI TORNA O TERMO DEFEITUOSO — e o resto não.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * A primeira versão de `cienciaDefasada()` comparava o TAMANHO da lista: termo
+ * com menos itens que a atual era defasado. Funcionou uma vez, por acidente —
+ * quando a lista foi de 4 para 7, os três itens que entraram eram os que
+ * faltavam de verdade.
+ *
+ * Na segunda vez o proxy quebrou. Acrescentar a cláusula do cancelamento de
+ * novembro — informação de prazo, útil, não protetiva — marcaria como
+ * defeituosos 6 termos que já avisam do cadeado do art. 41 § 5º e da ordem de
+ * negociar antes de optar. Alarme que acende no documento certo é o que faz
+ * ninguém ler o alarme.
+ *
+ * O critério passa a ser o que importa: o termo é defeituoso quando falta nele
+ * uma cláusula SEM A QUAL o signatário não podia ter decidido informado. Hoje
+ * são duas — e as duas são sobre coisas irreversíveis.
+ */
+export const CLAUSULAS_ESSENCIAIS: { ancora: string; oque: string }[] = [
+  {
+    ancora: "art. 41, § 5º",
+    oque: "o cadeado do ressarcimento — a hipótese em que a opção deixa de ser reversível",
+  },
+  {
+    ancora: "Negocie o reajuste ANTES de optar",
+    oque: "a ordem da negociação — o crédito passa ao cliente com ou sem acordo de preço",
+  },
 ];
 
 export interface DecisaoDoTermo {
@@ -493,17 +531,25 @@ export function nomeCorrompido(nome?: string | null): boolean {
  * ("emito de novo para colher ciência do cadeado do art. 41 § 5º?") é quem
  * emitiu, e a resposta muda conforme o termo já esteja assinado ou não.
  */
+export function faltamEssenciais(clausulas: string[] | null): typeof CLAUSULAS_ESSENCIAIS {
+  if (!clausulas || !clausulas.length) return [];
+  const texto = clausulas.join("\n");
+  return CLAUSULAS_ESSENCIAIS.filter((c) => !texto.includes(c.ancora));
+}
+
 export function cienciaDefasada(clausulas: string[] | null): boolean {
-  return !!clausulas && clausulas.length < CIENCIA_DOS_EFEITOS.length;
+  return faltamEssenciais(clausulas).length > 0;
 }
 
 export function avisoCienciaDefasada(clausulas: string[] | null, assinado: boolean): string | null {
-  if (!cienciaDefasada(clausulas)) return null;
-  const n = clausulas!.length;
+  const faltam = faltamEssenciais(clausulas);
+  if (!faltam.length) return null;
+  /* o aviso diz O QUE falta, não quantos itens faltam: "5 de 8" não ajuda
+     ninguém a decidir se vale reemitir */
   const base =
-    `Este termo foi emitido com a lista de ciência de ${n} itens; a atual tem ` +
-    `${CIENCIA_DOS_EFEITOS.length} — inclusive o cadeado do art. 41, § 5º, da LC 214/2025, que ` +
-    "torna a opção irreversível para quem pedir ressarcimento de créditos. ";
+    "Este termo foi emitido sem " +
+    (faltam.length === 1 ? "uma cláusula essencial" : `${faltam.length} cláusulas essenciais`) +
+    " — " + faltam.map((f) => f.oque).join("; ") + ". ";
   return assinado
     ? base +
         "O documento assinado é este, e continua válido pelo que diz. Para ter a ciência do cadeado " +

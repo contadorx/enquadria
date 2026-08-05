@@ -904,7 +904,17 @@ export function riscosELimites(a: AnaliseGravada): string[] {
      * questionário não perguntar isso, o aviso vai incondicional — errar para o
      * lado de avisar demais é o único erro barato aqui.
      */
-    "A opção produz efeito por semestre e é cancelável até o último dia de novembro de 2026. A decisão de agora não encerra o assunto: a janela seguinte reabre a pergunta, em março, na data que a Resolução do CGSN daquele ano fixar.",
+    /* O MÊS DA SEGUNDA JANELA ESTÁ EM DISPUTA NO PRÓPRIO TEXTO DA LEI, e este
+       laudo não escolhe por conta própria — declara.
+
+       Art. 41 da LC 123/2006, na consolidação da LC 214/2025 com a redação da
+       LC 227/2026, traz DOIS parágrafos consecutivos com meses diferentes:
+         § 10 — "exercida nos meses de setembro e MARÇO"   (redação da LC 227/2026)
+         § 11 — "exercida nos meses de setembro e ABRIL"   (NR)
+       Uma auditoria externa apontou abril como o correto; o texto do § 10 diz
+       março. Afirmar um dos dois num documento assinado seria escolher a favor
+       do cliente sem base — e é o tipo de frase que se contesta depois. */
+    "A opção produz efeito por semestre e é cancelável até o último dia de novembro de 2026. A decisão de agora não encerra o assunto: a janela seguinte reabre a pergunta no primeiro semestre de 2027. ATENÇÃO ao mês: o art. 41 da LC 123/2006, na consolidação da LC 214/2025 com a redação da LC 227/2026, traz março no § 10 e abril no § 11 — confirme a data na Resolução do CGSN vigente antes de agendar com o cliente.",
     "A reversibilidade tem uma exceção, e ela alcança justamente quem acumula crédito: o art. 41, § 5º, da Lei Complementar nº 214/2025 veda a saída do regime regular ao contribuinte que tenha recebido ressarcimento de créditos de IBS ou CBS no ano-calendário corrente ou no anterior. Se a empresa pretende pedir ressarcimento do saldo credor, a decisão desta janela deixa de ser semestral e passa a ser de mão única — confirme esse ponto antes de assinar.",
   ];
   if (p.ddas?.fonte === "conservador") {
@@ -982,7 +992,7 @@ export const BASE_LEGAL: { norma: string; papel: string }[] = [
   {
     norma: "Lei Complementar nº 123/2006, art. 13, §§ 9º e 10",
     papel:
-      "é o dispositivo operativo: faculta ao optante apurar IBS e CBS pelo regime regular, hipótese em que as parcelas relativas a eles não são cobradas pelo regime único, e fixa a opção como semestral e irretratável, exercida em setembro e em março. Redação dada pela Lei Complementar nº 227/2026.",
+      "é o dispositivo operativo: faculta ao optante apurar IBS e CBS pelo regime regular, hipótese em que as parcelas relativas a eles não são cobradas pelo regime único, e fixa a opção como semestral e irretratável. Quanto ao MÊS da segunda janela o texto consolidado é contraditório: o § 10 (redação da LC 227/2026) diz setembro e março; o § 11 diz setembro e abril. Prevalece a data fixada pela Resolução do CGSN do ciclo.",
   },
   {
     norma: "Lei Complementar nº 227/2026",
