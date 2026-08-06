@@ -15,7 +15,19 @@
 export const MARCA = "#0B1220";
 const APP = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.enquadria.com.br";
 
-export function moldura(titulo: string, miolo: string, rodapeExtra = ""): string {
+/**
+ * `linhaConta` existe por causa da novidade. O rodapé fixo dizia "Este é um
+ * e-mail automático da sua conta" — verdade para laudo, termo e cobrança, e
+ * mentira para um comunicado de produto. Rodapé que mente sobre a natureza da
+ * mensagem é exatamente o que os filtros de spam procuram, e o que faz a
+ * pessoa marcar como spam em vez de descadastrar.
+ */
+export function moldura(
+  titulo: string,
+  miolo: string,
+  rodapeExtra = "",
+  linhaConta = "Este é um e-mail automático da sua conta."
+): string {
   return `<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -27,7 +39,7 @@ export function moldura(titulo: string, miolo: string, rodapeExtra = ""): string
   </div>
   <div style="max-width:560px;margin:16px auto 0;font-size:12px;color:#6b7280;text-align:center">
     Enquadria — enquadramento de IBS/CBS por carteira.<br>
-    Este é um e-mail automático da sua conta. ${rodapeExtra}
+    ${linhaConta} ${rodapeExtra}
   </div>
 </body></html>`;
 }

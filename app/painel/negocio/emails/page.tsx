@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase-server";
 import { carregarContexto, planejar, separarFila, VARIAVEIS, type Envio } from "@/lib/reguas";
 import { ReguaCartao, RodarReguas, ForcarCron, LiberarReenvio, ConfigChave, ConfigNumero, type RegraUI } from "@/components/NegocioUI";
+import { NovidadeEmail } from "@/components/NovidadeEmail";
 
 export const dynamic = "force-dynamic";
 
@@ -98,6 +99,11 @@ export default async function Emails() {
 
   return (
     <div className="space-y-7">
+      {/* A NOVIDADE VEM ANTES DAS RÉGUAS, e não é hierarquia visual: é a única
+          coisa nesta tela que EU faço acontecer. Todo o resto é motor rodando
+          sozinho — e motor a gente confere, não opera. */}
+      <NovidadeEmail appUrl={process.env.NEXT_PUBLIC_APP_URL ?? "https://app.enquadria.com.br"} />
+
       <section className="rounded border border-line bg-surface p-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="max-w-[70ch]">

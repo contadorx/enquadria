@@ -81,6 +81,7 @@ try {
     "lib/curso.ts", "lib/faturas.ts", "lib/filtro-faturas.ts", "lib/email-eventos.ts", "lib/documento.ts", "lib/assinatura.ts",
     "lib/negocio-calc.ts", "lib/projecao.ts", "lib/deriva.ts", "lib/gateway-limpeza.ts",
     "lib/recalculo.ts", "lib/radar.ts", "lib/radar-form.ts", "lib/radar-aviso.ts", "lib/digest.ts", "lib/reforma.ts",
+    "lib/novidade.ts", "lib/mailer/templates.ts",
   ];
   const cfg = path.join(RAIZ, "tsconfig.testes.json");
   fs.writeFileSync(cfg, JSON.stringify({
@@ -97,11 +98,24 @@ try {
   } finally {
     fs.rmSync(cfg, { force: true });
   }
-  // o compilador não escreve a extensão nos imports; o Node ESM exige
-  for (const f of fs.readdirSync(TMP).filter((f) => f.endsWith(".js"))) {
-    const p = path.join(TMP, f);
-    fs.writeFileSync(p, fs.readFileSync(p, "utf8").replace(/from "\.\/([a-z-]+)"/g, 'from "./$1.js"'));
-  }
+  /* o compilador não escreve a extensão nos imports; o Node ESM exige.
+     A varredura é RECURSIVA e aceita subpasta desde que `lib/mailer/templates`
+     entrou na lista: com a versão antiga, `from "./mailer/templates"` ficava
+     sem `.js` e a suíte inteira morria com ERR_MODULE_NOT_FOUND — falha que
+     parece "teste quebrado" e é só extensão faltando. */
+  const arrumarImports = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) { arrumarImports(p); continue; }
+      if (!e.name.endsWith(".js")) continue;
+      fs.writeFileSync(
+        p,
+        fs.readFileSync(p, "utf8").replace(/from "(\.\.?\/[A-Za-z0-9_\-/]+)"/g,
+          (m, alvo) => (alvo.endsWith(".js") ? m : `from "${alvo}.js"`))
+      );
+    }
+  };
+  arrumarImports(TMP);
   fs.writeFileSync(path.join(TMP, "package.json"), '{"type":"module"}');
   ok("compila sem erro", true);
 } catch (e) {
