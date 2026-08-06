@@ -7,6 +7,7 @@ import {
   extrairCnpjs,
   csvDeCnpjs,
   CSV_EXEMPLO,
+  CSV_PRIMEIRO_CASO,
   decodificarCsv,
   pareceMojibake,
   planilhaParaCsv,
@@ -63,7 +64,7 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
   const [parse, setParse] = useState<ResultadoParse | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const [colando, setColando] = useState(false);
+  const [colando, setColando] = useState(true);
   const [texto, setTexto] = useState("");
   const [etapa, setEtapa] = useState<"gravando" | "analisando" | null>(null);
   const previaRef = useRef<HTMLDivElement>(null);
@@ -181,6 +182,20 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
       return;
     }
     setParse(resultado);
+    rolarAtePrevia();
+  }
+
+  /**
+   * O PRIMEIRO CASO GUIADO — uma empresa fictícia, para ver funcionando antes
+   * de entregar dado de cliente. A hesitação é real e apareceu literal numa
+   * conversa: criar a conta é barato; subir a carteira é entregar o ativo do
+   * escritório a um sistema que a pessoa ainda não viu funcionar.
+   */
+  function usarPrimeiroCaso() {
+    setErro(null);
+    setFeito(null);
+    setNomeArquivo("primeiro-caso.csv");
+    setParse(parsearCarteira(CSV_PRIMEIRO_CASO));
     rolarAtePrevia();
   }
 
@@ -400,78 +415,82 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
         abandono do produto. Quem tem o CSV na mão continua a um clique de
         distância; quem não tem agora consegue começar mesmo assim.
       */}
-      <div className="rounded border border-dashed border-line bg-surface p-6">
-        <div className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-accentdeep">
-          Caminho 1 · sem exportar nada
+      {/*
+        UMA PORTA, NÃO DUAS.
+        Até 06/08/2026 esta tela oferecia "Caminho 1 · colar CNPJ" e "Caminho 2
+        · subir CSV" com o mesmo peso visual, e o campo de colar ainda nascia
+        FECHADO, atrás de um botão. Duas portas do mesmo tamanho não são
+        liberdade: são uma decisão empurrada para quem tem menos informação
+        para decidir — e a pergunta que chegou por WhatsApp foi exatamente essa
+        ("primeiro eu preencho aquela planilha?").
+        Agora o campo de colar é a tela; o CSV é uma linha para quem já sabe
+        que tem o arquivo.
+      */}
+      <div className="rounded border border-line bg-surface p-6 shadow-card">
+        <div className="text-[16px] font-bold">
+          {jaTem > 0 ? "Cole os CNPJs das novas empresas" : "Cole o CNPJ de um cliente do Simples"}
         </div>
-        <div className="mt-1 text-[15px] font-bold">
-          {jaTem > 0 ? "Cole os CNPJs das novas empresas" : "Comece pelos CNPJs"}
-        </div>
-        <p className="mt-1 max-w-[68ch] text-[12.5px] leading-relaxed text-muted">
-          Não precisa exportar nada. Cole a lista de CNPJs dos seus clientes — um por linha,
-          ou separados por vírgula — e o resto (razão social, CNAE, porte, situação) vem da
-          base da Receita.
+        <p className="mt-1 max-w-[68ch] text-[13px] leading-relaxed text-muted">
+          {jaTem > 0
+            ? "Um por linha, ou separados por vírgula. Razão social, CNAE, porte e situação vêm da base da Receita."
+            : "Só o número, um por linha. Razão social, CNAE, porte e situação vêm da base da Receita — você não precisa preencher nada disso, nem planilha nenhuma."}
         </p>
 
-        {!colando ? (
+        <textarea
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          rows={5}
+          placeholder={"11.222.333/0001-81\n07.526.557/0001-00"}
+          className="mt-3 w-full rounded-sm border border-line bg-white p-3 font-mono text-[16px] leading-relaxed focus:border-accent md:text-[14px]"
+        />
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           <button
-            onClick={() => {
-              setColando(true);
-              setErro(null);
-              setFeito(null);
-            }}
-            className="mt-3 rounded-sm bg-ink px-4 py-2.5 text-sm font-semibold text-white"
+            onClick={lerColados}
+            title="Cole ao menos um CNPJ acima para liberar"
+            disabled={!texto.trim()}
+            className="rounded-sm bg-ink px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
           >
-            Colar lista de CNPJs
+            Ler CNPJs
           </button>
-        ) : (
-          <div className="mt-3">
-            <textarea
-              value={texto}
-              onChange={(e) => setTexto(e.target.value)}
-              rows={6}
-              placeholder={"11.222.333/0001-81\n07.526.557/0001-00\n22.333.444/0001-81"}
-              className="w-full rounded-sm border border-line bg-white p-3 font-mono text-[16px] leading-relaxed md:text-[13px]"
-            />
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button
-                onClick={lerColados}
-                title="Cole ao menos um CNPJ acima para liberar"
-                disabled={!texto.trim()}
-                className="rounded-sm bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
-              >
-                Ler CNPJs
-              </button>
-              <button
-                onClick={() => {
-                  setColando(false);
-                  setTexto("");
-                }}
-                className="rounded-sm border border-line px-4 py-2.5 text-sm font-semibold text-slate2"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        )}
+          {texto.trim() && (
+            <button
+              onClick={() => setTexto("")}
+              className="rounded-sm border border-line px-3 py-2.5 text-[13px] font-semibold text-slate2"
+            >
+              limpar
+            </button>
+          )}
+        </div>
 
+        {/* O PRIMEIRO CASO — a saída para quem hesita em usar cliente real.
+            Fica DENTRO do bloco primário, discreto: é uma alternativa ao que
+            está logo acima, não um terceiro caminho. */}
+        <div className="mt-4 border-t border-linesoft pt-3">
+          <p className="text-[12.5px] leading-relaxed text-muted">
+            Quer ver funcionando antes de usar dado de cliente?{" "}
+            {/* ux-ok: o clique monta a prévia logo abaixo e a tela rola até ela
+                (rolarAtePrevia), que é a regra desta página desde o primeiro dia. */}
+            <button
+              onClick={usarPrimeiroCaso}
+              className="font-semibold text-accentdeep underline underline-offset-2"
+            >
+              Use um caso de exemplo
+            </button>{" "}
+            — uma empresa fictícia, com os dados prontos, que vai até o laudo.
+          </p>
+        </div>
       </div>
 
-      {/* Os dois caminhos levam ao mesmo lugar e a pessoa escolhe UM. Enquanto
-          o CSV era um rodapé do bloco de cima, parecia passo seguinte — e quem
-          já tinha o arquivo na mão ficava colando CNPJ à toa. */}
-      <div className="my-3 flex items-center gap-3">
-        <div className="h-px flex-1 bg-line" />
-        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted">ou</span>
-        <div className="h-px flex-1 bg-line" />
-      </div>
-
-      <div className="rounded border border-dashed border-line bg-surface p-6">
-        <div>
-          <div className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-accentdeep">
-            Caminho 2 · você já tem o arquivo
-          </div>
-          <div className="mt-1 text-[15px] font-bold">Importe a carteira de um CSV</div>
+      {/* O CSV CONTINUA INTEIRO — só deixou de disputar a atenção.
+          Quem já tem o arquivo sabe que tem, e abre em um clique. Quem não tem
+          não é mais obrigado a decidir entre dois caminhos antes de começar. */}
+      <details className="mt-3 rounded border border-dashed border-line bg-surface">
+        <summary className="cursor-pointer list-none px-5 py-3 text-[13.5px] font-semibold text-slate2">
+          Tenho muitos — quero subir a carteira de uma vez{" "}
+          <span className="font-normal text-muted">(CSV ou Excel)</span>
+        </summary>
+        <div className="border-t border-linesoft px-5 pb-5 pt-4">
+          <div className="mt-1 text-[15px] font-bold">Importe a carteira de um arquivo</div>
           <p className="mt-1 max-w-[68ch] text-[12px] leading-relaxed text-muted">
             Aceita <b className="text-slate2">.xlsx</b>, <b className="text-slate2">.xls</b> e{" "}
             <b className="text-slate2">.csv</b> — do jeito que sair do seu sistema. Planilha do
@@ -486,7 +505,7 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
               onClick={usarExemplo}
               className="rounded-sm border border-line px-4 py-2.5 text-sm font-semibold text-slate2"
             >
-              Ver com carteira de exemplo
+              Ver com carteira de exemplo (3 empresas)
             </button>
             <button
               onClick={baixarModelo}
@@ -525,7 +544,6 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
             Simples — dois dados que a base pública não tem. CNPJs inválidos e repetidos são
             descartados antes de gravar.
           </p>
-        </div>
 
         <details className="mt-3">
           <summary className="cursor-pointer text-[12.5px] font-semibold text-accentdeep">
@@ -554,7 +572,8 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
             automaticamente.
           </p>
         </details>
-      </div>
+        </div>
+      </details>
 
       {erro && (
         <p className="mt-4 rounded-sm bg-vermelhowash px-3 py-2 text-[13px] text-vermelho">{erro}</p>

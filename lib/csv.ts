@@ -206,6 +206,26 @@ export function csvDeCnpjs(cnpjs: string[]): string {
   return "cnpj\n" + cnpjs.join("\n");
 }
 
+/**
+ * O PRIMEIRO CASO — uma empresa só, para quem quer ver funcionando antes de
+ * usar dado de cliente real.
+ *
+ * A hesitação apareceu literal numa conversa de WhatsApp (05-06/08/2026): a
+ * pessoa criou a conta e parou antes de colar o CNPJ de um cliente. Não é
+ * desconfiança do produto — é que subir a carteira é entregar o ativo do
+ * escritório a um sistema que ela ainda não viu funcionar.
+ *
+ * Um caso só, e não a carteira de exemplo, por um motivo: a promessa aqui é
+ * "veja o fluxo INTEIRO em dois minutos", e fluxo inteiro é uma empresa até o
+ * laudo. Três empresas viram uma lista para triar, que é outro assunto.
+ *
+ * É a MESMA empresa do vídeo de demonstração e da massa de teste. Coerência
+ * entre o que o vídeo mostra e o que o produto oferece não é capricho: quem
+ * assiste e depois clica espera reconhecer a tela.
+ */
+export const CSV_PRIMEIRO_CASO = `cnpj,razao_social,cnae_principal,porte,regime,rbt12,contato,email
+50.100.002/0001-20,Metalúrgica Ponte Nova Ltda (exemplo),2599-3/99,EPP,Simples Nacional,3400000,Sônia Ferraz (exemplo),exemplo@enquadria.com.br`;
+
 export const CSV_EXEMPLO = `cnpj,razao_social,cnae_principal,porte,regime,rbt12,contato,email
 11.222.333/0001-81,Distribuidora Aurora Autopeças Ltda,4649-4/08,EPP,Simples Nacional,480000,Marcos Aurélio,marcos@aurora.com.br
 07.526.557/0001-00,Casa Nova Restaurante ME,5611-2/01,ME,Simples Nacional,220000,Helena Prado,helena@casanova.com.br

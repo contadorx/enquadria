@@ -118,6 +118,12 @@ export interface Negocio {
   provaram: number;
   conversao: number;
   funil: { etapa: string; n: number; pct: number; nota: string }[];
+  /** a esteira: cada escritório em UM degrau só, o mais avançado que alcançou */
+  esteira: import("./funil").LinhaFunil[];
+  /** o degrau onde a passagem despenca — null quando a base é pequena demais */
+  ondeTrava: import("./funil").LinhaFunil | null;
+  /** quem está parado logo antes do gargalo, do mais antigo para o mais novo */
+  paradosNoGargalo: (import("./funil").EscritorioFunil & { diasParado: number })[];
   porPlano: { nome: string; assinantes: number; mrr: number; pct: number }[];
   uso: { empresas: number; analises: number; laudos: number; termos: number; assinados: number };
   historico: { mes: string; mrr: number; assinantes: number }[];

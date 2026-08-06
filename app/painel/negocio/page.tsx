@@ -34,7 +34,6 @@ export default async function NegocioVisao() {
   }
 
   const maxMrr = Math.max(1, ...n.historico.map((h) => h.mrr));
-  const maxFunil = Math.max(1, ...n.funil.map((f) => f.n));
   const pctMeta = n.meta.mrr ? Math.min(100, Math.round((n.mrr / n.meta.mrr) * 100)) : 0;
 
   const porTipo: Record<string, Acao[]> = {};
@@ -212,29 +211,98 @@ export default async function NegocioVisao() {
           A conversão que importa não é cadastro→pago: é <b>provou→pago</b>. Quem emitiu um laudo viu o produto
           inteiro. Se não assinou depois disso, o problema é preço ou valor percebido, não onboarding.
         </p>
-        <div className="mt-3 space-y-1.5">
-          {n.funil.map((f, i) => {
-            const anterior = i > 0 ? n.funil[i - 1].n : f.n;
-            const queda = anterior > 0 ? Math.round(((anterior - f.n) / anterior) * 100) : 0;
-            return (
-              <div key={f.etapa} className="flex items-center gap-3">
-                <div className="w-44 shrink-0 text-[12.5px] font-medium">{f.etapa}</div>
-                <div className="h-6 flex-1 overflow-hidden rounded-sm bg-linesoft">
-                  <div
-                    className="flex h-full items-center rounded-sm bg-accent px-2 font-mono text-[11px] font-bold text-white"
-                    style={{ width: `${Math.max((f.n / maxFunil) * 100, 7)}%` }}
-                  >
-                    {f.n}
-                  </div>
-                </div>
-                <div className="w-12 shrink-0 text-right text-[11.5px] text-muted">{f.pct}%</div>
-                <div className="hidden w-52 shrink-0 text-[11px] text-muted sm:block">
-                  {i > 0 && queda > 0 ? `perdeu ${queda}% da etapa anterior` : f.nota}
-                </div>
-              </div>
-            );
-          })}
+        {/* ══════════════════════════════════════════════ A ESTEIRA
+            Cada escritório aparece em UM degrau só — o mais avançado que ele
+            alcançou. A versão anterior contava cada etapa isoladamente e
+            produzia a leitura mais enganosa possível: "38 importaram, 12
+            analisaram" faz parecer que 26 estão analisando agora. Não estão.
+            Pararam. A coluna "pararam aqui" é a que gera trabalho. */}
+        <div className="mt-3 overflow-x-auto rounded border border-line bg-surface">
+          <table className="w-full text-[13px]">
+            <thead className="border-b border-line text-left text-[11px] uppercase tracking-wide text-muted">
+              <tr>
+                <th className="px-3 py-2.5 font-semibold">Degrau</th>
+                <th className="px-3 py-2.5 font-semibold">Chegaram até aqui</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Passagem</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Pararam aqui</th>
+              </tr>
+            </thead>
+            <tbody>
+              {n.esteira.map((d) => (
+                <tr
+                  key={d.chave}
+                  className={`border-b border-linesoft last:border-0 ${
+                    n.ondeTrava?.chave === d.chave ? "bg-amarelowash" : ""
+                  }`}
+                >
+                  <td className="px-3 py-2 font-medium">{d.titulo}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <div className="h-4 w-40 overflow-hidden rounded-sm bg-linesoft">
+                        <div
+                          className="h-full rounded-sm bg-accent"
+                          style={{ width: `${Math.max((d.chegaram / Math.max(1, n.esteira[0].chegaram)) * 100, 4)}%` }}
+                        />
+                      </div>
+                      <span className="font-mono text-[12.5px]">{d.chegaram}</span>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono text-[12.5px]">
+                    {d.passagem == null ? <span className="text-muted">—</span> : `${d.passagem}%`}
+                  </td>
+                  <td className={`px-3 py-2 text-right font-mono text-[12.5px] ${d.pararam > 0 ? "font-semibold" : "text-muted"}`}>
+                    {d.pararam}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
+
+        {/* O GARGALO — e a lista de quem contactar. Sem a lista isto vira
+            painel de contemplação: o número aponta o problema e não diz com
+            quem falar. */}
+        {n.ondeTrava ? (
+          <div className="mt-3 rounded border border-amarelo/40 bg-amarelowash p-4">
+            <p className="text-[13px] font-bold text-amarelo">
+              Onde a base trava: {n.ondeTrava.titulo.toLowerCase()} — só {n.ondeTrava.passagem}% passam
+            </p>
+            <p className="mt-1 max-w-[85ch] text-[12.5px] leading-relaxed text-slate2">
+              O degrau com mais gente parada quase sempre é o primeiro, porque todo mundo passa por
+              ele. O que interessa é onde a <b>passagem</b> despenca: é ali que a tela, o texto ou o
+              produto estão pedindo algo que a pessoa não consegue dar.
+            </p>
+            {n.paradosNoGargalo.length > 0 && (
+              <>
+                <p className="mt-2.5 text-[12px] font-semibold text-slate2">
+                  Parados logo antes, do mais antigo para o mais novo:
+                </p>
+                <ul className="mt-1 space-y-0.5 text-[12.5px] text-slate2">
+                  {n.paradosNoGargalo.map((e) => (
+                    <li key={e.tenant_id} className="flex flex-wrap items-baseline gap-2">
+                      <b>{e.nome}</b>
+                      <span className="text-muted">
+                        {e.empresas} empresa(s) · {e.analises} análise(s) ·{" "}
+                        <span className={e.diasParado >= 7 ? "text-amarelo" : ""}>
+                          há {e.diasParado} dia(s)
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-[11.5px] text-muted">
+                  Esta é a lista do suporte proativo: uma mensagem curta com UM próximo passo vale
+                  mais que um e-mail explicando o produto inteiro.
+                </p>
+              </>
+            )}
+          </div>
+        ) : (
+          <p className="mt-3 text-[11.5px] text-muted">
+            Base ainda pequena para apontar gargalo — com poucos escritórios, qualquer percentual é
+            ruído, e agir sobre ruído é pior do que não agir.
+          </p>
+        )}
       </section>
 
       {/* ────────────────────────────────────────────────────────────── uso */}

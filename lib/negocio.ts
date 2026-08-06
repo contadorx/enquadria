@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase-server";
 import { caixaDe, mrrDe, ativo, type Caixa, type Escritorio, type Plano, type Recurso, type Acao, type Negocio } from "./negocio-calc";
+import { DEGRAUS, gargalo, montarFunil, paradosEm, type EscritorioFunil, type LinhaFunil } from "./funil";
 
 /**
  * O NEGÓCIO — o Enquadria visto por quem vive dele.
@@ -26,7 +27,7 @@ export async function carregarNegocio(): Promise<Negocio> {
     mrr: 0, arr: 0, ticket: 0, mrrEmRisco: 0,
     assinantes: 0, gratuitos: 0, vencendo: 0, vencidos: 0, novosNoMes: 0,
     provaram: 0, conversao: 0,
-    funil: [], porPlano: [],
+    funil: [], esteira: [], ondeTrava: null, paradosNoGargalo: [], porPlano: [],
     uso: { empresas: 0, analises: 0, laudos: 0, termos: 0, assinados: 0 },
     historico: [],
     avisos: [],
@@ -154,7 +155,39 @@ export async function carregarNegocio(): Promise<Negocio> {
   ).length;
 
   // ------------------------------------------------------------------- funil
-  // O caminho real do produto: importar → triar → analisar → emitir → assinar.
+  /**
+   * O FUNIL VIROU ESTEIRA — cada escritório em UM degrau só, o mais avançado.
+   *
+   * A versão anterior contava cada etapa isoladamente ("38 importaram, 12
+   * analisaram") e produzia a leitura mais enganosa possível: parecia que 26
+   * estavam analisando agora. Não estavam — pararam. A lógica está em
+   * `lib/funil.ts`, com teste, porque métrica de funil errada não quebra tela:
+   * faz decidir na direção errada.
+   */
+  const esteira = montarFunil(
+    escritorios.map((e) => ({
+      tenant_id: String(e.id),
+      nome: String(e.nome ?? "Escritório"),
+      criado_em: String(e.criado_em ?? new Date().toISOString()),
+      empresas: e.empresas, analises: e.analises, laudos: e.laudos,
+      termos: e.termos, assinados: e.assinados,
+    }))
+  );
+  const ondeTrava = gargalo(esteira);
+  const paradosNoGargalo = ondeTrava
+    ? paradosEm(
+        escritorios.map((e) => ({
+          tenant_id: String(e.id), nome: String(e.nome ?? "Escritório"),
+          criado_em: String(e.criado_em ?? new Date().toISOString()),
+          empresas: e.empresas, analises: e.analises, laudos: e.laudos,
+          termos: e.termos, assinados: e.assinados,
+        })),
+        /* quem parou é quem NÃO passou do degrau anterior ao gargalo */
+        DEGRAUS[Math.max(0, DEGRAUS.findIndex((d) => d.chave === ondeTrava.chave) - 1)].chave,
+        new Date().toISOString()
+      ).slice(0, 12)
+    : [];
+
   const total = escritorios.length || 1;
   const comCarteira = escritorios.filter((e) => e.empresas > 0).length;
   const comAnalise = escritorios.filter((e) => e.analises > 0).length;
@@ -389,6 +422,9 @@ export async function carregarNegocio(): Promise<Negocio> {
     provaram: comLaudo,
     conversao,
     funil,
+    esteira,
+    ondeTrava,
+    paradosNoGargalo,
     porPlano,
     uso,
     historico,
