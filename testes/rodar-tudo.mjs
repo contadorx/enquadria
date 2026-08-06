@@ -492,6 +492,43 @@ secao("Endereços públicos — o que chega ao cliente sem login");
 
     /**
      * ═══════════════════════════════════════════════════════════════════════
+     * O QUE ENTRA NO COCKPIT — e o que sai dele quando é lido.
+     * ═══════════════════════════════════════════════════════════════════════
+     *
+     * DOIS DEFEITOS RELATADOS EM 06/08/2026, do mesmo tipo: a intenção estava
+     * escrita e o código não fazia.
+     *
+     *   1. "marco como lido e não some". A regra era `if (lidos.has(id) &&
+     *      avisos.length >= 1) continue` — o primeiro item lido continuava na
+     *      tela quando era o único. Botão que não muda nada ensina a não
+     *      confiar na interface.
+     *
+     *   2. o filtro `no_cockpit` existia só no comentário. Publicação marcada
+     *      como NOTÍCIA — que por definição não deve interromper — entrava no
+     *      topo da fila de trabalho do mesmo jeito.
+     *
+     * As duas regressões são invisíveis: nada quebra, a tela só fica errada.
+     * Por isso viram asserção de texto — feia, e a única que pega este caso.
+     */
+    {
+      const arq = path.join(RAIZ, "app/painel/page.tsx");
+      const src = fs.existsSync(arq) ? fs.readFileSync(arq, "utf8") : "";
+
+      ok("o cockpit só mostra ALERTA, não notícia",
+         /\.eq\(\s*["']no_cockpit["']\s*,\s*true\s*\)/.test(src),
+         "faltou `.eq(\"no_cockpit\", true)` na busca do radar — notícia vai interromper a fila");
+
+      ok("item lido some do cockpit, sem exceção",
+         /if\s*\(\s*lidos\.has\(item\.id\)\s*\)\s*continue/.test(src),
+         "não achei o corte seco do item lido");
+
+      ok("e o corte não voltou a ter exceção por contagem",
+         !/lidos\.has\(item\.id\)\s*&&/.test(src),
+         "achei `lidos.has(item.id) &&` — a exceção que fazia o aviso lido ficar na tela");
+    }
+
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
      * A EMISSÃO NÃO DECIDE — a decisão é de quem assina.
      * ═══════════════════════════════════════════════════════════════════════
      *

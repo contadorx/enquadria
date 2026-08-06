@@ -31,8 +31,11 @@ async function avisosDoRadar(
     /* SÓ ALERTA INTERROMPE. Publicação marcada como notícia (`no_cockpit`
        falso) vive só na aba Reforma: o cockpit é fila de trabalho, e um aviso
        aqui tira a pessoa do que ela estava fazendo. A coluna nasceu na 0056
-       com default true, então nada muda para os itens que já existiam. */
-    ; 
+       com default true, então nada muda para os itens que já existiam.
+
+       Até 06/08 este filtro existia só no comentário — a intenção descrita e o
+       código sem ela. Notícia entrava no cockpit do mesmo jeito. */
+    .eq("no_cockpit", true);
   // a tabela só existe a partir da migration 0011; sem ela o cockpit segue inteiro
   if (error || !itens?.length) return [];
 
@@ -44,7 +47,17 @@ async function avisosDoRadar(
   for (const item of ordenar(itens as unknown as ItemRadar[], hoje)) {
     const alvo = atingidas(item, empresasRadar);
     if (alvo.length === 0) continue; // notícia sem cliente atingido é ruído
-    if (lidos.has(item.id) && avisos.length >= 1) continue; // já lido não repete no topo
+    /* LIDO SOME DAQUI, SEM EXCEÇÃO.
+     *
+     * A regra anterior era "já lido não repete no topo", com um `&&
+     * avisos.length >= 1` no fim: o primeiro item lido continuava aparecendo
+     * quando era o único da lista. Na prática, o botão "marcar como lido" não
+     * mudava nada na tela — clicava, recarregava, o aviso continuava lá.
+     *
+     * Botão que não muda o que está na tela é pior do que botão nenhum: ensina
+     * a não confiar na interface. Nada se perde ao sumir daqui — o histórico
+     * inteiro, lido e não lido, vive na aba Reforma, que é feed. */
+    if (lidos.has(item.id)) continue;
     avisos.push({
       id: item.id,
       tipo: "radar",
