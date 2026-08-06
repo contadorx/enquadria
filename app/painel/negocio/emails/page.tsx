@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase-server";
 import { carregarContexto, planejar, separarFila, VARIAVEIS, type Envio } from "@/lib/reguas";
 import { ReguaCartao, RodarReguas, ForcarCron, LiberarReenvio, ConfigChave, ConfigNumero, type RegraUI } from "@/components/NegocioUI";
 import { NovidadeEmail } from "@/components/NovidadeEmail";
+import { casarEventos, resumir, resumirPorRegra, rotuloEntrega, type EnvioBase, type EventoBase } from "@/lib/entrega";
+import { EntregaResumo } from "@/components/EntregaResumo";
 
 export const dynamic = "force-dynamic";
 
@@ -41,15 +43,36 @@ const GRUPOS = [
 export default async function Emails() {
   const supabase = createClient();
 
-  const [{ data: regrasRaw }, { data: cfgRaw }, { data: logRaw }] = await Promise.all([
-    supabase.from("plataforma_reguas").select("*").order("ordem", { ascending: true }),
-    supabase.from("plataforma_config").select("chave, valor"),
-    supabase
-      .from("plataforma_envios")
-      .select("id, regra, chave_unica, para, assunto, status, erro, criado_em")
-      .order("criado_em", { ascending: false })
-      .limit(60),
-  ]);
+  /* 30 DIAS DE ENVIOS E OS EVENTOS DELES.
+   *
+   * O log mostrava 60 linhas com "enviado" e parava aí — mas "enviado" só quer
+   * dizer que o provedor aceitou. Se chegou, se abriram, se voltou: isso está
+   * em `email_eventos` desde a 0050, alimentado pelos webhooks, e não aparecia
+   * em lugar nenhum. As duas janelas abaixo são a base do casamento. */
+  const desde = new Date(Date.now() - 30 * 86_400_000).toISOString();
+
+  const [{ data: regrasRaw }, { data: cfgRaw }, { data: logRaw }, { data: enviosRaw }, { data: eventosRaw }] =
+    await Promise.all([
+      supabase.from("plataforma_reguas").select("*").order("ordem", { ascending: true }),
+      supabase.from("plataforma_config").select("chave, valor"),
+      supabase
+        .from("plataforma_envios")
+        .select("id, regra, chave_unica, para, assunto, status, erro, criado_em")
+        .order("criado_em", { ascending: false })
+        .limit(60),
+      supabase
+        .from("plataforma_envios")
+        .select("id, regra, para, criado_em")
+        .gte("criado_em", desde)
+        .order("criado_em", { ascending: false })
+        .limit(3000),
+      supabase
+        .from("email_eventos")
+        .select("envio_id, para, regra, evento, ocorreu_em")
+        .gte("ocorreu_em", desde)
+        .order("ocorreu_em", { ascending: false })
+        .limit(6000),
+    ]);
 
   const regras = ((regrasRaw as RegraUI[]) || []);
   const cfg: Record<string, Record<string, unknown>> = {};
@@ -93,6 +116,14 @@ export default async function Emails() {
 
   const nomeRegra: Record<string, string> = {};
   for (const r of regras) nomeRegra[r.chave] = r.nome;
+
+  /* ── entrega e leitura ───────────────────────────────────────────────── */
+  const envios30 = ((enviosRaw ?? []) as EnvioBase[]);
+  const eventos30 = ((eventosRaw ?? []) as EventoBase[]);
+  const { estados, orfaos } = casarEventos(envios30, eventos30);
+  const geral = resumir(envios30, estados);
+  const porRegra = resumirPorRegra(envios30, estados);
+  const semWebhook = eventos30.length === 0;
 
   const cfgReguas = cfg.reguas || {};
   const cfgCobranca = cfg.cobranca || {};
@@ -280,6 +311,11 @@ export default async function Emails() {
         );
       })}
 
+      {/* ENTREGA E LEITURA — extraído para `components/EntregaResumo` porque é
+          apresentação pura, e porque assim dá para renderizar a seção sozinha
+          numa prévia sem subir a página inteira. */}
+      <EntregaResumo geral={geral} porRegra={porRegra} nomeRegra={nomeRegra} semWebhook={semWebhook} orfaos={orfaos} />
+
       <section>
         <h2 className="mb-1 text-[15px] font-bold">Últimos envios</h2>
         <p className="mb-2 max-w-[80ch] text-[12.5px] text-muted">
@@ -295,6 +331,7 @@ export default async function Emails() {
                 <th className="px-3 py-2.5 font-semibold">Para</th>
                 <th className="px-3 py-2.5 font-semibold">Assunto</th>
                 <th className="px-3 py-2.5 font-semibold">Status</th>
+                <th className="px-3 py-2.5 font-semibold">Entrega</th>
                 <th className="px-3 py-2.5 font-semibold"></th>
               </tr>
             </thead>
@@ -319,11 +356,40 @@ export default async function Emails() {
                       {l.status}
                     </span>
                   </td>
+                  {/* O QUE ACONTECEU DEPOIS DO ENVIO — a coluna que faltava */}
+                  <td className="px-3 py-2">
+                    {(() => {
+                      const e = estados.get(l.id);
+                      const r = rotuloEntrega(e);
+                      const cor =
+                        r.nivel === "falha" ? "bg-vermelhowash text-vermelho"
+                        : r.nivel === "clique" ? "bg-accentwash text-accentdeep"
+                        : r.nivel === "aberto" ? "bg-verdewash text-verde"
+                        : r.nivel === "entregue" ? "bg-neutrowash text-neutro"
+                        : "bg-surface2 text-muted";
+                      const detalhe = e
+                        ? [
+                            e.entregue && `entregue ${new Date(e.entregue).toLocaleString("pt-BR")}`,
+                            e.aberto && `abriu ${new Date(e.aberto).toLocaleString("pt-BR")}`,
+                            e.clique && `clicou ${new Date(e.clique).toLocaleString("pt-BR")}`,
+                            e.falha && `${e.falha.tipo} ${new Date(e.falha.em).toLocaleString("pt-BR")}`,
+                          ].filter(Boolean).join(" · ")
+                        : "";
+                      return (
+                        <span
+                          title={detalhe || "nenhum evento do provedor para este envio"}
+                          className={`rounded-full px-2 py-0.5 text-[10.5px] font-bold ${cor}`}
+                        >
+                          {r.texto}
+                        </span>
+                      );
+                    })()}
+                  </td>
                   <td className="px-3 py-2 text-right"><LiberarReenvio chaveUnica={l.chave_unica} /></td>
                 </tr>
               ))}
               {!log.length && (
-                <tr><td colSpan={6} className="px-3 py-8 text-center text-muted">Nenhum envio registrado ainda.</td></tr>
+                <tr><td colSpan={7} className="px-3 py-8 text-center text-muted">Nenhum envio registrado ainda.</td></tr>
               )}
             </tbody>
           </table>

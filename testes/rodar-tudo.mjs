@@ -81,7 +81,7 @@ try {
     "lib/curso.ts", "lib/faturas.ts", "lib/filtro-faturas.ts", "lib/email-eventos.ts", "lib/documento.ts", "lib/assinatura.ts",
     "lib/negocio-calc.ts", "lib/projecao.ts", "lib/deriva.ts", "lib/gateway-limpeza.ts",
     "lib/recalculo.ts", "lib/radar.ts", "lib/radar-form.ts", "lib/radar-aviso.ts", "lib/digest.ts", "lib/reforma.ts",
-    "lib/novidade.ts", "lib/mailer/templates.ts",
+    "lib/novidade.ts", "lib/mailer/templates.ts", "lib/entrega.ts", "lib/passos.ts",
   ];
   const cfg = path.join(RAIZ, "tsconfig.testes.json");
   fs.writeFileSync(cfg, JSON.stringify({

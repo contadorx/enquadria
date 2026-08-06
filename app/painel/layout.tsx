@@ -66,6 +66,15 @@ export default async function PainelLayout({ children }: { children: React.React
    * disser que saiu.
    */
   let reformaNaoLidas = 0;
+  /**
+   * A SITUAÇÃO DO ESCRITÓRIO — cinco contagens baratas (head: true, sem trazer
+   * linha) que o assistente usa para saber qual é o próximo passo de quem está
+   * na tela. Sem isso ele só sabe responder quando perguntado, e quem está
+   * perdido não sabe o que perguntar.
+   */
+  let situacao = {
+    temEscritorio: false, empresas: 0, analises: 0, laudos: 0, termos: 0, assinados: 0,
+  };
   try {
     const [cfg, laudos, nps] = await Promise.all([
       supabase.from("assistente_config").select("ativo").eq("id", 1).maybeSingle(),
@@ -92,6 +101,26 @@ export default async function PainelLayout({ children }: { children: React.React
       (noticias.data ?? []) as { id: string; atualizado_em: string }[],
       leituras
     );
+
+    const [empresas, analises, termos, assinados, escritorioCfg] = await Promise.all([
+      supabase.from("empresas").select("id", { count: "exact", head: true }).is("arquivada_em", null),
+      supabase.from("analises").select("id", { count: "exact", head: true }),
+      supabase.from("termos").select("id", { count: "exact", head: true }),
+      supabase.from("termos").select("id", { count: "exact", head: true }).not("assinado_em", "is", null),
+      supabase.from("profiles").select("tenants(nome, crc)").eq("id", user?.id ?? "").maybeSingle(),
+    ]);
+    const tt = escritorioCfg.data?.tenants as { nome?: string; crc?: string } | { nome?: string; crc?: string }[] | null;
+    const dono = Array.isArray(tt) ? tt[0] : tt;
+    situacao = {
+      /* "Escritório" é o nome que o cadastro nasce tendo: contá-lo como
+         preenchido faria a trilha pular o passo que ela existe para cobrar */
+      temEscritorio: !!dono?.nome && dono.nome !== "Escritório" && !!dono?.crc,
+      empresas: empresas.count ?? 0,
+      analises: analises.count ?? 0,
+      laudos: laudosDoEscritorio,
+      termos: termos.count ?? 0,
+      assinados: assinados.count ?? 0,
+    };
   } catch {
     /* migrations não rodadas: painel funciona, os acessórios não aparecem */
   }
@@ -167,6 +196,7 @@ export default async function PainelLayout({ children }: { children: React.React
         assistenteAtivo={assistenteAtivo}
         laudos={laudosDoEscritorio}
         respondidoEm={npsRespondidoEm}
+        situacao={situacao}
       />
     </div>
   );

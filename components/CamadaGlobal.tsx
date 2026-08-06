@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { AssistenteFlutuante } from "@/components/AssistenteFlutuante";
 import { NpsModal } from "@/components/NpsModal";
 import { devePerguntarNps } from "@/lib/nps";
+import type { Situacao } from "@/lib/passos";
 
 /**
  * O QUE FLUTUA POR CIMA DE TODAS AS TELAS: o assistente e o convite de NPS.
@@ -22,10 +23,13 @@ export function CamadaGlobal({
   assistenteAtivo,
   laudos,
   respondidoEm,
+  situacao,
 }: {
   assistenteAtivo: boolean;
   laudos: number;
   respondidoEm: string | null;
+  /** onde o escritório está na esteira — é o que deixa o assistente proativo */
+  situacao?: Situacao;
 }) {
   const [perguntarNps, setPerguntarNps] = useState(false);
 
@@ -53,7 +57,7 @@ export function CamadaGlobal({
 
   return (
     <>
-      <AssistenteFlutuante ativo={assistenteAtivo} />
+      <AssistenteFlutuante ativo={assistenteAtivo} situacao={situacao} />
       <NpsModal mostrar={perguntarNps} />
     </>
   );
