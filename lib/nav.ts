@@ -164,6 +164,9 @@ export const ABAS_NEGOCIO: ItemNav[] = [
   { href: "/painel/negocio/chamados", label: "Suporte" },
   { href: "/painel/negocio/assistente", label: "Assistente e NPS" },
   { href: "/painel/negocio/ajuda", label: "Conteúdo" },
+  /* onde se publica a norma. Entrou em 05/08/2026: a tabela existia desde
+     sempre e não tinha porta — 4 itens, todos de 24/04, 104 dias parados. */
+  { href: "/painel/negocio/radar", label: "Radar" },
   /* onde se publica aula: o link do vídeo saiu do código na 0038 */
   { href: "/painel/negocio/curso", label: "Curso" },
 ];
