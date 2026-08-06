@@ -452,6 +452,46 @@ secao("Endereços públicos — o que chega ao cliente sem login");
 
     /**
      * ═══════════════════════════════════════════════════════════════════════
+     * O FIO DO RADAR — o campo que o cockpit jogava fora.
+     * ═══════════════════════════════════════════════════════════════════════
+     *
+     * O CASO REAL, 06/08/2026. O primeiro item de radar com critério por
+     * ANEXO foi publicado. A função `radar_alcance()` do banco respondeu
+     * "39 empresas", a rota de aviso mandou cinco e-mails dizendo
+     * "39 clientes seus" — e o cockpit mostrou NADA.
+     *
+     * Motivo: `empresasRadar` era montado a partir de `linhas`, e `Linha`
+     * (lib/cockpit) não carrega anexo. O mapeamento escrevia `anexo: null`, e
+     * `afeta()` — corretamente — descarta empresa sem anexo quando o critério
+     * pede anexo.
+     *
+     * `afeta()` estava certa. Os testes dela passavam. O erro morava no
+     * caminho até ela, e é por isso que só um teste de FIO o pega: o defeito
+     * não é o que a função faz, é o que chega nela.
+     *
+     * A regra que fica: quem monta EmpresaRadar tem de ler a tabela de
+     * empresas. `anexo: null` escrito à mão é sempre um campo perdido.
+     */
+    {
+      const MONTAM_RADAR = [
+        ["app/painel/page.tsx", "o cockpit"],
+        ["app/api/digest/route.ts", "o digest mensal"],
+        ["app/api/radar/avisar/route.ts", "a rota de aviso"],
+      ];
+      for (const [arq, oque] of MONTAM_RADAR) {
+        const src = fs.existsSync(path.join(RAIZ, arq)) ? fs.readFileSync(path.join(RAIZ, arq), "utf8") : "";
+        ok(`${oque} não zera o anexo ao montar o radar`,
+           src !== "" && !/anexo:\s*null\s*,/.test(src),
+           src === "" ? "arquivo não encontrado"
+                      : "achei `anexo: null` — o critério por anexo não vai alcançar ninguém");
+        ok(`${oque} lê o anexo da carteira`,
+           src !== "" && /anexo:\s*(\(?e(\s|\)|\.)|e\.anexo)/.test(src),
+           src === "" ? "arquivo não encontrado" : "não achei o anexo vindo de `empresas`");
+      }
+    }
+
+    /**
+     * ═══════════════════════════════════════════════════════════════════════
      * A EMISSÃO NÃO DECIDE — a decisão é de quem assina.
      * ═══════════════════════════════════════════════════════════════════════
      *

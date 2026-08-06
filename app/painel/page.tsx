@@ -104,16 +104,36 @@ export default async function Painel() {
   const janela = estadoDaJanela();
   const fase = faseDaJanela();
 
-  // ---------------------------------------------------------------- avisos
-  const empresasRadar: EmpresaRadar[] = linhas.map((l) => ({
-    id: l.id,
-    razao_social: l.razao_social,
-    cnpj: l.cnpj,
-    anexo: null,
-    faixa: l.faixa,
-    cnae_principal: l.cnae,
-    saida: l.saida,
-    tem_analise: !!l.analise_id,
+  /* ─────────────────────────────────────────────────────────────── avisos
+   * O ANEXO VEM DE `empresas`, NÃO DE `linhas` — e este é o conserto de um
+   * defeito que só apareceu quando o radar publicou o primeiro item com
+   * critério por anexo, em 06/08/2026.
+   *
+   * `Linha` (lib/cockpit) não carrega `anexo`: ela é a fila de trabalho, e
+   * anexo não aparece nela. O mapeamento antigo preenchia `anexo: null`, e
+   * `afeta()` descarta empresa com anexo nulo quando o critério pede anexo.
+   *
+   * Resultado, silencioso e completo: o item da NFS-e, com critério
+   * `anexos [3,4,5]`, atingia 39 empresas segundo a função `radar_alcance()`
+   * do banco e segundo a rota de aviso — e ZERO aqui. O e-mail saiu dizendo
+   * "39 clientes seus", o contador abriu o app e não viu nada.
+   *
+   * A lista de empresas já vinha com `anexo` na query acima. Era só usá-la.
+   * Duas leituras da mesma carteira que discordam falham sempre assim:
+   * ninguém enxerga, porque nada quebra.
+   * ───────────────────────────────────────────────────────────────────── */
+  const saidaPorEmpresa = new Map(
+    (analises ?? []).map((a) => [a.empresa_id as string, (a.saida ?? null) as string | null])
+  );
+  const empresasRadar: EmpresaRadar[] = (empresas ?? []).map((e) => ({
+    id: e.id as string,
+    razao_social: e.razao_social as string,
+    cnpj: e.cnpj as string,
+    anexo: (e as { anexo?: number | null }).anexo ?? null,
+    faixa: (e.faixa ?? null) as string | null,
+    cnae_principal: (e.cnae_principal ?? null) as string | null,
+    saida: saidaPorEmpresa.get(e.id as string) ?? null,
+    tem_analise: saidaPorEmpresa.has(e.id as string),
   }));
 
   const avisos: Aviso[] = await avisosDoRadar(supabase, linhas, empresasRadar);

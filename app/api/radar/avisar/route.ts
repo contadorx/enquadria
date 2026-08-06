@@ -143,6 +143,28 @@ export async function POST(req: Request) {
     await admin.from("radar_avisos").insert({
       item_id: item.id, tenant_id: alvo.tenant_id, canal: "imediato", empresas: alvo.empresas,
     });
+
+    /**
+     * E TAMBÉM NO LIVRO DE ENVIOS DA PLATAFORMA.
+     *
+     * `radar_avisos` responde "este escritório já foi comunicado?"; ele não
+     * responde "o e-mail saiu, por onde e com que assunto?". Sem esta linha, a
+     * tela Negócio → E-mails não mostra nada do radar — foi exatamente o que
+     * aconteceu em 06/08: cinco avisos enviados e nenhuma pista na interface
+     * de que tinham saído. Duas perguntas, dois registros.
+     *
+     * `caminho` diz se saiu pelo servidor próprio ou pela Brevo, que é a
+     * primeira coisa a olhar quando alguém diz "não chegou".
+     */
+    await admin.from("plataforma_envios").insert({
+      tenant_id: alvo.tenant_id,
+      regra: "radar_aviso",
+      chave_unica: `radar_aviso:${item.id}:${alvo.tenant_id}`,
+      para: alvo.email,
+      assunto: assuntoAviso(item as unknown as ItemPublicado, alvo.empresas, hoje),
+      status: "enviado",
+      erro: envio.caminho ? `saiu por ${envio.caminho}` : null,
+    });
     enviados++;
   }
 

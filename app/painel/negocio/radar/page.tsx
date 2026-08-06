@@ -52,9 +52,11 @@ export default async function RadarNegocio() {
     <div>
       <h1 className="text-[19px] font-bold tracking-tight">Radar da transição</h1>
       <p className="mt-0.5 max-w-[76ch] text-[13px] leading-relaxed text-muted">
-        O que entra aqui aparece na aba <b>Reforma</b> de cada contador — e só para quem o critério
-        alcança. É a única coisa do produto que cruza a norma com a <b>carteira dele</b>: nenhum
-        portal de notícia consegue dizer “isto atinge 14 dos seus clientes”.
+        O que entra aqui aparece <b>no topo do cockpit</b> de cada contador (no máximo três por
+        vez), e só para quem o critério alcança. É a única coisa do produto que cruza a norma com a
+        <b>carteira dele</b>: nenhum portal de notícia consegue dizer “isto atinge 14 dos seus
+        clientes”. Para avisar por e-mail é preciso clicar em <b>avisar escritórios</b> — publicar,
+        sozinho, não manda nada.
       </p>
 
       {/**
