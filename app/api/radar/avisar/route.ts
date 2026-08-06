@@ -47,6 +47,19 @@ export async function POST(req: Request) {
   if (!corpo.item_id) return NextResponse.json({ erro: "item_id obrigatório" }, { status: 400 });
 
   const apenasTeste = new URL(req.url).searchParams.get("teste") === "1";
+  /**
+   * REENVIAR — a saída que faltava.
+   *
+   * A trava de "já avisei este escritório" é certa e impede o pior erro do
+   * canal. Mas ela criou uma porta sem volta: em 06/08 os cinco avisos foram
+   * registrados como enviados, nenhum chegou, e o botão passou a recusar
+   * qualquer nova tentativa. Sem `?reenviar=1` a única saída era apagar linha
+   * no banco de produção — que é exatamente o que a tela existe para evitar.
+   *
+   * Ele ignora o histórico DE PROPÓSITO e é explícito na URL: reenvio de
+   * e-mail em massa não pode acontecer por acidente de clique.
+   */
+  const reenviar = new URL(req.url).searchParams.get("reenviar") === "1";
   const hoje = new Date().toISOString().slice(0, 10);
   const base = new URL(req.url).origin;
 
@@ -106,7 +119,7 @@ export async function POST(req: Request) {
   const dx = diagnosticarAviso(
     item as unknown as ItemPublicado,
     carteiras,
-    (jaFoi ?? []).map((x) => x.tenant_id as string)
+    reenviar ? [] : (jaFoi ?? []).map((x) => x.tenant_id as string)
   );
 
   if (dx.bloqueio) {
@@ -140,9 +153,15 @@ export async function POST(req: Request) {
     /* O REGISTRO SÓ ENTRA DEPOIS DO ENVIO CONFIRMADO.
        Gravar antes seria mais simples e criaria o pior dos mundos: e-mail que
        não saiu, marcado como avisado, e o escritório nunca mais recebe. */
-    await admin.from("radar_avisos").insert({
-      item_id: item.id, tenant_id: alvo.tenant_id, canal: "imediato", empresas: alvo.empresas,
-    });
+    /* no reenvio a linha já existe: `upsert` atualiza a data em vez de
+       estourar na chave primária (item_id, tenant_id) */
+    await admin.from("radar_avisos").upsert(
+      {
+        item_id: item.id, tenant_id: alvo.tenant_id, canal: "imediato",
+        empresas: alvo.empresas, avisado_em: new Date().toISOString(),
+      },
+      { onConflict: "item_id,tenant_id" }
+    );
 
     /**
      * E TAMBÉM NO LIVRO DE ENVIOS DA PLATAFORMA.
@@ -159,7 +178,9 @@ export async function POST(req: Request) {
     await admin.from("plataforma_envios").insert({
       tenant_id: alvo.tenant_id,
       regra: "radar_aviso",
-      chave_unica: `radar_aviso:${item.id}:${alvo.tenant_id}`,
+      /* o reenvio carrega o horário na chave: são dois envios diferentes, e o
+         livro de envios tem de mostrar os dois */
+      chave_unica: `radar_aviso:${item.id}:${alvo.tenant_id}${reenviar ? `:${Date.now()}` : ""}`,
       para: alvo.email,
       assunto: assuntoAviso(item as unknown as ItemPublicado, alvo.empresas, hoje),
       status: "enviado",
@@ -168,5 +189,5 @@ export async function POST(req: Request) {
     enviados++;
   }
 
-  return NextResponse.json({ ok: true, enviados, falhas, ...dx });
+  return NextResponse.json({ ok: true, enviados, falhas, reenvio: reenviar, ...dx });
 }

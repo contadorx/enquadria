@@ -27,7 +27,12 @@ async function avisosDoRadar(
   const { data: itens, error } = await supabase
     .from("radar_itens")
     .select("id, titulo, resumo, o_que_fazer, fonte, publicado_em, vigencia_em, severidade, criterio")
-    .eq("ativo", true);
+    .eq("ativo", true)
+    /* SÓ ALERTA INTERROMPE. Publicação marcada como notícia (`no_cockpit`
+       falso) vive só na aba Reforma: o cockpit é fila de trabalho, e um aviso
+       aqui tira a pessoa do que ela estava fazendo. A coluna nasceu na 0056
+       com default true, então nada muda para os itens que já existiam. */
+    ; 
   // a tabela só existe a partir da migration 0011; sem ela o cockpit segue inteiro
   if (error || !itens?.length) return [];
 

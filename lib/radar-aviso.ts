@@ -33,7 +33,7 @@
 import { atingidas, diasPara, type ItemRadar, type EmpresaRadar } from "./radar";
 
 /** um item como ele vive no banco: o `ativo` importa para poder avisar */
-export type ItemPublicado = ItemRadar & { ativo?: boolean };
+export type ItemPublicado = ItemRadar & { ativo?: boolean; no_cockpit?: boolean };
 
 export interface CarteiraDeTenant {
   tenant_id: string;

@@ -27,6 +27,11 @@ function corpoValido(c: Partial<Rascunho>): Rascunho {
     severidade: String(c.severidade ?? "media"),
     criterio: c.criterio ?? {},
     ativo: c.ativo !== false,
+    /* default TRUE: quem publicava antes de existir a coluna publicava alerta,
+       e o corpo antigo (sem o campo) tem de continuar significando a mesma
+       coisa. Silencioso vira notícia seria mudança de comportamento por
+       omissão — o pior tipo. */
+    no_cockpit: c.no_cockpit !== false,
   };
 }
 
@@ -41,6 +46,7 @@ function paraBanco(r: Rascunho) {
     severidade: r.severidade,
     criterio: limparCriterio(r.criterio),
     ativo: r.ativo,
+    no_cockpit: r.no_cockpit,
   };
 }
 

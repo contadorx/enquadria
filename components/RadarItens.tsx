@@ -32,7 +32,7 @@ const ANEXOS = [1, 2, 3, 4, 5];
 const VAZIO: Rascunho = {
   titulo: "", resumo: "", o_que_fazer: "", fonte: "",
   publicado_em: new Date().toISOString().slice(0, 10),
-  vigencia_em: "", severidade: "media", criterio: {}, ativo: true,
+  vigencia_em: "", severidade: "media", criterio: {}, ativo: true, no_cockpit: true,
 };
 
 interface Previa {
@@ -45,6 +45,8 @@ interface EstadoAviso {
   erro: string | null;
   enviando: boolean;
   resultado: string | null;
+  /** ignora quem já foi avisado — a saída para quando o e-mail não chegou */
+  reenvio: boolean;
 }
 
 export function RadarItens({
@@ -120,6 +122,7 @@ export function RadarItens({
       /* preserva o estado: forçar `true` aqui republicava sem querer um item
          que a pessoa tinha tirado do ar de propósito */
       criterio: i.criterio ?? {}, ativo: i.ativo !== false,
+      no_cockpit: i.no_cockpit !== false,
     });
     setCnaeTexto((i.criterio?.divisoes_cnae ?? []).join(", "));
     setAlcance(null);
@@ -141,28 +144,28 @@ export function RadarItens({
      Primeiro `?teste=1`, que devolve exatamente quem receberia e com que
      assunto, sem mandar nada. Só depois o envio. E-mail não tem CTRL+Z: um
      critério errado aqui não dá erro, dá cinco caixas de entrada. */
-  async function conferirAviso(item: ItemPublicado) {
-    setAviso({ item_id: item.id, previa: [], repetidos: 0, erro: null, enviando: false, resultado: null });
+  async function conferirAviso(item: ItemPublicado, reenvio = false) {
+    setAviso({ item_id: item.id, previa: [], repetidos: 0, erro: null, enviando: false, resultado: null, reenvio });
     try {
-      const resp = await fetch("/api/radar/avisar?teste=1", {
+      const resp = await fetch(`/api/radar/avisar?teste=1${reenvio ? "&reenviar=1" : ""}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ item_id: item.id }),
       });
       const j = await resp.json();
       if (!resp.ok) {
-        setAviso({ item_id: item.id, previa: [], repetidos: j.repetidos ?? 0, erro: j.erro ?? "não consegui conferir", enviando: false, resultado: null });
+        setAviso({ item_id: item.id, previa: [], repetidos: j.repetidos ?? 0, erro: j.erro ?? "não consegui conferir", enviando: false, resultado: null, reenvio });
         return;
       }
-      setAviso({ item_id: item.id, previa: j.previa ?? [], repetidos: j.repetidos ?? 0, erro: null, enviando: false, resultado: null });
+      setAviso({ item_id: item.id, previa: j.previa ?? [], repetidos: j.repetidos ?? 0, erro: null, enviando: false, resultado: null, reenvio });
     } catch (e) {
-      setAviso({ item_id: item.id, previa: [], repetidos: 0, erro: e instanceof Error ? e.message : "erro inesperado", enviando: false, resultado: null });
+      setAviso({ item_id: item.id, previa: [], repetidos: 0, erro: e instanceof Error ? e.message : "erro inesperado", enviando: false, resultado: null, reenvio });
     }
   }
 
   async function enviarAviso(item: ItemPublicado) {
     setAviso((a) => (a ? { ...a, enviando: true, erro: null } : a));
     try {
-      const resp = await fetch("/api/radar/avisar", {
+      const resp = await fetch(`/api/radar/avisar${aviso?.reenvio ? "?reenviar=1" : ""}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ item_id: item.id }),
       });
@@ -258,8 +261,35 @@ export function RadarItens({
             </div>
           </div>
 
-          {/* ──────────────────────────────── o critério */}
+          {/* ──────────────────────────────── alerta ou notícia
+            * A escolha que separa INTERROMPER de INFORMAR. O cockpit é fila de
+            * trabalho; um aviso lá tira a pessoa do que ela estava fazendo. A
+            * aba Reforma é feed e espera ser visitada.
+            */}
           <div className="rounded-sm border border-line bg-surface2 p-3.5">
+            <div className="text-[12px] font-bold">Onde isto aparece</div>
+            <div className="mt-2 space-y-2">
+              <label className="flex cursor-pointer items-start gap-2">
+                <input type="radio" name="onde" className="mt-0.5" checked={r.no_cockpit}
+                  onChange={() => mexer({ no_cockpit: true })} />
+                <span className="text-[12.5px] leading-relaxed">
+                  <b>Alerta</b> — entra no topo do cockpit de quem o critério alcança,
+                  <b> e</b> na aba Reforma. Use quando muda o trabalho dele.
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-2">
+                <input type="radio" name="onde" className="mt-0.5" checked={!r.no_cockpit}
+                  onChange={() => mexer({ no_cockpit: false })} />
+                <span className="text-[12.5px] leading-relaxed">
+                  <b>Notícia</b> — só na aba Reforma, para <b>todos</b> os escritórios. Use para
+                  contexto, sem critério e sem interromper ninguém.
+                </span>
+              </label>
+            </div>
+          </div>
+
+          {/* ──────────────────────────────── o critério */}
+          <div className={`rounded-sm border border-line bg-surface2 p-3.5 ${r.no_cockpit ? "" : "opacity-55"}`}>
             <div className="text-[12px] font-bold">Quem isto alcança</div>
             <p className="mt-0.5 text-[11.5px] text-muted">
               Deixe tudo em branco para alcançar todo mundo. Cada filtro RESTRINGE.
@@ -304,8 +334,11 @@ export function RadarItens({
             </div>
 
             <p className="mt-2.5 rounded-sm bg-surface px-3 py-2 text-[12px] font-semibold text-ink">
-              {descreverCriterio(limparCriterio(r.criterio))}
+              {r.no_cockpit
+                ? descreverCriterio(limparCriterio(r.criterio))
+                : "Como notícia, o critério não filtra nada: a aba Reforma mostra para todos."}
             </p>
+            <Avisos lista={doCampo("criterio" as keyof Rascunho)} />
 
             {/* O ALCANCE É CONSULTADO ANTES DE SALVAR. O erro típico do radar é
                 de escopo, e escopo errado não dá erro — dá um item que não
@@ -361,10 +394,20 @@ export function RadarItens({
                     className="rounded-sm border border-line px-3 py-1.5 text-[12px] font-semibold text-accentdeep">
                     editar
                   </button>
-                  <button onClick={() => conferirAviso(i)} disabled={ocupado}
+                  <button onClick={() => conferirAviso(i, false)} disabled={ocupado}
                     className="rounded-sm border border-accent px-3 py-1.5 text-[12px] font-semibold text-accentdeep disabled:opacity-40">
                     {avisados[i.id] ? `avisar (${avisados[i.id]} já)` : "avisar escritórios"}
                   </button>
+                  {/* a saída para quando o envio consta como feito e ninguém
+                      recebeu. Só aparece quando há histórico, e diz na cara que
+                      vai repetir — reenvio em massa não pode ser um clique
+                      parecido com o outro. */}
+                  {!!avisados[i.id] && (
+                    <button onClick={() => conferirAviso(i, true)} disabled={ocupado}
+                      className="rounded-sm border border-line px-3 py-1.5 text-[12px] font-semibold text-amarelo disabled:opacity-40">
+                      reenviar a todos
+                    </button>
+                  )}
                   <button onClick={() => alternarAtivo(i.id, false)} disabled={ocupado}
                     className="rounded-sm border border-line px-3 py-1.5 text-[12px] font-semibold text-slate2 disabled:opacity-40">
                     tirar do ar
@@ -385,9 +428,15 @@ export function RadarItens({
                     <>
                       <div className="text-[12px] font-bold">
                         {aviso.previa.length
-                          ? `Vai para ${aviso.previa.length} escritório(s). Nada foi enviado ainda.`
+                          ? `${aviso.reenvio ? "REENVIO · " : ""}Vai para ${aviso.previa.length} escritório(s). Nada foi enviado ainda.`
                           : "Conferindo…"}
                       </div>
+                      {aviso.reenvio && !!aviso.previa.length && (
+                        <p className="mt-0.5 text-[11.5px] text-amarelo">
+                          Quem já recebeu vai receber de novo. Use só quando o primeiro envio
+                          não chegou.
+                        </p>
+                      )}
                       {aviso.repetidos > 0 && (
                         <p className="mt-0.5 text-[11.5px] text-muted">
                           {aviso.repetidos} escritório(s) já foram avisados deste item e ficam de fora.
@@ -485,7 +534,14 @@ function Cabeca({ i }: { i: ItemPublicado }) {
           {i.vigencia_em ? ` · vigência ${new Date(i.vigencia_em).toLocaleDateString("pt-BR")}` : ""}
         </span>
       </div>
-      <div className="mt-0.5 text-[13.5px] font-semibold">{i.titulo}</div>
+      <div className="mt-0.5 text-[13.5px] font-semibold">
+        {i.no_cockpit === false && (
+          <span className="mr-1.5 rounded-sm bg-surface2 px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-wider text-muted">
+            notícia
+          </span>
+        )}
+        {i.titulo}
+      </div>
       <p className="mt-0.5 text-[12px] leading-relaxed text-slate2">{i.resumo}</p>
       <p className="mt-1 font-mono text-[11px] text-muted">{descreverCriterio(i.criterio)}</p>
     </div>

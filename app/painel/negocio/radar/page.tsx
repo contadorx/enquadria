@@ -28,7 +28,7 @@ export default async function RadarNegocio() {
      consegui publicar". */
   const { data, error } = await supabase
     .from("radar_itens")
-    .select("id, titulo, resumo, o_que_fazer, fonte, publicado_em, vigencia_em, severidade, criterio, ativo")
+    .select("id, titulo, resumo, o_que_fazer, fonte, publicado_em, vigencia_em, severidade, criterio, ativo, no_cockpit")
     .order("publicado_em", { ascending: false });
 
   const itens = (data ?? []) as unknown as ItemPublicado[];

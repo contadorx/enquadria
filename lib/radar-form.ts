@@ -26,6 +26,15 @@ export interface Rascunho {
   severidade: string;
   criterio: CriterioRadar;
   ativo: boolean;
+  /**
+   * true  = ALERTA: entra no topo do cockpit de quem o critério alcança, e
+   *         também na aba Reforma.
+   * false = NOTÍCIA: aparece só na aba Reforma, para todos os escritórios.
+   *
+   * É a diferença entre interromper e informar. O cockpit é fila; a aba
+   * Reforma é feed, e espera ser visitada.
+   */
+  no_cockpit: boolean;
 }
 
 export const SEVERIDADES = [
@@ -87,6 +96,27 @@ export function validar(r: Rascunho): Problema[] {
   if (r.vigencia_em && r.publicado_em && r.vigencia_em < r.publicado_em) {
     p.push({ campo: "vigencia_em", texto: "A vigência é anterior à publicação. Confira as duas datas.", bloqueia: false });
   }
+  /**
+   * NOTÍCIA COM CRITÉRIO É QUASE SEMPRE ENGANO.
+   *
+   * Se o item não vai ao cockpit, o critério não filtra nada — a aba Reforma
+   * mostra tudo para todos. Deixar o filtro preenchido faz a pessoa acreditar
+   * que restringiu alguma coisa, e ninguém descobre que não restringiu.
+   */
+  if (!r.no_cockpit) {
+    const k = r.criterio ?? {};
+    const temFiltro =
+      !!k.anexos?.length || !!k.faixas?.length || !!k.saidas?.length ||
+      !!k.divisoes_cnae?.length || !!k.somente_com_analise;
+    if (temFiltro) {
+      p.push({
+        campo: "criterio",
+        texto: "Marcado como notícia (fora do cockpit), o critério não filtra nada — a aba Reforma mostra para todos. Ou limpe o filtro, ou marque como alerta.",
+        bloqueia: false,
+      });
+    }
+  }
+
   if (r.severidade === "alta" && !r.vigencia_em) {
     p.push({
       campo: "vigencia_em",
