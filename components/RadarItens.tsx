@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { CriterioRadar, ItemRadar } from "@/lib/radar";
+import type { CriterioRadar } from "@/lib/radar";
+import type { ItemPublicado } from "@/lib/radar-aviso";
 import { ROTULO_SEVERIDADE, COR_SEVERIDADE } from "@/lib/radar";
 import {
   SEVERIDADES, validar, bloqueado, descreverCriterio, limparCriterio, divisoesDe,
@@ -34,7 +35,21 @@ const VAZIO: Rascunho = {
   vigencia_em: "", severidade: "media", criterio: {}, ativo: true,
 };
 
-export function RadarItens({ itens }: { itens: ItemRadar[] }) {
+interface Previa {
+  para: string; escritorio: string; empresas: number; assunto: string;
+}
+interface EstadoAviso {
+  item_id: string;
+  previa: Previa[];
+  repetidos: number;
+  erro: string | null;
+  enviando: boolean;
+  resultado: string | null;
+}
+
+export function RadarItens({
+  itens, avisados,
+}: { itens: ItemPublicado[]; avisados: Record<string, number> }) {
   const router = useRouter();
   const [r, setR] = useState<Rascunho>(VAZIO);
   const [editando, setEditando] = useState<string | null>(null);
@@ -42,6 +57,10 @@ export function RadarItens({ itens }: { itens: ItemRadar[] }) {
   const [alcance, setAlcance] = useState<{ empresas: number; escritorios: number } | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<EstadoAviso | null>(null);
+
+  const noAr = itens.filter((i) => i.ativo !== false);
+  const foraDoAr = itens.filter((i) => i.ativo === false);
 
   const problemas = validar(r);
   const trava = bloqueado(problemas);
@@ -92,13 +111,15 @@ export function RadarItens({ itens }: { itens: ItemRadar[] }) {
     } finally { setOcupado(false); }
   }
 
-  function editar(i: ItemRadar) {
+  function editar(i: ItemPublicado) {
     setEditando(i.id);
     setR({
       titulo: i.titulo, resumo: i.resumo, o_que_fazer: i.o_que_fazer ?? "",
       fonte: i.fonte ?? "", publicado_em: i.publicado_em?.slice(0, 10) ?? "",
       vigencia_em: i.vigencia_em?.slice(0, 10) ?? "", severidade: i.severidade,
-      criterio: i.criterio ?? {}, ativo: true,
+      /* preserva o estado: forçar `true` aqui republicava sem querer um item
+         que a pessoa tinha tirado do ar de propósito */
+      criterio: i.criterio ?? {}, ativo: i.ativo !== false,
     });
     setCnaeTexto((i.criterio?.divisoes_cnae ?? []).join(", "));
     setAlcance(null);
@@ -114,6 +135,51 @@ export function RadarItens({ itens }: { itens: ItemRadar[] }) {
       });
       router.refresh();
     } finally { setOcupado(false); }
+  }
+
+  /* ── O AVISO É EM DOIS TEMPOS, de propósito ──────────────────────────────
+     Primeiro `?teste=1`, que devolve exatamente quem receberia e com que
+     assunto, sem mandar nada. Só depois o envio. E-mail não tem CTRL+Z: um
+     critério errado aqui não dá erro, dá cinco caixas de entrada. */
+  async function conferirAviso(item: ItemPublicado) {
+    setAviso({ item_id: item.id, previa: [], repetidos: 0, erro: null, enviando: false, resultado: null });
+    try {
+      const resp = await fetch("/api/radar/avisar?teste=1", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ item_id: item.id }),
+      });
+      const j = await resp.json();
+      if (!resp.ok) {
+        setAviso({ item_id: item.id, previa: [], repetidos: j.repetidos ?? 0, erro: j.erro ?? "não consegui conferir", enviando: false, resultado: null });
+        return;
+      }
+      setAviso({ item_id: item.id, previa: j.previa ?? [], repetidos: j.repetidos ?? 0, erro: null, enviando: false, resultado: null });
+    } catch (e) {
+      setAviso({ item_id: item.id, previa: [], repetidos: 0, erro: e instanceof Error ? e.message : "erro inesperado", enviando: false, resultado: null });
+    }
+  }
+
+  async function enviarAviso(item: ItemPublicado) {
+    setAviso((a) => (a ? { ...a, enviando: true, erro: null } : a));
+    try {
+      const resp = await fetch("/api/radar/avisar", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ item_id: item.id }),
+      });
+      const j = await resp.json();
+      if (!resp.ok) {
+        setAviso((a) => (a ? { ...a, enviando: false, erro: j.erro ?? "não consegui enviar" } : a));
+        return;
+      }
+      const falhas = (j.falhas ?? []).length;
+      setAviso((a) => (a ? {
+        ...a, enviando: false, previa: [],
+        resultado: `${j.enviados} escritório(s) avisados${falhas ? ` · ${falhas} falha(s)` : ""}.`,
+      } : a));
+      router.refresh();
+    } catch (e) {
+      setAviso((a) => (a ? { ...a, enviando: false, erro: e instanceof Error ? e.message : "erro inesperado" } : a));
+    }
   }
 
   const campo = "w-full rounded-sm border border-line px-3 py-2 text-[13px] outline-none focus:border-accent";
@@ -275,30 +341,17 @@ export function RadarItens({ itens }: { itens: ItemRadar[] }) {
 
       {/* ─────────────────────────────────────────── o que já está no ar */}
       <div>
-        <div className="mb-2 text-[13px] font-bold">No ar ({itens.length})</div>
-        {!itens.length && (
+        <div className="mb-2 text-[13px] font-bold">No ar ({noAr.length})</div>
+        {!noAr.length && (
           <p className="rounded border border-line bg-surface p-4 text-[12.5px] text-muted">
-            Nenhum item ainda. O primeiro é o que tira a aba Reforma do estado de abandono.
+            Nenhum item no ar. O primeiro é o que tira a aba Reforma do estado de abandono.
           </p>
         )}
         <div className="space-y-2">
-          {itens.map((i) => (
+          {noAr.map((i) => (
             <div key={i.id} className="rounded border border-line bg-surface p-3.5">
               <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className={`font-mono text-[10px] uppercase tracking-wide ${COR_SEVERIDADE[i.severidade] ?? "text-muted"}`}>
-                      {ROTULO_SEVERIDADE[i.severidade] ?? i.severidade}
-                    </span>
-                    <span className="font-mono text-[10px] text-muted">
-                      {new Date(i.publicado_em).toLocaleDateString("pt-BR")}
-                      {i.vigencia_em ? ` · vigência ${new Date(i.vigencia_em).toLocaleDateString("pt-BR")}` : ""}
-                    </span>
-                  </div>
-                  <div className="mt-0.5 text-[13.5px] font-semibold">{i.titulo}</div>
-                  <p className="mt-0.5 text-[12px] leading-relaxed text-slate2">{i.resumo}</p>
-                  <p className="mt-1 font-mono text-[11px] text-muted">{descreverCriterio(i.criterio)}</p>
-                </div>
+                <Cabeca i={i} />
                 <div className="flex shrink-0 gap-2">
                   {/* o efeito deste clique é o formulário lá em cima, e `editar()`
                       termina com um scroll até ele. O auditor mede distância em
@@ -308,16 +361,133 @@ export function RadarItens({ itens }: { itens: ItemRadar[] }) {
                     className="rounded-sm border border-line px-3 py-1.5 text-[12px] font-semibold text-accentdeep">
                     editar
                   </button>
+                  <button onClick={() => conferirAviso(i)} disabled={ocupado}
+                    className="rounded-sm border border-accent px-3 py-1.5 text-[12px] font-semibold text-accentdeep disabled:opacity-40">
+                    {avisados[i.id] ? `avisar (${avisados[i.id]} já)` : "avisar escritórios"}
+                  </button>
                   <button onClick={() => alternarAtivo(i.id, false)} disabled={ocupado}
                     className="rounded-sm border border-line px-3 py-1.5 text-[12px] font-semibold text-slate2 disabled:opacity-40">
                     tirar do ar
                   </button>
                 </div>
               </div>
+
+              {/* ── a prévia do aviso, embaixo do próprio item ─────────────── */}
+              {aviso?.item_id === i.id && (
+                <div className="mt-3 rounded-sm border border-line bg-surface2 p-3">
+                  {aviso.erro && (
+                    <p className="text-[12.5px] leading-relaxed text-vermelho">{aviso.erro}</p>
+                  )}
+                  {aviso.resultado && (
+                    <p className="text-[12.5px] font-semibold text-verde">{aviso.resultado}</p>
+                  )}
+                  {!aviso.erro && !aviso.resultado && (
+                    <>
+                      <div className="text-[12px] font-bold">
+                        {aviso.previa.length
+                          ? `Vai para ${aviso.previa.length} escritório(s). Nada foi enviado ainda.`
+                          : "Conferindo…"}
+                      </div>
+                      {aviso.repetidos > 0 && (
+                        <p className="mt-0.5 text-[11.5px] text-muted">
+                          {aviso.repetidos} escritório(s) já foram avisados deste item e ficam de fora.
+                        </p>
+                      )}
+                      <ul className="mt-2 space-y-1">
+                        {aviso.previa.map((p) => (
+                          <li key={p.para} className="text-[11.5px] leading-relaxed text-slate2">
+                            <b>{p.escritorio}</b> · {p.empresas} empresa(s) · {p.para}
+                            <br />
+                            <span className="font-mono text-[11px] text-muted">{p.assunto}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      {!!aviso.previa.length && (
+                        <div className="mt-2.5 flex gap-2">
+                          <button onClick={() => enviarAviso(i)} disabled={aviso.enviando}
+                            className="rounded-sm bg-ink px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40">
+                            {aviso.enviando ? "Enviando…" : "Enviar agora"}
+                          </button>
+                          <button onClick={() => setAviso(null)}
+                            className="rounded-sm border border-line px-3 py-1.5 text-[12px] font-semibold text-slate2">
+                            cancelar
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {(aviso.erro || aviso.resultado) && (
+                    <button onClick={() => setAviso(null)}
+                      className="mt-2 text-[11.5px] font-semibold text-accentdeep">
+                      fechar
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
       </div>
+
+      {/* ──────────────────────────────────────────────── o que está fora do ar
+        * ESTA SEÇÃO É O CONSERTO DE UMA PORTA DE MÃO ÚNICA.
+        *
+        * A tela listava só `ativo = true`. Quem clicava em "tirar do ar" via o
+        * item desaparecer por inteiro, e não havia caminho de volta pela
+        * interface — só abrindo o banco, que é exatamente o que esta tela
+        * existe para evitar. Aconteceu com o item da NFS-e: publicado, certo,
+        * com 55 empresas de alcance, e invisível.
+        */}
+      {!!foraDoAr.length && (
+        <div>
+          <div className="mb-2 text-[13px] font-bold text-muted">Fora do ar ({foraDoAr.length})</div>
+          <p className="mb-2 text-[11.5px] text-muted">
+            Estes itens existem, mas nenhum contador os vê. Item fora do ar também não pode ser
+            avisado por e-mail — quem recebesse abriria a aba Reforma e não acharia nada.
+          </p>
+          <div className="space-y-2">
+            {foraDoAr.map((i) => (
+              <div key={i.id} className="rounded border border-dashed border-line bg-surface2 p-3.5 opacity-80">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <Cabeca i={i} />
+                  <div className="flex shrink-0 gap-2">
+                    {/* mesmo caso do "editar" da lista de cima: o efeito é o
+                        formulário no topo e `editar()` rola até lá.
+                        ux-ok: levar a pessoa ATÉ o efeito é a resposta certa. */}
+                    <button onClick={() => editar(i)}
+                      className="rounded-sm border border-line px-3 py-1.5 text-[12px] font-semibold text-accentdeep">
+                      editar
+                    </button>
+                    <button onClick={() => alternarAtivo(i.id, true)} disabled={ocupado}
+                      className="rounded-sm bg-ink px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40">
+                      voltar ao ar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Cabeca({ i }: { i: ItemPublicado }) {
+  return (
+    <div className="min-w-0 flex-1">
+      <div className="flex items-center gap-2">
+        <span className={`font-mono text-[10px] uppercase tracking-wide ${COR_SEVERIDADE[i.severidade] ?? "text-muted"}`}>
+          {ROTULO_SEVERIDADE[i.severidade] ?? i.severidade}
+        </span>
+        <span className="font-mono text-[10px] text-muted">
+          {new Date(i.publicado_em).toLocaleDateString("pt-BR")}
+          {i.vigencia_em ? ` · vigência ${new Date(i.vigencia_em).toLocaleDateString("pt-BR")}` : ""}
+        </span>
+      </div>
+      <div className="mt-0.5 text-[13.5px] font-semibold">{i.titulo}</div>
+      <p className="mt-0.5 text-[12px] leading-relaxed text-slate2">{i.resumo}</p>
+      <p className="mt-1 font-mono text-[11px] text-muted">{descreverCriterio(i.criterio)}</p>
     </div>
   );
 }

@@ -28,6 +28,18 @@ export interface DadosDigest {
   radar_marcos: number;
   radar_clientes: number;
   radar_titulo: string | null;
+  /**
+   * DOS MARCOS ACIMA, quantos este escritório ainda NÃO foi avisado.
+   *
+   * Sem esta distinção o digest reportava os mesmos marcos todo mês, com o
+   * mesmo número no assunto — e o item inédito não se destacava de nada. É
+   * assim que um remetente vira ruído: o contador aprende que o e-mail de
+   * todo dia 1º diz sempre a mesma coisa, e para de abrir. Marco já
+   * comunicado vira CONTEXTO no fim; só o novo puxa o assunto e, sozinho,
+   * justifica o envio.
+   */
+  radar_novos: number;
+  radar_novo_titulo: string | null;
   /** dias até o fechamento da janela (negativo = já fechou) */
   dias_janela: number | null;
 }
@@ -55,10 +67,10 @@ export function montarDigest(d: DadosDigest): Digest {
   const destaques: string[] = [];
   let chamada: Digest["chamada"] = null;
 
-  // 1. o que muda a conta de clientes reais vem primeiro
-  if (d.radar_clientes > 0) {
+  // 1. o que é NOVO para este escritório vem primeiro — e só ele é notícia
+  if (d.radar_novos > 0) {
     destaques.push(
-      `${d.radar_marcos} ${d.radar_marcos === 1 ? "marco da transição atinge" : "marcos da transição atingem"} ${d.radar_clientes} ${d.radar_clientes === 1 ? "cliente seu" : "clientes seus"}${d.radar_titulo ? `. O mais relevante: ${d.radar_titulo}` : ""}.`
+      `${d.radar_novos} ${d.radar_novos === 1 ? "novidade da transição atinge" : "novidades da transição atingem"} ${d.radar_clientes} ${d.radar_clientes === 1 ? "cliente seu" : "clientes seus"}${d.radar_novo_titulo ? `. A mais urgente: ${d.radar_novo_titulo}` : ""}.`
     );
     chamada = { texto: "Ver quais clientes são afetados", caminho: "/painel" };
   }
@@ -90,7 +102,18 @@ export function montarDigest(d: DadosDigest): Digest {
     if (!chamada) chamada = { texto: "Emitir laudos", caminho: "/painel" };
   }
 
-  // 4. reconhecimento quando está tudo em dia (mas isso sozinho NÃO gera e-mail)
+  /* 4. os marcos JÁ COMUNICADOS entram como contexto, no fim e sem chamada.
+        Eles não geram e-mail (senão o digest reenviaria a mesma notícia todo
+        mês), mas some-los seria pior: o contador que abre o resumo precisa
+        ver que a carteira dele continua sob aqueles prazos. */
+  const jaComunicados = d.radar_marcos - d.radar_novos;
+  if (destaques.length > 0 && jaComunicados > 0) {
+    destaques.push(
+      `Seguem valendo ${jaComunicados} ${jaComunicados === 1 ? "marco já comunicado" : "marcos já comunicados"} que atingem a sua carteira.`
+    );
+  }
+
+  // 5. reconhecimento quando está tudo em dia (mas isso sozinho NÃO gera e-mail)
   const tudoEmDia =
     destaques.length === 0 && d.assinados > 0 && d.assinados === d.termos && semAnalise === 0;
   if (tudoEmDia) {
@@ -99,10 +122,10 @@ export function montarDigest(d: DadosDigest): Digest {
     );
   }
 
-  const vale_enviar = d.radar_clientes > 0 || semAnalise > 0 || aguardandoAssinatura > 0 || semLaudo > 0;
+  const vale_enviar = d.radar_novos > 0 || semAnalise > 0 || aguardandoAssinatura > 0 || semLaudo > 0;
 
   const assunto =
-    d.radar_clientes > 0
+    d.radar_novos > 0
       ? `${d.radar_clientes} ${d.radar_clientes === 1 ? "cliente seu é afetado" : "clientes seus são afetados"} por mudanças da reforma`
       : semAnalise > 0 && d.dias_janela != null && d.dias_janela > 0
       ? `Faltam ${d.dias_janela} dias e ${semAnalise} ${semAnalise === 1 ? "cliente seu" : "clientes seus"} sem decisão`

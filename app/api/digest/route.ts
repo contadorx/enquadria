@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { montarDigest, htmlDigest, type DadosDigest } from "@/lib/digest";
 import { atingidas, ordenar, type ItemRadar, type EmpresaRadar } from "@/lib/radar";
+import { novosParaTenant } from "@/lib/radar-aviso";
 import { enviarEmail } from "@/lib/email";
 import { HONORARIO_PADRAO } from "@/lib/potencial";
 
@@ -58,6 +59,17 @@ export async function GET(req: Request) {
     .select("id, titulo, resumo, o_que_fazer, fonte, publicado_em, vigencia_em, severidade, criterio")
     .eq("ativo", true);
   const radarOrdenado = ordenar((itensRadar ?? []) as unknown as ItemRadar[], hoje);
+
+  /* QUEM JÁ FOI AVISADO DE QUÊ — é isto que separa notícia de repetição.
+     Sem este mapa o digest reportava os mesmos marcos todo mês, com o mesmo
+     número no assunto, e o item inédito não se destacava de nada. */
+  const { data: avisos } = await supabase.from("radar_avisos").select("item_id, tenant_id");
+  const avisadosDe = new Map<string, Set<string>>();
+  for (const a of avisos ?? []) {
+    const t = a.tenant_id as string;
+    if (!avisadosDe.has(t)) avisadosDe.set(t, new Set());
+    avisadosDe.get(t)!.add(a.item_id as string);
+  }
 
   // escritórios com pelo menos um dono cadastrado
   const { data: perfis } = await supabase
@@ -125,6 +137,9 @@ export async function GET(req: Request) {
       }
     }
 
+    const jaAvisado = avisadosDe.get(tenantId) ?? new Set<string>();
+    const novidade = novosParaTenant(radarOrdenado, paraRadar, jaAvisado);
+
     const dados: DadosDigest = {
       escritorio: dono.nome,
       fila: empresas.filter((e) => e.faixa === "A" || e.faixa === "B").length,
@@ -136,6 +151,8 @@ export async function GET(req: Request) {
       radar_marcos: marcos,
       radar_clientes: afetados.size,
       radar_titulo: tituloRadar,
+      radar_novos: novidade.novos.length,
+      radar_novo_titulo: novidade.titulo,
       dias_janela: diasJanela,
     };
 
@@ -158,6 +175,22 @@ export async function GET(req: Request) {
       html: htmlDigest(digest, dono.nome, base),
     });
     if (envio.enviado) enviados++;
+
+    /* O DIGEST TAMBÉM É AVISO — e por isso escreve no mesmo livro-razão que o
+       botão "avisar agora". Sem esta gravação o mês seguinte reapresentaria
+       tudo como novidade, que é exatamente o defeito que estamos consertando.
+       Só grava depois do envio confirmado. */
+    if (envio.enviado && novidade.novos.length) {
+      await supabase.from("radar_avisos").insert(
+        novidade.novos.map((i) => ({
+          item_id: i.id,
+          tenant_id: tenantId,
+          canal: "digest",
+          empresas: novidade.empresasAfetadas.size,
+        }))
+      );
+    }
+
     relatorio.push({
       escritorio: dono.nome,
       enviado: envio.enviado,

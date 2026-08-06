@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase-server";
 import { RadarItens } from "@/components/RadarItens";
-import type { ItemRadar } from "@/lib/radar";
+import type { ItemPublicado } from "@/lib/radar-aviso";
 
 /**
  * NEGÓCIO → RADAR: publicar a norma sem abrir o banco.
@@ -17,14 +17,33 @@ export const dynamic = "force-dynamic";
 
 export default async function RadarNegocio() {
   const supabase = createClient();
+  /* CARREGA TAMBÉM O QUE ESTÁ FORA DO AR — e isto é o conserto de um defeito
+     real, encontrado em 06/08/2026.
+
+     A tela filtrava por `ativo = true` e o único botão ao lado do item era
+     "tirar do ar". Quem clicava via o item SUMIR da tela inteira, sem nenhum
+     caminho de volta: porta de mão única. Foi exatamente o que aconteceu com
+     o item da NFS-e nacional — publicado, correto, com alcance de 55 empresas
+     em 5 escritórios, e invisível. Do lado de fora a leitura foi "não
+     consegui publicar". */
   const { data, error } = await supabase
     .from("radar_itens")
     .select("id, titulo, resumo, o_que_fazer, fonte, publicado_em, vigencia_em, severidade, criterio, ativo")
-    .eq("ativo", true)
     .order("publicado_em", { ascending: false });
 
-  const itens = (data ?? []) as unknown as ItemRadar[];
-  const ultimo = itens[0]?.publicado_em ?? null;
+  const itens = (data ?? []) as unknown as ItemPublicado[];
+
+  /* quantos escritórios já foram avisados de cada item — o botão de aviso
+     precisa disto para não parecer que nunca mandou nada */
+  const { data: avisos } = await supabase.from("radar_avisos").select("item_id");
+  const avisados: Record<string, number> = {};
+  for (const a of avisos ?? []) {
+    const k = a.item_id as string;
+    avisados[k] = (avisados[k] ?? 0) + 1;
+  }
+
+  const noAr = itens.filter((i) => i.ativo !== false);
+  const ultimo = noAr[0]?.publicado_em ?? null;
   const dias = ultimo
     ? Math.floor((Date.now() - new Date(ultimo).getTime()) / 86_400_000)
     : null;
@@ -61,7 +80,7 @@ export default async function RadarNegocio() {
       )}
 
       <div className="mt-5">
-        <RadarItens itens={itens} />
+        <RadarItens itens={itens} avisados={avisados} />
       </div>
     </div>
   );

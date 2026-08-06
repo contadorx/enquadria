@@ -58,7 +58,7 @@ for (const frase of ["Fique atento", "acompanhe", "Aguarde.", "nada a fazer"]) {
   ok(bloqueado(validar(base({ o_que_fazer: frase }))),
      `"${frase}" é recusado — o contador precisa saber o que ABRIR ou CONFERIR`);
 }
-ok(!bloqueado(validar(base({ o_que_fazer: "Acompanhe o PLP 108 e revise as doações antes de dezembro." }))),
+ok(!bloqueado(validar(base({ o_que_fazer: "Acompanhe a lei do seu estado e revise as doações antes de dezembro." }))),
    "mas 'acompanhe' DENTRO de uma frase com ação passa — o corte é da frase inteira, não da palavra");
 
 /* ═══════════ 4 · os avisos que não bloqueiam ════════════════════════════
