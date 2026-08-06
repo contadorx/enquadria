@@ -361,15 +361,17 @@ export async function POST(req: Request) {
 
   let diasAcesso = DIAS_PADRAO;
   let ciclo: string | null = null;
+  let planoNome = "seu plano";
   const planoId = (assin as { plano_id?: string } | null)?.plano_id;
   if (planoId) {
     const { data: plano } = await supabase
       .from("planos")
-      .select("dias_acesso, ciclo")
+      .select("nome, dias_acesso, ciclo")
       .eq("id", planoId)
       .maybeSingle();
-    const p = plano as { dias_acesso?: number | null; ciclo?: string | null } | null;
+    const p = plano as { nome?: string | null; dias_acesso?: number | null; ciclo?: string | null } | null;
     ciclo = p?.ciclo ?? null;
+    if (p?.nome) planoNome = p.nome;
     if (p?.dias_acesso) diasAcesso = Number(p.dias_acesso);
     else if (p?.ciclo === "anual") diasAcesso = 365;
   }
@@ -512,25 +514,166 @@ export async function POST(req: Request) {
    * Aqui também não pode derrubar nada: o pagamento já foi processado e o
    * acesso já foi liberado quando esta linha roda.
    */
+  /* o dono da conta, buscado UMA vez — o recibo e o Contatia querem o mesmo */
+  let donoEmail: string | null = null;
+  let tenantNome: string | null = null;
   if (tenantId) {
     try {
       const { data: t } = await supabase
         .from("tenants").select("nome").eq("id", tenantId).maybeSingle();
       const { data: p } = await supabase
         .from("profiles").select("email").eq("tenant_id", tenantId).order("email").limit(1);
-      const email = ((p ?? []) as { email?: string }[])[0]?.email;
-      if (email) {
-        const r = await avisarContatia({
-          evento: "assinatura_ativa",
-          /* a chave inclui a ASSINATURA: renovar no mês seguinte é um fato
-             novo, e o CRM deve saber que ele aconteceu de novo */
-          chave: chaveDe("assinatura_ativa", assinaturaId),
-          email,
-          empresa: (t as { nome?: string } | null)?.nome ?? null,
-          extra: { plano: planoId, valido_ate: validade },
+      tenantNome = (t as { nome?: string } | null)?.nome ?? null;
+      donoEmail = ((p ?? []) as { email?: string }[])[0]?.email ?? null;
+    } catch (e) {
+      console.error("[asaas] dono da conta não encontrado:", e instanceof Error ? e.message : e);
+    }
+  }
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════════
+   * O RECIBO — o e-mail que faltava depois do dinheiro entrar.
+   *
+   * Até 06/08/2026 este webhook liberava o acesso, somava o MRR, atualizava as
+   * colunas de cobrança e avisava o CRM. A única pessoa que não recebia nada
+   * era quem tinha acabado de pagar. Ele pagava, olhava para a tela e não sabia
+   * se tinha entrado.
+   *
+   * ─────────────────────────────────────────────────────────────────────────
+   * A TRAVA DE DUPLICIDADE É UM INSERT, NÃO UM `if`.
+   *
+   * O Asaas manda DOIS eventos por cobrança: `PAYMENT_CONFIRMED` e, depois,
+   * `PAYMENT_RECEIVED` (D+1 no boleto, na liquidação do cartão). Com uma
+   * checagem simples em memória, os dois virariam dois recibos do mesmo
+   * pagamento — e recibo repetido de cobrança é o que faz um e-mail legítimo
+   * parecer golpe.
+   *
+   * A chave é do PAGAMENTO (`payment.id`), não da assinatura: os dois eventos
+   * trazem o mesmo `payment.id`, então sai um recibo por cobrança; e a
+   * renovação do mês seguinte é outro pagamento, que merece o seu.
+   *
+   * `plataforma_envios.chave_unica` tem índice ÚNICO, então o insert é a
+   * própria trava — atômica, sem corrida entre dois webhooks simultâneos.
+   *
+   * ─────────────────────────────────────────────────────────────────────────
+   * E SE O ENVIO FALHAR, A RESERVA É DESFEITA.
+   *
+   * Reservar e sair calado transformaria uma falha de SMTP em "este cliente
+   * nunca vai receber recibo, e ninguém vai saber". Apagando a linha, o
+   * `PAYMENT_RECEIVED` que chega depois tenta de novo sozinho — a segunda
+   * tentativa vem de graça, embutida no jeito como o Asaas já funciona.
+   *
+   * NADA AQUI PODE DERRUBAR O WEBHOOK: o pagamento já foi processado e o
+   * acesso já está liberado quando esta linha roda. Falha vira log.
+   * ═══════════════════════════════════════════════════════════════════════════
+   */
+  const pagamentoId = evento.payment?.id;
+  if (donoEmail && tenantId && pagamentoId) {
+    const chaveRecibo = `pagamento_confirmado:${pagamentoId}`;
+    try {
+      /**
+       * RESERVA ÓRFÃ É VARRIDA ANTES DE TENTAR.
+       *
+       * Se a função morrer entre a reserva e o envio — timeout, deploy no meio,
+       * queda do provedor de e-mail — a linha fica presa em `enviando` e a
+       * chave única passa a bloquear TODA tentativa futura. O recibo nunca
+       * sairia, e ninguém saberia por quê: o log mostraria uma linha que parece
+       * em andamento há três semanas.
+       *
+       * Dez minutos é folgado para qualquer envio real e curto o suficiente
+       * para o `PAYMENT_RECEIVED` (que vem horas depois) encontrar o caminho
+       * livre. Uma reserva ainda quente NÃO é varrida — é o que protege contra
+       * dois webhooks simultâneos.
+       */
+      await supabase
+        .from("plataforma_envios")
+        .delete()
+        .eq("chave_unica", chaveRecibo)
+        .eq("status", "enviando")
+        .lt("criado_em", new Date(Date.now() - 10 * 60_000).toISOString());
+
+      const { data: reservado } = await supabase
+        .from("plataforma_envios")
+        .upsert(
+          {
+            tenant_id: tenantId,
+            regra: "pagamento_confirmado",
+            chave_unica: chaveRecibo,
+            para: donoEmail,
+            assunto: "(reservando)",
+            status: "enviando",
+          },
+          { onConflict: "chave_unica", ignoreDuplicates: true }
+        )
+        .select("id");
+
+      /* vazio = a chave já existia: o outro evento desta cobrança já cuidou */
+      if (reservado?.length) {
+        const { enviarEmail } = await import("@/lib/email");
+        const { htmlPagamentoConfirmado, assuntoPagamentoConfirmado } = await import("@/lib/emails-cliente");
+
+        const dBR = (iso: string) => new Date(`${iso.slice(0, 10)}T12:00:00`).toLocaleDateString("pt-BR");
+        const validoAteBR = dBR(validade);
+        const assunto = assuntoPagamentoConfirmado(planoNome, validoAteBR);
+
+        const r = await enviarEmail({
+          para: donoEmail,
+          nome: tenantNome ?? "Seu escritório",
+          assunto,
+          html: htmlPagamentoConfirmado({
+            plano: planoNome,
+            valor: (Number(evento.payment?.value || 0)).toLocaleString("pt-BR", {
+              style: "currency", currency: "BRL",
+            }),
+            pago_em: base ? dBR(String(base)) : null,
+            valido_ate: validoAteBR,
+            credito_dias: credito,
+            link: `${new URL(req.url).origin}/painel`,
+          }),
+          tag: "pagamento-confirmado",
         });
-        if (!r.enviado) console.error(`[contatia] assinatura_ativa não avisada: ${r.motivo}`);
+
+        if (r.enviado) {
+          await supabase
+            .from("plataforma_envios")
+            .update({ status: "enviado", assunto })
+            .eq("chave_unica", chaveRecibo);
+        } else {
+          await supabase.from("plataforma_envios").delete().eq("chave_unica", chaveRecibo);
+          console.error(`[asaas] recibo não saiu (${r.motivo}) — a reserva foi desfeita, o próximo evento tenta de novo`);
+        }
       }
+    } catch (e) {
+      /* desfaz a reserva também quando a exceção vem do meio do caminho */
+      await supabase.from("plataforma_envios").delete()
+        .eq("chave_unica", chaveRecibo).eq("status", "enviando");
+      console.error("[asaas] recibo falhou:", e instanceof Error ? e.message : e);
+    }
+  }
+
+  /**
+   * VIROU CLIENTE — o segundo evento que o Contatia entende.
+   *
+   * `cadastro_ativo` tira da prospecção; `assinatura_ativa` marca quem paga.
+   * São tags diferentes de propósito: a conversa com quem testa e com quem
+   * paga não é a mesma, e misturar as duas na mesma lista é o jeito mais
+   * rápido de mandar pitch de conversão para quem já converteu.
+   *
+   * Aqui também não pode derrubar nada: o pagamento já foi processado e o
+   * acesso já foi liberado quando esta linha roda.
+   */
+  if (tenantId && donoEmail) {
+    try {
+      const r = await avisarContatia({
+        evento: "assinatura_ativa",
+        /* a chave inclui a ASSINATURA: renovar no mês seguinte é um fato
+           novo, e o CRM deve saber que ele aconteceu de novo */
+        chave: chaveDe("assinatura_ativa", assinaturaId),
+        email: donoEmail,
+        empresa: tenantNome,
+        extra: { plano: planoId, valido_ate: validade },
+      });
+      if (!r.enviado) console.error(`[contatia] assinatura_ativa não avisada: ${r.motivo}`);
     } catch (e) {
       console.error("[contatia] aviso de assinatura falhou:", e instanceof Error ? e.message : e);
     }

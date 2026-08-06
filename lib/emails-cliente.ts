@@ -456,3 +456,86 @@ export function htmlRespostaChamado(params: {
     <p style="font-size:13px;color:#64748B">Se ficou alguma dúvida, é só responder este e-mail.</p>`,
   });
 }
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * PAGAMENTO CONFIRMADO — o recibo que não existia.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * O BURACO, medido em 06/08/2026: o webhook do Asaas recebia
+ * `PAYMENT_CONFIRMED`, liberava o acesso, somava o MRR, atualizava as colunas
+ * de cobrança do escritório e avisava o CRM — e não mandava uma linha a quem
+ * tinha acabado de pagar. O contador pagava e ficava olhando para a tela sem
+ * saber se entrou.
+ *
+ * Este é o único e-mail do arquivo que vai ao CONTADOR sobre a conta DELE, e
+ * não ao cliente do contador. Por isso a moldura leva "Enquadria" e
+ * `paraCliente: false`: aqui nós somos o fornecedor, e esconder isso seria
+ * mentir sobre quem cobrou.
+ *
+ * A DATA DE VALIDADE É O ASSUNTO DO E-MAIL, não um detalhe. "Recebemos seu
+ * pagamento" é cortesia; "seu acesso vai até 04/09" é a informação pela qual
+ * ele pagou, e é a que ele vai procurar daqui a três semanas.
+ *
+ * OS DIAS HERDADOS APARECEM POR ESCRITO quando existem. A tela de Planos
+ * promete, na hora da troca de plano, que os dias que sobravam do plano
+ * anterior vêm junto. Promessa feita na tela e nunca repetida em lugar nenhum
+ * é promessa que o cliente não consegue conferir — e conferir é exatamente o
+ * que ele faz quando desconfia.
+ */
+export function htmlPagamentoConfirmado(params: {
+  plano: string;
+  valor: string;
+  /** já formatado dd/mm/aaaa */
+  pago_em?: string | null;
+  /** já formatado dd/mm/aaaa */
+  valido_ate: string;
+  /** dias que vieram do plano anterior, quando houve troca */
+  credito_dias?: number;
+  link: string;
+}): string {
+  const credito =
+    params.credito_dias && params.credito_dias > 0
+      ? `<p style="font-size:13px;color:#64748B">Incluímos os <strong>${params.credito_dias} ${
+          params.credito_dias === 1 ? "dia" : "dias"
+        }</strong> que ainda sobravam do seu plano anterior — eles foram somados à data acima, como
+        combinado na hora da troca.</p>`
+      : "";
+
+  return moldura({
+    escritorio: { nome: "Enquadria" },
+    paraCliente: false,
+    corpo: `
+    <p>Pagamento confirmado. Seu acesso está liberado.</p>
+    <table style="width:100%;border-collapse:collapse;margin:18px 0;font-size:14px">
+      <tr><td style="padding:7px 0;color:#64748B">Plano</td>
+          <td style="padding:7px 0;text-align:right"><strong>${escapar(params.plano)}</strong></td></tr>
+      <tr><td style="padding:7px 0;color:#64748B;border-top:1px solid #EEF2F7">Valor</td>
+          <td style="padding:7px 0;text-align:right;border-top:1px solid #EEF2F7"><strong>${escapar(params.valor)}</strong></td></tr>
+      ${
+        params.pago_em
+          ? `<tr><td style="padding:7px 0;color:#64748B;border-top:1px solid #EEF2F7">Pago em</td>
+                 <td style="padding:7px 0;text-align:right;border-top:1px solid #EEF2F7">${escapar(params.pago_em)}</td></tr>`
+          : ""
+      }
+      <tr><td style="padding:7px 0;color:#64748B;border-top:1px solid #EEF2F7">Acesso até</td>
+          <td style="padding:7px 0;text-align:right;border-top:1px solid #EEF2F7"><strong style="color:#0B1220">${escapar(params.valido_ate)}</strong></td></tr>
+    </table>
+    ${credito}
+    ${botao(params.link, "Abrir o painel")}
+    <p style="font-size:13px;color:#64748B">O comprovante fica em <strong>Planos → Minhas
+    faturas</strong>, com todo o histórico. Precisando de nota fiscal ou de qualquer ajuste no
+    cadastro, é só responder este e-mail.</p>`,
+  });
+}
+
+/**
+ * O ASSUNTO CARREGA A DATA.
+ *
+ * Fica separado do HTML porque é ele que a pessoa lê na lista da caixa de
+ * entrada meses depois, procurando "até quando eu paguei". "Pagamento
+ * confirmado" sozinho não responde nada; a data responde sem abrir.
+ */
+export function assuntoPagamentoConfirmado(plano: string, validoAte: string): string {
+  return `Pagamento confirmado — ${plano} ativo até ${validoAte}`;
+}
