@@ -532,9 +532,16 @@ export function LinhaEscritorio({ e, planos, temAsaas }: { e: EscritorioUI; plan
                   onClick={() =>
                     start(async () => {
                       const r = await acao({ acao: "gerar_cobranca", tenant_id: e.id, plano_id: novoPlano });
+                      /* o resultado do E-MAIL vai junto: sem isto, "criada"
+                         parecia incluir o aviso ao cliente — e não incluía */
+                      const avisoEmail = r.email
+                        ? (r.email as { enviado?: boolean; motivo?: string }).enviado
+                          ? " E-mail com o link enviado."
+                          : ` O e-mail NÃO saiu (${(r.email as { motivo?: string }).motivo ?? "motivo não informado"}) — mande o link à mão.`
+                        : "";
                       setMsg(
                         r.erro ? String(r.erro)
-                          : r.checkout_url ? `Cobrança de ${r.valor} criada. Link gerado.`
+                          : r.checkout_url ? `Cobrança de ${r.valor} criada. Link gerado.${avisoEmail}`
                           : "Cobrança registrada, mas o Asaas não devolveu link (chave configurada?)."
                       );
                       if (!r.erro) router.refresh();

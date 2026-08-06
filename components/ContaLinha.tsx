@@ -208,7 +208,18 @@ export function ContaLinha({
                       start(async () => {
                         const r = await acao({ acao: "gerar_cobranca", tenant_id: e.id, plano_id: novoPlano });
                         if (r.erro) setErro(String(r.erro));
-                        else { setMsg(`Cobrança de ${r.valor} criada.`); router.refresh(); }
+                        else {
+                          /* dizer só "criada" fazia parecer que o cliente já
+                             tinha sido avisado; agora o e-mail é explícito */
+                          const em = r.email as { enviado?: boolean; motivo?: string } | undefined;
+                          setMsg(
+                            `Cobrança de ${r.valor} criada.` +
+                            (em?.enviado
+                              ? " E-mail com o link enviado."
+                              : ` O e-mail NÃO saiu (${em?.motivo ?? "motivo não informado"}) — mande o link à mão.`)
+                          );
+                          router.refresh();
+                        }
                       })
                     }
                   >

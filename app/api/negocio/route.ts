@@ -471,11 +471,83 @@ export async function POST(req: Request) {
         );
       }
 
+      /**
+       * ═════════════════════════════════════════════════════════════════════
+       * O E-MAIL SAI AGORA — e não na próxima rodada do cron.
+       *
+       * O DEFEITO, medido em 06/08/2026: a tela de Planos (app/api/checkout)
+       * manda o link no mesmo segundo em que a cobrança nasce. Esta rota, que
+       * é a que EU uso quando gero a cobrança pelo painel, não mandava nada.
+       * O contador só era avisado quando a régua `cobranca_gerada` fosse
+       * planejada pelo cron do negócio — que roda de hora em hora, mas só
+       * entre 9h e 18h de dias úteis.
+       *
+       * Na prática: cobrança gerada às 18h05 de uma sexta ficava sem aviso
+       * até as 9h de segunda. Sessenta e três horas de silêncio depois de eu
+       * ter dito ao cliente "acabei de te mandar".
+       *
+       * A MESMA CHAVE da régua é reservada aqui — senão o cron manda o mesmo
+       * link de novo, com outro assunto. Foi exatamente o bug que o checkout
+       * já teve e já consertou.
+       * ═════════════════════════════════════════════════════════════════════
+       */
+      let emailCobranca: { enviado: boolean; motivo?: string } = {
+        enviado: false,
+        motivo: "escritório sem e-mail ou cobrança sem link",
+      };
+      if (esc.email && cob.checkout_url) {
+        try {
+          const { enviarEmail } = await import("@/lib/email");
+          const { htmlCobrancaGerada } = await import("@/lib/emails-cliente");
+          const assunto = `Sua cobrança do ${p.nome} — Enquadria`;
+          const r = await enviarEmail({
+            para: esc.email,
+            nome: esc.nome || "Escritório",
+            assunto,
+            html: htmlCobrancaGerada({
+              escritorio: { nome: "Enquadria" },
+              plano: p.nome,
+              valor: brl(p.preco_centavos),
+              vencimento: vencimento
+                ? new Date(`${vencimento}T12:00:00`).toLocaleDateString("pt-BR")
+                : null,
+              link: cob.checkout_url,
+            }),
+            tag: "cobranca-gerada",
+          });
+          emailCobranca = { enviado: r.enviado, motivo: r.motivo };
+
+          if (r.enviado) {
+            /* a chave só é reservada DEPOIS do envio confirmado. Reservar
+               antes de um envio que falhou silenciaria a régua para sempre —
+               e aí a cobrança não seria avisada por caminho nenhum. */
+            await db.from("plataforma_envios").insert({
+              tenant_id: tenantId,
+              regra: "cobranca_gerada",
+              chave_unica: `cobranca_gerada:${(nova as { id: string }).id}`,
+              para: esc.email,
+              assunto,
+              status: "enviado",
+            });
+          } else {
+            console.error(`[negocio] e-mail da cobrança não saiu: ${r.motivo}`);
+          }
+        } catch (e) {
+          /* falha aqui NÃO desfaz a cobrança: o link já está na tela, e como
+             a chave não foi reservada, a régua do cron segue como rede de
+             segurança */
+          const m = e instanceof Error ? e.message : "erro";
+          emailCobranca = { enviado: false, motivo: m };
+          console.error("[negocio] e-mail da cobrança falhou:", m);
+        }
+      }
+
       return NextResponse.json({
         ok: true,
         asaas_ativo: cob.ativo,
         checkout_url: cob.checkout_url ?? null,
         valor: brl(p.preco_centavos),
+        email: emailCobranca,
       });
     }
 
