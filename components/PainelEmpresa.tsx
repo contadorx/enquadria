@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MuroPlano } from "@/components/MuroPlano";
+import { PropostaEmpresa, type PropostaResumo } from "@/components/PropostaEmpresa";
 import type { Muro } from "@/lib/plano";
 import { useRouter } from "next/navigation";
 import { formatarCnpj } from "@/lib/cnpj";
@@ -81,6 +82,7 @@ interface Dossie {
   } | null;
   coleta: ColetaGravada | null;
   comparativos: { id: string; numero: number; emitido_em: string }[];
+  propostas?: PropostaResumo[];
   envios: {
     id: string;
     tipo: "laudo" | "comparativo" | "termo";
@@ -795,6 +797,21 @@ export function PainelEmpresa({
               </div>
             </Bloco>
           )}
+
+          {/* A PROPOSTA FICA FORA DO `a &&` de propósito: propor ANTES de
+              analisar é o caminho mais comum de verdade — o contador fecha o
+              serviço e só então levanta as premissas com o cliente. Exigir a
+              análise para poder cobrar inverteria a ordem do trabalho. */}
+          <PropostaEmpresa
+            empresaId={e.id}
+            razaoSocial={e.razao_social}
+            cnpj={e.cnpj}
+            faixa={e.faixa}
+            rbt12={e.rbt12 != null ? Number(e.rbt12) : null}
+            saida={(a?.saida as Saida | undefined) ?? null}
+            propostas={d.propostas ?? []}
+            aoMudar={() => mudou()}
+          />
         </div>
       )}
 

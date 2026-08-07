@@ -70,6 +70,17 @@ export async function GET(req: Request) {
     .eq("empresa_id", id)
     .order("emitido_em", { ascending: false });
 
+  /* AS PROPOSTAS. Sem `.limit()` propositalmente pequeno: uma empresa recebe
+     poucas, e sumir com a mais antiga esconderia justamente a que foi aceita.
+     Falha de leitura (migration 0059 não rodada) não derruba o dossiê — a lista
+     vem vazia e o resto da tela continua funcionando. */
+  const { data: propostas } = await supabase
+    .from("propostas")
+    .select("id, numero, emitido_em, conteudo")
+    .eq("empresa_id", id)
+    .order("emitido_em", { ascending: false })
+    .limit(10);
+
   const assinado = termo?.assinatura_status === "assinado" || !!termo?.assinado_em;
 
   /**
@@ -118,6 +129,14 @@ export async function GET(req: Request) {
     termo,
     coleta: coleta ?? null,
     comparativos: comparativos ?? [],
+    propostas: (propostas ?? []).map((p) => ({
+      id: (p as { id: string }).id,
+      numero: (p as { numero: number }).numero,
+      emitido_em: (p as { emitido_em: string }).emitido_em,
+      /* só o que a lista mostra — o conteúdo inteiro é grande e a tela não usa */
+      projeto: ((p as { conteudo?: { investimento?: { projeto?: number } } }).conteudo?.investimento?.projeto) ?? null,
+      validade: ((p as { conteudo?: { validade?: string } }).conteudo?.validade) ?? null,
+    })),
     envios: envios ?? [],
     janelas: Object.fromEntries((janelas ?? []).map((j) => [j.id, j.nome])),
     trilha: assinado && termo ? trilhaEmTexto(termo as never) : [],

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { calcularNps } from "@/lib/nps";
+import { AgenteVenda } from "@/components/AgenteVenda";
 
 /**
  * O INTERRUPTOR DO ASSISTENTE — e o placar do NPS, que mora ao lado porque as
@@ -142,6 +143,8 @@ export default function AssistenteAdmin() {
           </label>
         </div>
       )}
+
+      <AgenteVenda />
     </div>
   );
 }

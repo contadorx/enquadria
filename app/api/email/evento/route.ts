@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { normalizarEvento } from "@/lib/email-eventos";
+import { confirmarPorMensagemId, confirmarPorEmail } from "@/lib/entrega-server";
 
 /**
  * O WEBHOOK DE ABERTURA E CLIQUE — Postal e Brevo entram pela mesma porta.
@@ -95,6 +96,36 @@ export async function POST(req: Request) {
       mensagem_id: e.mensagem_id ?? null,
       ocorreu_em: e.ocorreu_em,
     });
+  }
+
+  /* ─────────────────────────────────────── A CONFIRMAÇÃO DE ENTREGA ──────
+   * Esta é a metade da garantia que fecha o ciclo: o envio grava a mensagem
+   * como ACEITA (o Postal responde "success" quando ela entra na fila dele,
+   * não quando o destino recebe) e é aqui que ela vira ENTREGUE de verdade.
+   *
+   * Sem este trecho, toda mensagem ficaria eternamente "aceita" e a varredura
+   * reenviaria a base inteira pela Brevo de 15 em 15 minutos.
+   *
+   * Bounce e recusa marcam FALHOU — e falhou não se reenvia: caixa que não
+   * existe pelo Postal também não existe pela Brevo, e insistir queima o
+   * segundo caminho.
+   *
+   * Falha aqui não derruba o webhook: o evento já está para ser gravado, e
+   * provedor que recebe 5xx desativa o webhook depois de N tentativas. */
+  for (const e of eventos) {
+    const status =
+      e.evento === "entregue" ? "entregue" : e.evento === "bounce" || e.evento === "spam" || e.evento === "recusado" ? "falhou" : null;
+    if (!status) continue;
+    try {
+      const casou = e.mensagem_id
+        ? await confirmarPorMensagemId(e.mensagem_id, status)
+        : false;
+      /* a Brevo não devolve um id que dê para casar no envio — cai no
+         destinatário mais recente ainda em aberto */
+      if (!casou) await confirmarPorEmail(e.para, status);
+    } catch (err) {
+      console.error("[email-evento] confirmação não gravou:", err instanceof Error ? err.message : err);
+    }
   }
 
   const { error } = await supabase.from("email_eventos").insert(linhas);

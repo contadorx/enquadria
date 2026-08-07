@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/negocio",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/email",
+      "schedule": "*/15 * * * *"
     }
   ]
 }
