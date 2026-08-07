@@ -48,8 +48,8 @@ ok    suíte reguas-indicacao (40 asserções)
 ok    suíte repasse (26 asserções)
 ok    suíte roteiro (24 asserções)
 ok    suíte tabela-2027 (82 asserções)
-ok    suíte termo (126 asserções)
-ok    suíte venda (72 asserções)
+ok    suíte termo (128 asserções)
+ok    suíte venda (80 asserções)
 
 ── Auditoria de UX (percepção, não estética) ───────────────────
 ok    auditoria de UX (6 regras limpas)
@@ -259,6 +259,20 @@ ok    triagem: faixa D = 9
 ok    triagem: faixa MEI = 2
 ok    triagem: faixa FORA = 4
 ok    prioridade máxima na de faixa textual
+ok    regime 'SN' é Simples (era o bug: virava FORA)
+ok    regime 'Sim' é Simples
+ok    regime 'Optante' é Simples
+ok    regime '1 - Simples Nacional' é Simples
+ok    regime 'Não' é FORA (o silencioso: entrava na fila)
+ok    regime 'Não optante' é FORA — a negação vence o 'optante' contido
+ok    regime 'Lucro Presumido' segue FORA
+ok    porte por extenso vira MEI
+ok    situação desconhecida NÃO derruba (falso-FORA é carteira sumindo)
+ok    situação '8 - BAIXADA' derruba
+ok    coluna 'Optante pelo Simples' cai em regime (era ignorada)
+ok    coluna 'Situação Simples Nacional' cai em REGIME, não em situação
+ok    'Situação Cadastral' continua caindo em situação
+ok    'Anexo Simples' continua caindo em anexo, não em regime
 
 ── Links das réguas apontam para rotas que existem ─────────────
 ok    rotas citadas nos e-mails: importar
@@ -349,4 +363,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 306 verificações automáticas
+TUDO PASSOU — 320 verificações automáticas

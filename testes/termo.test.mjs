@@ -469,8 +469,15 @@ ok(/não que ele estava certo/.test(AVISO_NOME_CORROMPIDO),
 {
   const ATUAL = CIENCIA_DOS_EFEITOS;
   ok(ATUAL.length === 8, "a lista atual tem 8 cláusulas", ATUAL.length);
-  ok(ATUAL.some((c) => /CANCELADA at\u00e9 30 de novembro de 2026/.test(c)),
-     "a do cancelamento até 30/11 entrou — era o achado 06 da auditoria");
+  /* precisada em 07/08 (Resolução CGSN 186/2026): além da data, a cláusula
+     precisa carregar a DIREÇÃO da porta — irretratável, só saída. Um termo que
+     diz "pode ser revista" promete um caminho de volta que a norma não dá. */
+  ok(ATUAL.some((c) => /CANCELADA, de forma irretrat\u00e1vel, at\u00e9 30 de novembro de 2026/.test(c)),
+     "a do cancelamento até 30/11 entrou — e diz que é irretratável");
+  ok(ATUAL.some((c) => /somente de sa\u00edda|n\u00e3o h\u00e1 ades\u00e3o nova/.test(c)),
+     "a cláusula nega a adesão tardia — a porta tem um sentido só");
+  ok(!ATUAL.some((c) => /pode ser revista/.test(c)),
+     "a palavra de dois sentidos saiu do documento assinado");
   ok(ATUAL.some((c) => /31\/10\/2026/.test(c)),
      "e ela explica POR QUE a data importa: a alíquota é fixada dentro dessa janela");
 

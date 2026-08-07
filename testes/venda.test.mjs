@@ -83,6 +83,24 @@ ok(chave("e depois de setembro, acaba?") === "depois-de-setembro", "a transiçã
 ok(chave("serve para lucro presumido?") === "lucro-presumido", "presumido");
 ok(chave("meu sistema já tem simulador da reforma") === "ja-tenho-simulador", "a objeção do simulador");
 ok(chave("tem fidelidade?") === "fidelidade", "fidelidade");
+
+/* A COLISÃO DO 30/11 (07/08/2026): "cancelar a opção" casava `fidelidade` pelo
+   gatilho "cancelar" e respondia sobre o PLANO — para uma pergunta sobre a
+   Resolução CGSN nº 186/2026. A regra específica precisa vencer a genérica, e
+   a resposta precisa carregar a direção da porta: só sai quem optou, sem volta. */
+ok(chave("posso cancelar a opção em novembro?") === "cancelar-opcao", "cancelar a OPÇÃO não é cancelar o plano", chave("posso cancelar a opção em novembro?"));
+ok(chave("dá pra voltar atrás depois de optar?") === "cancelar-opcao", "voltar atrás é sobre a opção");
+ok(chave("o cancelamento é irretratável?") === "cancelar-opcao", "irretratável casa a regra da opção");
+ok(chave("quero cancelar o contrato, tem carência?") === "fidelidade", "cancelar o PLANO continua na fidelidade", chave("quero cancelar o contrato, tem carência?"));
+{
+  const r = responderRoteiro("posso cancelar a opção em novembro?");
+  ok(/irretratável/.test(r.resposta), "a resposta diz que o cancelamento é irretratável");
+  ok(/adesão tardia|não existe adesão/i.test(r.resposta), "a resposta nega a adesão tardia");
+}
+/* A EXCEÇÃO DO 4º TRIMESTRE: inscrição no CNPJ entre out-dez/2026 opta no ato.
+   Sem a regra, "abri empresa agora" caía em `prazo` e recebia um não implícito. */
+ok(chave("abri empresa agora em outubro, perdi o prazo?") === "empresa-nova", "empresa nova tem resposta própria", chave("abri empresa agora em outubro, perdi o prazo?"));
+ok(chave("vou abrir um cnpj novo em novembro, e a opção?") === "empresa-nova", "cnpj novo no 4º tri");
 ok(chave("o laudo sai com a minha marca?") === "laudo", "laudo");
 ok(chave("preciso preencher planilha antes?") === "importar", "a dúvida da planilha (a mais cara do suporte)");
 ok(chave("de onde vem esse 3,65%?") === "365", "o número que abre conversa");

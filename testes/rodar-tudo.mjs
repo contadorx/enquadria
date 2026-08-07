@@ -1346,6 +1346,40 @@ if (!fs.existsSync(CSV)) {
      triagem.triar({ cnpj: faixaTxt?.cnpj ?? "", razao_social: "x", cnae_principal: "4639-7/01",
                      porte: "EPP", situacao: "ATIVA", regime: "Simples Nacional",
                      faturamento_faixa: "acima de 3,6mi" }).prioridade_maxima === true);
+
+  /* ═══ OS VALORES COMO OS SISTEMAS ESCREVEM (07/08/2026) ═══════════════════
+     A primeira carteira REAL veio com o regime em sigla e a triagem jogou
+     TUDO em FORA — o produto pareceu não ter lido o arquivo. E o inverso,
+     silencioso: "Não" numa coluna não reconhecida deixava Presumido entrar
+     na fila como optante. Estes casos são a carteira real, não a de exemplo. */
+  const triaCom = (regime, extra = {}) => triagem.triar({
+    cnpj: "33000167000101", razao_social: "x", cnae_principal: "2599-3/99",
+    porte: "EPP", situacao: "ATIVA", regime, ...extra,
+  }).faixa;
+  ok("regime 'SN' é Simples (era o bug: virava FORA)", triaCom("SN") === "A", triaCom("SN"));
+  ok("regime 'Sim' é Simples", triaCom("Sim") === "A", triaCom("Sim"));
+  ok("regime 'Optante' é Simples", triaCom("Optante") === "A", triaCom("Optante"));
+  ok("regime '1 - Simples Nacional' é Simples", triaCom("1 - Simples Nacional") === "A");
+  ok("regime 'Não' é FORA (o silencioso: entrava na fila)", triaCom("Não") === "FORA", triaCom("Não"));
+  ok("regime 'Não optante' é FORA — a negação vence o 'optante' contido",
+     triaCom("Não optante") === "FORA", triaCom("Não optante"));
+  ok("regime 'Lucro Presumido' segue FORA", triaCom("Lucro Presumido") === "FORA");
+  ok("porte por extenso vira MEI", triaCom("Simples Nacional", { porte: "MICROEMPREENDEDOR INDIVIDUAL" }) === "MEI");
+  ok("situação desconhecida NÃO derruba (falso-FORA é carteira sumindo)",
+     triaCom("Simples Nacional", { situacao: "Habilitada" }) === "A");
+  ok("situação '8 - BAIXADA' derruba", triaCom("Simples Nacional", { situacao: "8 - BAIXADA" }) === "FORA");
+
+  /* o cabeçalho também: a coluna dos exports reais tem que cair em REGIME */
+  const cab = (csv) => csvlib.parsearCarteira(csv).colunas_reconhecidas;
+  const c1 = cab("CNPJ;Optante pelo Simples\n33.000.167/0001-01;Sim");
+  ok("coluna 'Optante pelo Simples' cai em regime (era ignorada)", c1.regime === "Optante pelo Simples", c1);
+  const c2 = cab("CNPJ;Situação Simples Nacional\n33.000.167/0001-01;Optante");
+  ok("coluna 'Situação Simples Nacional' cai em REGIME, não em situação",
+     c2.regime === "Situação Simples Nacional" && !c2.situacao, c2);
+  const c3 = cab("CNPJ;Situação Cadastral\n33.000.167/0001-01;ATIVA");
+  ok("'Situação Cadastral' continua caindo em situação", c3.situacao === "Situação Cadastral", c3);
+  const c4 = cab("CNPJ;Anexo Simples\n33.000.167/0001-01;2");
+  ok("'Anexo Simples' continua caindo em anexo, não em regime", c4.anexo === "Anexo Simples", c4);
 }
 
 /* ============================ 2a. ROTAS CITADAS NOS E-MAILS EXISTEM? ===== */
