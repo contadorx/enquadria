@@ -52,11 +52,13 @@ export interface Aviso {
 
 type Grupo = "trabalho" | "curtas" | "fora" | "todas";
 
+/* "Toda a carteira" vem primeiro porque é o padrão — chip ativo no fim da
+   fileira faz o padrão parecer escolha exótica */
 const GRUPOS: { chave: Grupo; rotulo: string; faixas: Faixa[] | null }[] = [
+  { chave: "todas", rotulo: "Toda a carteira", faixas: null },
   { chave: "trabalho", rotulo: "Precisam decidir", faixas: FAIXAS_TRABALHO },
   { chave: "curtas", rotulo: "Laudo curto", faixas: FAIXAS_CURTAS },
   { chave: "fora", rotulo: "Fora da janela", faixas: FAIXAS_FORA },
-  { chave: "todas", rotulo: "Toda a carteira", faixas: null },
 ];
 
 const COR_FAIXA: Record<string, string> = {
@@ -94,7 +96,19 @@ export function Cockpit({
 }) {
   const router = useRouter();
   const [etapa, setEtapa] = useState<keyof Esteira | null>(null);
-  const [grupo, setGrupo] = useState<Grupo>("trabalho");
+  /**
+   * ABRE EM "TODAS" — decisão de 07/08/2026, e o caso que a provocou importa:
+   * a primeira empresa importada numa conta era de Lucro Presumido (faixa
+   * FORA), o filtro padrão era "Precisam decidir" (A/B), e a tela abriu VAZIA
+   * segundos depois de uma importação bem-sucedida. Parecia importação
+   * perdida; era filtro.
+   *
+   * E há mérito além do susto: a triagem classifica pelo CNAE PRINCIPAL, e
+   * empresa com atividades secundárias pode estar na faixa errada. Filtro que
+   * esconde por padrão transforma uma estimativa de prioridade em veredito
+   * silencioso. A classificação ordena a fila; não pode omitir empresa.
+   */
+  const [grupo, setGrupo] = useState<Grupo>("todas");
   const [busca, setBusca] = useState("");
   const [selecao, setSelecao] = useState<Set<string>>(new Set());
   const [foco, setFoco] = useState<{ aviso: Aviso; ids: Set<string> } | null>(null);
@@ -645,21 +659,29 @@ export function Cockpit({
               </button>
             </div>
           ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {GRUPOS.map((g) => (
-                <button
-                  key={g.chave}
-                  onClick={() => {
-                    setGrupo(g.chave);
-                    setMostrar(PAGINA);
-                  }}
-                  className={`rounded-full px-3 py-1.5 text-[12px] font-semibold ${
-                    grupo === g.chave ? "bg-ink text-white" : "border border-line bg-surface text-slate2"
-                  }`}
-                >
-                  {g.rotulo}
-                </button>
-              ))}
+            <div>
+              <div className="flex flex-wrap gap-1.5">
+                {GRUPOS.map((g) => (
+                  <button
+                    key={g.chave}
+                    onClick={() => {
+                      setGrupo(g.chave);
+                      setMostrar(PAGINA);
+                    }}
+                    className={`rounded-full px-3 py-1.5 text-[12px] font-semibold ${
+                      grupo === g.chave ? "bg-ink text-white" : "border border-line bg-surface text-slate2"
+                    }`}
+                  >
+                    {g.rotulo}
+                  </button>
+                ))}
+              </div>
+              {/* uma linha, de propósito: a faixa é estimativa por CNAE
+                  principal — o filtro agrupa, não dispensa ninguém de análise */}
+              <p className="mt-1.5 text-[11.5px] text-muted">
+                A faixa vem do CNAE principal — atividade secundária pode mudar o quadro. O
+                filtro agrupa; a análise é de todas.
+              </p>
             </div>
           )}
 

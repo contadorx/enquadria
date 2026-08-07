@@ -75,10 +75,20 @@ const SINONIMOS: Record<keyof LinhaCarteira, string[]> = {
   cnae_principal: ["cnae", "cnae principal", "cnae fiscal", "atividade", "cnaeprincipal", "cnae_principal"],
   porte: ["porte", "porte empresa", "porte da empresa"],
   situacao: ["situacao", "situacao cadastral", "status"],
-  regime: ["regime", "regime tributario", "tributacao", "enquadramento"],
+  /* 07/08/2026, primeira carteira real: os sistemas n\u00e3o exportam "regime" \u2014
+     exportam "Optante pelo Simples", "Situa\u00e7\u00e3o Simples Nacional", "Op\u00e7\u00e3o
+     Simples". Sem estes sin\u00f4nimos a coluna ca\u00eda em `situacao` (valor
+     "Optante" \u2192 FORA) ou era ignorada (o "N\u00e3o" do Presumido se perdia e a
+     empresa entrava na fila como optante). */
+  regime: [
+    "regime", "regime tributario", "tributacao", "enquadramento",
+    "simples nacional", "optante pelo simples", "optante simples",
+    "opcao pelo simples", "opcao simples", "situacao simples", "optante",
+    "simples", "sn",
+  ],
   anexo: ["anexo", "anexo simples"],
   faturamento_faixa: ["faturamento", "faixa faturamento", "receita", "rbt12", "faturamento 12m"],
-  rbt12: ["rbt 12", "receita bruta 12 meses", "receita bruta acumulada", "faturamento anual", "faturamento 12 meses", "rbt12 valor"],
+  rbt12: ["rbt 12", "receita bruta 12 meses", "receita bruta acumulada", "receita bruta", "faturamento anual", "faturamento 12 meses", "rbt12 valor"],
   contato_nome: ["contato", "responsavel", "socio", "nome do contato", "nome contato", "representante", "signatario"],
   contato_email: ["email", "e-mail", "email contato", "e-mail do contato", "email responsavel", "mail"],
   contato_telefone: ["telefone", "celular", "whatsapp", "fone", "tel"],
@@ -87,10 +97,27 @@ const SINONIMOS: Record<keyof LinhaCarteira, string[]> = {
 const semAcento = (s: string) =>
   (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
 
+/**
+ * O SIN\u00d4NIMO MAIS ESPEC\u00cdFICO VENCE \u2014 n\u00e3o o primeiro campo declarado.
+ *
+ * A vers\u00e3o anterior percorria os campos em ordem fixa, e "Situa\u00e7\u00e3o Simples
+ * Nacional" casava `situacao` (declarado antes de `regime`): a coluna inteira
+ * ia para o campo errado e a triagem lia "Optante" como situa\u00e7\u00e3o cadastral.
+ * Ordenando os pares por comprimento do sin\u00f4nimo, "situacao simples" (16)
+ * vence "situacao" (8), "anexo simples" vence "simples", e a ordem de
+ * declara\u00e7\u00e3o deixa de ser uma armadilha.
+ *
+ * Sin\u00f4nimo de at\u00e9 3 letras ("sn") s\u00f3 casa por IGUALDADE: por `includes`,
+ * duas letras dentro de qualquer palavra virariam mapeamento falso.
+ */
+const PARES = Object.entries(SINONIMOS)
+  .flatMap(([campo, nomes]) => nomes.map((n) => ({ campo: campo as keyof LinhaCarteira, n })))
+  .sort((a, b) => b.n.length - a.n.length);
+
 function casarColuna(cabecalho: string): keyof LinhaCarteira | null {
   const h = semAcento(cabecalho);
-  for (const [campo, nomes] of Object.entries(SINONIMOS)) {
-    if (nomes.some((n) => h === n || h.includes(n))) return campo as keyof LinhaCarteira;
+  for (const { campo, n } of PARES) {
+    if (h === n || (n.length > 3 && h.includes(n))) return campo;
   }
   return null;
 }

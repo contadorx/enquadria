@@ -55,23 +55,69 @@ export function anexoPorCnae(cnae?: string | null): number | undefined {
   return 3;
 }
 
-export function triar(e: EmpresaBruta): Triagem {
-  const situacao = (e.situacao || "").toUpperCase();
-  const porte = (e.porte || "").toUpperCase();
-  const regime = (e.regime || "").toUpperCase();
-  const d = div(e.cnae_principal);
+/* ───────────────────────────────────────────────────────────────────────────
+ * LER O VALOR COMO OS SISTEMAS ESCREVEM, não como a gente gostaria.
+ *
+ * Descoberto em 07/08/2026 com a PRIMEIRA carteira real: a coluna de regime
+ * veio em sigla — e `regime.includes("SIMPLES")` jogou a carteira INTEIRA em
+ * "Fora do Simples". Nenhum A, nenhum B; o produto pareceu não ter lido o
+ * arquivo. Os exports reais escrevem "SN", "Sim", "1 - Simples Nacional",
+ * "Optante", "Não optante" — e cada leitura ingênua aqui classifica uma
+ * carteira inteira errado, no primeiro contato com o produto.
+ *
+ * O erro tem dois sentidos, e o silencioso é o pior: "Não" numa coluna
+ * "Optante pelo Simples" que o parser não reconhecia deixava a empresa de
+ * Lucro Presumido ENTRAR na fila como se fosse optante.
+ * ─────────────────────────────────────────────────────────────────────────── */
 
-  if (situacao && !situacao.includes("ATIV")) {
+const semAcentoV = (s?: string | null) =>
+  (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toUpperCase();
+
+/** interpreta o campo de regime como os exports reais o escrevem */
+export function leRegime(bruto?: string | null): "simples" | "mei" | "fora" | null {
+  const v = semAcentoV(bruto);
+  if (!v) return null;
+  if (/\bMEI\b|MICROEMPREENDEDOR/.test(v)) return "mei";
+  // a negação vem ANTES do resto: "NAO OPTANTE" contém "OPTANTE"
+  if (/\bNAO\b|^N$|^0$/.test(v)) return "fora";
+  if (/PRESUMIDO|\bREAL\b|ARBITRADO|\bNORMAL\b/.test(v)) return "fora";
+  if (/SIMPLES|\bSN\b|\bSIM\b|^S$|^1\b|OPTANTE/.test(v)) return "simples";
+  // preenchido e irreconhecível: fora, como sempre foi — mas agora só depois
+  // de todas as grafias reais terem tido a chance de casar
+  return "fora";
+}
+
+/** MEI pelo porte — por palavra, não por substring ("priMEIra" contém MEI) */
+export function ehMEIPorPorte(porte?: string | null): boolean {
+  return /\bMEI\b|MICROEMPREENDEDOR/.test(semAcentoV(porte));
+}
+
+/**
+ * A situação só DERRUBA quando reconhece um estado ruim. A versão anterior
+ * derrubava tudo que não contivesse "ATIV" — e uma coluna mal mapeada (ex.:
+ * "Situação Simples Nacional" = "Optante") mandava a empresa para FORA com o
+ * motivo surreal "Situação cadastral: Optante". Falso-FORA é a carteira
+ * sumindo da tela; valor desconhecido agora segue adiante.
+ */
+export function situacaoDerruba(situacao?: string | null): boolean {
+  return /BAIXAD|INAPT|SUSPENS|\bNULA\b|CANCELAD|ENCERRAD|EXTINT/.test(semAcentoV(situacao));
+}
+
+export function triar(e: EmpresaBruta): Triagem {
+  const d = div(e.cnae_principal);
+  const regime = leRegime(e.regime);
+
+  if (situacaoDerruba(e.situacao)) {
     return { faixa: "FORA", motivo: `Situação cadastral: ${e.situacao}.`, prioridade_maxima: false };
   }
-  if (porte.includes("MEI") || regime.includes("MEI")) {
+  if (ehMEIPorPorte(e.porte) || regime === "mei") {
     return {
       faixa: "MEI",
       motivo: "O regime híbrido alcança apenas ME e EPP. MEI segue com alíquota fixa.",
       prioridade_maxima: false,
     };
   }
-  if (regime && !regime.includes("SIMPLES")) {
+  if (regime === "fora") {
     return {
       faixa: "FORA",
       motivo: "Empresa já fora do Simples — entra na trilha de transição, não nesta janela.",

@@ -237,8 +237,12 @@ export const MODULOS: Modulo[] = [
         topicos: [
           "Semana 1 a 4: o que precisa estar pronto ao fim de cada uma",
           "As datas que não se movem",
-          "O cancelamento até o último dia de novembro como segunda onda cobrável",
-          "Março de 2027: a mesma carteira, a mesma pergunta",
+          /* precisado em 07/08/2026 (Resolução CGSN nº 186/2026, três fontes):
+             a porta de novembro é só de saída e sem volta — o tópico precisa
+             carregar isso, senão a aula promete "rever" onde a norma só
+             permite desfazer. E março/2027 é previsão, não norma publicada. */
+          "O cancelamento até 30 de novembro — só para quem optou, e irretratável — como segunda onda cobrável",
+          "A próxima janela (prevista para março de 2027): a mesma carteira, a mesma pergunta",
         ],
         materiais: ["calendario"],
       },

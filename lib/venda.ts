@@ -153,6 +153,51 @@ const REGRAS: Regra[] = [
   },
 
   // ---- prazo e janela -----------------------------------------------------
+  /**
+   * A EXCEÇÃO DO 4º TRIMESTRE (mesma verificação de 07/08): empresa inscrita
+   * no CNPJ entre 01/10 e 31/12/2026 opta NO ATO da inscrição, com efeito
+   * desde a data dela — fora do rito de setembro. Sem esta regra, "abri
+   * empresa agora, perdi o prazo?" casava `prazo` e recebia um não implícito.
+   *
+   * ANTES da regra do cancelamento de propósito: "vou abrir um CNPJ novo em
+   * novembro" contém "novembro", e a regra de baixo o capturaria — o caso da
+   * empresa é o mais específico dos dois e precisa casar primeiro.
+   */
+  {
+    chave: "empresa-nova",
+    tecnicoOk: true,
+    algum: [
+      "abri empresa", "abrir empresa", "empresa nova", "abriu agora", "vou abrir",
+      "inscricao no cnpj", "cnpj novo", "constituir empresa", "abertura",
+    ],
+    resposta:
+      "Empresa inscrita no CNPJ entre 1º de outubro e 31 de dezembro de 2026 não perde a decisão: a opção — pelo Simples e pela apuração de IBS/CBS pelo regime regular — é feita no ato da inscrição, com efeito desde a data dela. O rito de setembro vale para quem já existia.\n\nPara esse caso o sistema tem o estudo de abertura, que compara os caminhos antes do registro.",
+    cta: DESTINOS.app,
+  },
+  /**
+   * CANCELAMENTO ≠ CANCELAR O PLANO — e a colisão era real.
+   *
+   * "Posso cancelar a opção em novembro?" casava a regra `fidelidade` pelo
+   * gatilho "cancelar" e respondia sobre o PLANO do Enquadria — para uma
+   * pergunta sobre a Resolução CGSN nº 186/2026. Verificado em 07/08/2026,
+   * junto com a regra em si (três fontes): só cancela quem optou, o
+   * cancelamento é irretratável, e novembro NÃO é adesão tardia.
+   *
+   * Por isso esta regra vem ANTES do bloco de objeções: os gatilhos com
+   * "opcao"/"novembro" são específicos e precisam vencer o "cancelar" seco.
+   */
+  {
+    chave: "cancelar-opcao",
+    tecnicoOk: true,
+    algum: [
+      "cancelar a opcao", "cancela a opcao", "cancelamento da opcao", "desistir da opcao",
+      "irretratavel", "voltar atras", "se arrepender", "arrependimento", "desfazer a opcao",
+      "novembro", "30/11",
+    ],
+    resposta:
+      "Só cancela quem optou: a opção exercida em setembro pode ser cancelada até 30 de novembro de 2026 — e o cancelamento é irretratável. Não existe adesão tardia: quem deixou setembro passar permanece como está até a janela seguinte.\n\nA sequência que faz sentido: a alíquota de referência é fixada até 31/10; com o número real, a conta de quem optou pode ser refeita — e, se não sustentar, cancelada dentro do prazo. O sistema avisa quem tem laudo emitido quando essa fase começa.",
+    cta: DESTINOS.guia,
+  },
   {
     chave: "depois-de-setembro",
     algum: ["depois de setembro", "depois da janela", "acaba em setembro", "e depois", "2033", "transicao"],

@@ -225,13 +225,21 @@ export const CIENCIA_DOS_EFEITOS: string[] = [
     "do Senado até 31/10/2026, depois do fim desta janela.",
   "Os cálculos são de responsabilidade técnica do profissional que assina o laudo. O resultado " +
     "comercial da negociação de preço é decisão e risco da empresa.",
-  /* acrescentada em 05/08/2026, apontada por auditoria externa. Informação de
-     PRAZO, não de risco: quem opta ainda tem até 30/11 para desistir, e essa
-     porta é a única resposta possível a "e se a alíquota de referência sair
-     pior do que a estimada?" — ela é fixada em 31/10, dentro dessa janela. */
-  "A opção exercida em setembro pode ser CANCELADA até 30 de novembro de 2026. Como a alíquota de " +
-    "referência de IBS/CBS só é fixada até 31/10/2026, essa é a janela em que a decisão pode ser " +
-    "revista à luz do número definitivo.",
+  /* acrescentada em 05/08/2026, apontada por auditoria externa; PRECISADA em
+     07/08/2026 após verificar a Resolução CGSN nº 186/2026 em três fontes.
+     Informação de PRAZO, não de risco: quem opta ainda tem até 30/11 para
+     desistir, e essa porta é a única resposta possível a "e se a alíquota de
+     referência sair pior do que a estimada?" — ela é fixada em 31/10, dentro
+     dessa janela.
+
+     A versão anterior dizia que a decisão podia ser "revista" — e revista tem
+     dois sentidos, enquanto a porta tem um só: sai quem optou, não entra quem
+     não optou, e cancelamento não se desfaz. Num documento que o cliente
+     ASSINA, a direção da porta não fica por conta da leitura. */
+  "A opção exercida em setembro pode ser CANCELADA, de forma irretratável, até 30 de novembro de " +
+    "2026. A porta é somente de saída: não há adesão nova em novembro, e cancelamento feito não se " +
+    "desfaz. Como a alíquota de referência de IBS/CBS só é fixada até 31/10/2026, esse é o período " +
+    "em que a conta pode ser refeita à luz do número definitivo antes de manter ou desfazer a opção.",
 ];
 
 /**

@@ -82,6 +82,7 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
     receita_configurada?: boolean;
     receita_falhas?: number;
     triagem_cega?: boolean;
+    regime_suspeito?: { quantas: number; total: number; exemplo: string | null } | null;
     analisadas?: number;
   } | null>(null);
   const [diag, setDiag] = useState<{
@@ -393,6 +394,24 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
           </p>
         )}
 
+        {/* a rede do regime: quase tudo FORA é mais provavelmente leitura
+            errada do arquivo do que um escritório inteiro fora do Simples */}
+        {feito.regime_suspeito && (
+          <p className="mt-3 rounded-sm bg-amarelowash px-3 py-2 text-[12.5px] leading-relaxed text-amarelo">
+            <b>Confira antes de seguir:</b> {feito.regime_suspeito.quantas} de{" "}
+            {feito.regime_suspeito.total} empresas caíram em &quot;fora do Simples&quot; pelo
+            valor da coluna de regime
+            {feito.regime_suspeito.exemplo ? (
+              <>
+                {" "}
+                (ex.: <b>&quot;{feito.regime_suspeito.exemplo}&quot;</b>)
+              </>
+            ) : null}
+            . Se a sua carteira é majoritariamente do Simples, o arquivo está dizendo outra
+            coisa — me mande esse valor pelo suporte que a leitura passa a entendê-lo.
+          </p>
+        )}
+
         {diag && (
           <div className="mt-3 rounded-sm border border-line bg-surface2 p-3">
             <div className="text-[13px] font-semibold">{diag.veredito}</div>
@@ -434,21 +453,13 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
   return (
     <div>
       {/*
-        COLAR CNPJ É O CAMINHO PRIMÁRIO, e o upload é o segundo.
-        Não é preferência estética: o export do sistema é o maior ponto de
-        abandono do produto. Quem tem o CSV na mão continua a um clique de
-        distância; quem não tem agora consegue começar mesmo assim.
-      */}
-      {/*
-        UMA PORTA, NÃO DUAS.
-        Até 06/08/2026 esta tela oferecia "Caminho 1 · colar CNPJ" e "Caminho 2
-        · subir CSV" com o mesmo peso visual, e o campo de colar ainda nascia
-        FECHADO, atrás de um botão. Duas portas do mesmo tamanho não são
-        liberdade: são uma decisão empurrada para quem tem menos informação
-        para decidir — e a pergunta que chegou por WhatsApp foi exatamente essa
-        ("primeiro eu preencho aquela planilha?").
-        Agora o campo de colar é a tela; o CSV é uma linha para quem já sabe
-        que tem o arquivo.
+        DUAS PORTAS ABERTAS — decisão de 07/08/2026, revertendo a de 06/08.
+        A versão anterior escondia o CSV atrás de um <details> ("uma porta, não
+        duas"). No primeiro uso real, quem chegou COM o arquivo na mão não viu
+        onde subi-lo: a porta fechada não simplificou, sumiu. A lição que fica:
+        esconder um caminho só simplifica para quem não precisa dele.
+        Colar CNPJ continua primeiro (é o caminho de quem não tem nada na mão);
+        o arquivo fica visível ao lado, sem clique de descoberta.
       */}
       <div className="rounded border border-line bg-surface p-6 shadow-card">
         <div className="text-[16px] font-bold">
@@ -505,20 +516,17 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
         </div>
       </div>
 
-      {/* O CSV CONTINUA INTEIRO — só deixou de disputar a atenção.
-          Quem já tem o arquivo sabe que tem, e abre em um clique. Quem não tem
-          não é mais obrigado a decidir entre dois caminhos antes de começar. */}
-      <details className="mt-3 rounded border border-dashed border-line bg-surface">
-        <summary className="cursor-pointer list-none px-5 py-3 text-[13.5px] font-semibold text-slate2">
-          Tenho muitos — quero subir a carteira de uma vez{" "}
-          <span className="font-normal text-muted">(CSV ou Excel)</span>
-        </summary>
-        <div className="border-t border-linesoft px-5 pb-5 pt-4">
-          <div className="mt-1 text-[15px] font-bold">Importe a carteira de um arquivo</div>
+      {/* aberto e visível — ver o comentário "DUAS PORTAS ABERTAS" acima */}
+      <div className="mt-3 rounded border border-line bg-surface">
+        <div className="px-5 pb-5 pt-4">
+          <div className="mt-1 text-[15px] font-bold">
+            Ou suba a carteira de uma vez{" "}
+            <span className="font-normal text-muted">(CSV ou Excel)</span>
+          </div>
           <p className="mt-1 max-w-[68ch] text-[12px] leading-relaxed text-muted">
-            Aceita <b className="text-slate2">.xlsx</b>, <b className="text-slate2">.xls</b> e{" "}
-            <b className="text-slate2">.csv</b> — do jeito que sair do seu sistema. Planilha do
-            Excel entra direto, sem converter nada.
+            Do jeito que sair do seu sistema — <b className="text-slate2">.xlsx</b>,{" "}
+            <b className="text-slate2">.xls</b> ou <b className="text-slate2">.csv</b>, sem
+            converter nada.
           </p>
           <div className="mt-2.5 flex flex-wrap items-center gap-3">
             <label className="cursor-pointer rounded-sm border border-line px-4 py-2.5 text-sm font-semibold text-slate2">
@@ -559,14 +567,10 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
           )}
 
           <p className="mt-3 max-w-[70ch] text-[12.5px] leading-relaxed text-muted">
-            Suba do jeito que veio: as colunas são reconhecidas por sinônimo, sem formato
-            rígido. <b className="text-slate2">Só o CNPJ é obrigatório</b> — o resto, quando
-            falta, vem do enriquecimento contra a Receita. Com a coluna de{" "}
-            <b className="text-slate2">RBT12</b> a alíquota do laudo sai efetiva em vez de
-            estimada, e com <b className="text-slate2">porte</b> ou{" "}
-            <b className="text-slate2">regime</b> a triagem separa MEI e quem já saiu do
-            Simples — dois dados que a base pública não tem. CNPJs inválidos e repetidos são
-            descartados antes de gravar.
+            <b className="text-slate2">Só o CNPJ é obrigatório</b> — o resto vem da Receita.
+            Com <b className="text-slate2">RBT12</b> a alíquota sai efetiva; com{" "}
+            <b className="text-slate2">porte</b> ou <b className="text-slate2">regime</b> a
+            triagem separa MEI e quem já saiu do Simples.
           </p>
 
         <details className="mt-3">
@@ -597,7 +601,7 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
           </p>
         </details>
         </div>
-      </details>
+      </div>
 
       {erro && (
         <p className="mt-4 rounded-sm bg-vermelhowash px-3 py-2 text-[13px] text-vermelho">{erro}</p>

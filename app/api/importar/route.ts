@@ -144,6 +144,22 @@ export async function POST(req: Request) {
     // uma carteira inteira em "baixo risco" como se fosse resultado
     triagem_cega:
       !ativo && registros.every((r) => !r.cnae_principal),
+    /**
+     * A REDE DO REGIME (07/08/2026): a leitura do campo ficou robusta, mas o
+     * próximo export exótico vai existir. Quando quase toda a carteira cai em
+     * "fora do Simples" POR REGIME, a chance de ser leitura errada é maior do
+     * que a de um escritório inteiro de Lucro Presumido usar o produto — e a
+     * tela mostra o valor bruto que causou, para o diagnóstico ser de um
+     * olhar, não de um chamado.
+     */
+    regime_suspeito: (() => {
+      const porRegime = registros.filter(
+        (r) => r.faixa === "FORA" && (r.motivo_triagem ?? "").includes("fora do Simples")
+      );
+      if (registros.length < 5 || porRegime.length / registros.length < 0.8) return null;
+      const exemplo = porRegime.find((r) => r.regime)?.regime ?? null;
+      return { quantas: porRegime.length, total: registros.length, exemplo };
+    })(),
     empresas_para_analisar: (paraAnalisar ?? []).map((e) => e.id),
     resumo,
   });
