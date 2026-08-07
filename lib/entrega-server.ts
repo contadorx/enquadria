@@ -2,6 +2,9 @@ import { createAdminClient } from "./supabase-admin";
 import {
   avaliarDisjuntor,
   acaoPara,
+  instrumentoConfiavel,
+  AVISO_SEM_INSTRUMENTO,
+  DIAS_ATE_APAGAR_CORPO,
   type Disjuntor,
   type Caminho,
   type StatusSaida,
@@ -64,6 +67,58 @@ export async function gravarDisjuntor(d: Disjuntor): Promise<void> {
     .eq("id", 1);
 }
 
+/**
+ * GRAVA O RESULTADO DA VARREDURA — o que faz a quebra deixar de ser cega.
+ *
+ * Sem isto, o estado da última varredura vive só no JSON de retorno do cron e
+ * no log da Vercel: dois lugares onde ninguém passa. É o mesmo defeito que
+ * esta série corrige — informação que existe e não chega a quem decide.
+ *
+ * Roda SEMPRE, inclusive (e principalmente) quando a varredura se declara
+ * cega: é justamente esse o estado que precisa aparecer na tela.
+ */
+export async function registrarVarredura(r: {
+  cega: boolean;
+  aviso: string | null;
+  resumo: Record<string, unknown>;
+}): Promise<void> {
+  const admin = createAdminClient();
+  if (!admin) return;
+  try {
+    await admin
+      .from("email_disjuntor")
+      .update({
+        varredura_em: new Date().toISOString(),
+        varredura_cega: r.cega,
+        varredura_aviso: r.aviso,
+        varredura_resumo: r.resumo,
+      })
+      .eq("id", 1);
+  } catch (e) {
+    console.error("[entrega] não consegui registrar a varredura:", e instanceof Error ? e.message : e);
+  }
+}
+
+/** o que a tela lê para montar o monitor */
+export async function lerVarredura(): Promise<{ em: string | null; cega: boolean; aviso: string | null }> {
+  const admin = createAdminClient();
+  if (!admin) return { em: null, cega: false, aviso: null };
+  try {
+    const { data } = await admin
+      .from("email_disjuntor")
+      .select("varredura_em, varredura_cega, varredura_aviso")
+      .eq("id", 1)
+      .maybeSingle();
+    return {
+      em: (data?.varredura_em as string) ?? null,
+      cega: Boolean(data?.varredura_cega),
+      aviso: (data?.varredura_aviso as string) ?? null,
+    };
+  } catch {
+    return { em: null, cega: false, aviso: null };
+  }
+}
+
 export interface RegistroSaida {
   chave: string;
   para: string;
@@ -75,6 +130,11 @@ export interface RegistroSaida {
   tentativas?: number;
   erro?: string | null;
   referencia?: string | null;
+  /** o envelope guardado para o reenvio ser idêntico, não parecido */
+  corpo_html?: string | null;
+  nome_destinatario?: string | null;
+  responder_para?: string | null;
+  responder_nome?: string | null;
 }
 
 /**
@@ -99,6 +159,10 @@ export async function registrarSaida(r: RegistroSaida): Promise<void> {
         tentativas: r.tentativas ?? 0,
         erro: r.erro ?? null,
         referencia: r.referencia ?? null,
+        corpo_html: r.corpo_html ?? null,
+        nome_destinatario: r.nome_destinatario ?? null,
+        responder_para: r.responder_para ?? null,
+        responder_nome: r.responder_nome ?? null,
         ...(r.status === "entregue" ? { confirmado_em: new Date().toISOString() } : {}),
       },
       { onConflict: "chave,caminho" }
@@ -130,6 +194,12 @@ export async function confirmarPorMensagemId(
       .update({
         status,
         confirmado_em: new Date().toISOString(),
+        /* O CORPO SOME NA CONFIRMAÇÃO — o conteúdo existe exatamente enquanto
+           pode ser útil. Entregue (ou recusado em definitivo), reenviar deixou
+           de ser possibilidade e guardar dado de cliente deixou de ter razão. */
+        corpo_html: null,
+        corpo_apagado_em: new Date().toISOString(),
+        corpo_apagado_motivo: status === "entregue" ? "entrega confirmada" : "falha definitiva",
         ...(erro ? { erro } : {}),
       })
       .eq("mensagem_id", mensagemId)
@@ -165,7 +235,13 @@ export async function confirmarPorEmail(
     if (!alvo?.id) return false;
     await admin
       .from("emails_saida")
-      .update({ status, confirmado_em: new Date().toISOString() })
+      .update({
+        status,
+        confirmado_em: new Date().toISOString(),
+        corpo_html: null,
+        corpo_apagado_em: new Date().toISOString(),
+        corpo_apagado_motivo: status === "entregue" ? "entrega confirmada" : "falha definitiva",
+      })
       .eq("id", alvo.id);
     return true;
   } catch {
@@ -179,35 +255,56 @@ export interface ResultadoVarredura {
   examinadas: number;
   reenviadas: number;
   desistidas: number;
+  semCorpo: number;
+  corposApagados: number;
   disjuntor: Disjuntor;
   mudou: boolean;
+  /** true quando a varredura se recusou a concluir por falta de instrumento */
+  cega: boolean;
+  aviso: string | null;
   erros: string[];
+}
+
+export interface MensagemReenvio {
+  para: string;
+  nome?: string;
+  assunto: string;
+  html: string;
+  responderPara?: { email: string; nome?: string };
 }
 
 /**
  * A VARREDURA — o coração da garantia, e ela roda no cron.
  *
- * Faz três coisas, nesta ordem, e a ordem importa:
+ * A ORDEM DAS QUATRO ETAPAS É A REGRA DE NEGÓCIO:
  *
- *  1. marca como PERDIDA toda mensagem aceita pelo Postal que passou da janela
- *     sem confirmação;
- *  2. REENVIA as perdidas pela Brevo (uma linha nova, caminho novo);
- *  3. só então reavalia o DISJUNTOR — com a foto já atualizada, senão a
- *     decisão sairia de dados velhos.
+ *  0. CONFERE O INSTRUMENTO. Se nenhuma confirmação de entrega existe na
+ *     janela, a varredura NÃO conclui nada — nem reenvia, nem mexe no
+ *     disjuntor. Ausência total de sinal é webhook desligado, não base
+ *     perdida. Sem esta etapa, um segredo errado no ambiente reenviaria a base
+ *     inteira a cada 15 minutos e desligaria um servidor que está são.
+ *  1. Marca como perdida a mensagem aceita além da janela.
+ *  2. REENVIA O DOCUMENTO ORIGINAL pela Brevo, com o mesmo assunto, o mesmo
+ *     HTML e o mesmo reply-to. Sem corpo guardado, degrada para o aviso.
+ *  3. Reavalia o disjuntor com a foto já atualizada.
  *
- * `enviarPelaBrevo` entra por parâmetro para este arquivo não depender do
- * driver, e para o teste poder rodar a varredura inteira sem rede.
+ * `enviar` entra por parâmetro para este arquivo não depender do driver e para
+ * o teste rodar a varredura inteira sem rede.
  */
 export async function varrerEntregas(
-  enviarPelaBrevo: (m: { para: string; assunto: string; html: string }) => Promise<{ enviado: boolean; motivo?: string }>,
+  enviar: (m: MensagemReenvio) => Promise<{ enviado: boolean; motivo?: string }>,
   agora = new Date()
 ): Promise<ResultadoVarredura> {
   const vazio: ResultadoVarredura = {
     examinadas: 0,
     reenviadas: 0,
     desistidas: 0,
+    semCorpo: 0,
+    corposApagados: 0,
     disjuntor: DISJUNTOR_FECHADO,
     mudou: false,
+    cega: false,
+    aviso: null,
     erros: [],
   };
   const admin = createAdminClient();
@@ -216,19 +313,54 @@ export async function varrerEntregas(
   const desde = new Date(agora.getTime() - 4 * 3_600_000).toISOString();
   const { data, error } = await admin
     .from("emails_saida")
-    .select("id, chave, para, tag, assunto, caminho, status, mensagem_id, criado_em, confirmado_em, tentativas")
+    .select(
+      "id, chave, para, tag, assunto, caminho, status, mensagem_id, criado_em, confirmado_em, tentativas, corpo_html, nome_destinatario, responder_para, responder_nome, referencia"
+    )
     .eq("caminho", "postal")
     .gte("criado_em", desde)
     .order("criado_em", { ascending: false })
     .limit(500);
 
   if (error) return { ...vazio, erros: [error.message] };
-  const linhas = (data ?? []) as unknown as (LinhaSaida & { assunto: string | null })[];
+
+  type Linha = LinhaSaida & {
+    assunto: string | null;
+    corpo_html: string | null;
+    nome_destinatario: string | null;
+    responder_para: string | null;
+    responder_nome: string | null;
+    referencia: string | null;
+  };
+  const linhas = (data ?? []) as unknown as Linha[];
+
+  /* ─────────────────────────────────────── 0. O INSTRUMENTO FUNCIONA? ──── */
+  const confirmadas = linhas.filter((l) => l.status === "entregue" || l.confirmado_em).length;
+  const confiavel = instrumentoConfiavel({
+    temConfirmacoes: confirmadas > 0,
+    totalObservado: linhas.length,
+  });
+
+  if (!confiavel) {
+    console.error("[entrega] varredura CEGA — " + AVISO_SEM_INSTRUMENTO);
+    await registrarVarredura({
+      cega: true,
+      aviso: AVISO_SEM_INSTRUMENTO,
+      resumo: { examinadas: linhas.length, confirmadas: 0 },
+    });
+    return {
+      ...vazio,
+      examinadas: linhas.length,
+      disjuntor: await lerDisjuntor(),
+      cega: true,
+      aviso: AVISO_SEM_INSTRUMENTO,
+    };
+  }
 
   let reenviadas = 0;
   let desistidas = 0;
-  const erros: string[] = [];
+  let semCorpo = 0;
   let perdidas = 0;
+  const erros: string[] = [];
 
   for (const l of linhas) {
     const acao = acaoPara(l, agora);
@@ -241,23 +373,34 @@ export async function varrerEntregas(
       continue;
     }
 
-    /* O REENVIO NÃO REMONTA O HTML — e é a limitação honesta desta versão.
-       O corpo original não é guardado (armazenar o HTML de todo e-mail é
-       espaço e é dado de cliente parado no banco). O reenvio leva um aviso
-       curto com o assunto original e o pedido de contato, que é infinitamente
-       melhor que silêncio — e a linha fica marcada para o humano decidir se
-       reemite o documento. */
-    const r = await enviarPelaBrevo({
+    /* ─────────────────────────────── 2. O DOCUMENTO, e não um bilhete ──── */
+    const temCorpo = !!l.corpo_html;
+    if (!temCorpo) semCorpo++;
+
+    const r = await enviar({
       para: l.para,
+      nome: l.nome_destinatario ?? undefined,
       assunto: l.assunto ?? "Mensagem do Enquadria",
-      html: htmlReenvio(l.assunto ?? "uma mensagem"),
+      html: l.corpo_html ?? htmlAviso(l.assunto ?? "uma mensagem"),
+      ...(l.responder_para
+        ? { responderPara: { email: l.responder_para, nome: l.responder_nome ?? undefined } }
+        : {}),
     });
 
     if (r.enviado) {
       await admin
         .from("emails_saida")
-        .update({ status: "reenviado", reenviado_em: agora.toISOString(), tentativas: l.tentativas + 1 })
+        .update({
+          status: "reenviado",
+          reenviado_em: agora.toISOString(),
+          tentativas: l.tentativas + 1,
+          /* o corpo cumpriu a função: sai do banco junto com o reenvio */
+          corpo_html: null,
+          corpo_apagado_em: agora.toISOString(),
+          corpo_apagado_motivo: "reenviado pela Brevo",
+        })
         .eq("id", l.id);
+
       await registrarSaida({
         chave: l.chave,
         para: l.para,
@@ -266,6 +409,8 @@ export async function varrerEntregas(
         caminho: "brevo",
         status: "aceito",
         tentativas: l.tentativas + 1,
+        referencia: l.referencia,
+        erro: temCorpo ? null : "reenviado sem o corpo original (expirado ou não guardado)",
       });
       reenviadas++;
     } else {
@@ -277,30 +422,50 @@ export async function varrerEntregas(
     }
   }
 
-  /* o disjuntor decide DEPOIS, com a foto atualizada */
+  /* ──────────────────────────────── 3. O DISJUNTOR, com a foto nova ────── */
   const atual = await lerDisjuntor();
-  const novo = avaliarDisjuntor(
-    atual,
-    { total: linhas.length, perdidas },
-    agora.toISOString()
-  );
+  const novo = avaliarDisjuntor(atual, { total: linhas.length, perdidas }, agora.toISOString());
   const mudou = novo.estado !== atual.estado;
   if (mudou) {
     await gravarDisjuntor(novo);
     console.warn(`[entrega] disjuntor ${atual.estado} → ${novo.estado}: ${novo.motivo}`);
   }
 
+  /* ─────────────────────── 4. A FAXINA, que não depende de mais nada ───── */
+  let corposApagados = 0;
+  try {
+    const { data: n } = await admin.rpc("limpar_corpos_expirados", { p_dias: DIAS_ATE_APAGAR_CORPO });
+    corposApagados = typeof n === "number" ? n : 0;
+  } catch (e) {
+    erros.push(`faxina de corpos: ${e instanceof Error ? e.message : "falhou"}`);
+  }
+
+  await registrarVarredura({
+    cega: false,
+    aviso: semCorpo > 0 ? `${semCorpo} reenvio(s) saíram sem o corpo original.` : null,
+    resumo: { examinadas: linhas.length, perdidas, reenviadas, desistidas, semCorpo, corposApagados },
+  });
+
   return {
     examinadas: linhas.length,
     reenviadas,
     desistidas,
+    semCorpo,
+    corposApagados,
     disjuntor: novo,
     mudou,
+    cega: false,
+    aviso: semCorpo > 0 ? `${semCorpo} reenvio(s) saíram sem o corpo original.` : null,
     erros,
   };
 }
 
-function htmlReenvio(assunto: string): string {
+/**
+ * O AVISO — a degradação, para quando o corpo não existe mais (expirou, ou a
+ * mensagem é anterior à 0061). Não é o documento e não finge ser: diz que algo
+ * ficou pelo caminho e pede contato.
+ */
+function htmlAviso(assunto: string): string {
   return `<p>Olá,</p>
 <p>Enviamos a você a mensagem <b>"${assunto}"</b> e o nosso servidor não conseguiu confirmar a entrega.
 Este aviso sai por um segundo caminho justamente para você saber que existe algo esperando.</p>

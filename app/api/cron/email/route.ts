@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { varrerEntregas } from "@/lib/entrega-server";
+import { varrerEntregas, type MensagemReenvio } from "@/lib/entrega-server";
 import { enviarPelaBrevo } from "@/lib/brevo";
 
 /**
@@ -36,9 +36,11 @@ export async function GET(req: Request) {
 
   const teste = new URL(req.url).searchParams.get("teste") === "1";
 
+  /* em teste, o "envio" não manda nada e diz que deu certo: serve para ver
+     QUANTAS mensagens seriam reenviadas antes de deixar o cron solto */
   const enviar = teste
     ? async () => ({ enviado: true as const })
-    : (m: { para: string; assunto: string; html: string }) => enviarPelaBrevo(m);
+    : (m: MensagemReenvio) => enviarPelaBrevo(m);
 
   const r = await varrerEntregas(enviar);
 
@@ -48,6 +50,10 @@ export async function GET(req: Request) {
     examinadas: r.examinadas,
     reenviadas: r.reenviadas,
     desistidas: r.desistidas,
+    sem_corpo: r.semCorpo,
+    corpos_apagados: r.corposApagados,
+    cega: r.cega,
+    aviso: r.aviso,
     disjuntor: r.disjuntor,
     mudou_estado: r.mudou,
     erros: r.erros,

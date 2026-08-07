@@ -38,7 +38,7 @@
 
 import { enviarPelaBrevo, type ResultadoEmail } from "./brevo";
 import { postalEnviar, postalConfigurado } from "./mailer/postal";
-import { chaveSaida, caminhoDeSaida, type Caminho } from "./entrega-garantida";
+import { chaveSaida, caminhoDeSaida, deveGuardarCorpo, type Caminho } from "./entrega-garantida";
 import { lerDisjuntor, registrarSaida } from "./entrega-server";
 
 export type { ResultadoEmail };
@@ -141,6 +141,17 @@ export async function enviarEmail(params: {
       mensagem_id: r.messageId || null,
       status: "aceito",
       referencia: params.referencia ?? null,
+      /* O ENVELOPE INTEIRO, para o reenvio ser IDÊNTICO e não parecido. Some na
+         confirmação de entrega — o conteúdo existe exatamente enquanto pode ser
+         útil, e só no caminho que precisa de vigilância. */
+      ...(deveGuardarCorpo("postal")
+        ? {
+            corpo_html: params.html,
+            nome_destinatario: params.nome ?? null,
+            responder_para: params.responderPara?.email ?? null,
+            responder_nome: params.responderPara?.nome ?? null,
+          }
+        : {}),
     });
     return { enviado: true, caminho: "postal" };
   }

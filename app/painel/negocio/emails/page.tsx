@@ -4,6 +4,8 @@ import { ReguaCartao, RodarReguas, ForcarCron, LiberarReenvio, ConfigChave, Conf
 import { NovidadeEmail } from "@/components/NovidadeEmail";
 import { casarEventos, resumir, resumirPorRegra, rotuloEntrega, type EnvioBase, type EventoBase } from "@/lib/entrega";
 import { EntregaResumo } from "@/components/EntregaResumo";
+import { MonitorEntrega } from "@/components/MonitorEntrega";
+import { lerDisjuntor, lerVarredura } from "@/lib/entrega-server";
 
 export const dynamic = "force-dynamic";
 
@@ -125,11 +127,21 @@ export default async function Emails() {
   const porRegra = resumirPorRegra(envios30, estados);
   const semWebhook = eventos30.length === 0;
 
+  /* O MONITOR DA ENTREGA — lido aqui, no servidor, junto do resto. */
+  const [disjuntor, varredura] = await Promise.all([lerDisjuntor(), lerVarredura()]);
+  const agoraISO = new Date().toISOString();
+
   const cfgReguas = cfg.reguas || {};
   const cfgCobranca = cfg.cobranca || {};
 
   return (
     <div className="space-y-7">
+      {/* O MONITOR VEM ANTES DE TUDO, e a ordem é o argumento: taxa de abertura
+          não significa nada se a entrega está fora do ar. Enquanto a varredura
+          estiver cega ou o cron parado, nenhum número desta tela é confiável —
+          e quem abre aqui precisa saber disso antes de ler o primeiro. */}
+      <MonitorEntrega varredura={varredura} disjuntor={disjuntor} agora={agoraISO} />
+
       {/* A NOVIDADE VEM ANTES DAS RÉGUAS, e não é hierarquia visual: é a única
           coisa nesta tela que EU faço acontecer. Todo o resto é motor rodando
           sozinho — e motor a gente confere, não opera. */}

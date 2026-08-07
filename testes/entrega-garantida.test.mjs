@@ -28,6 +28,12 @@ import {
   JANELA_CONFIRMACAO_MIN,
   TENTATIVAS_MAX,
   AMOSTRA_MINIMA,
+  instrumentoConfiavel,
+  deveGuardarCorpo,
+  corpoExpirado,
+  DIAS_ATE_APAGAR_CORPO,
+  monitorar,
+  MINUTOS_ATE_SUSPEITAR_DO_CRON,
 } from "./entrega-garantida.js";
 
 let f = 0;
@@ -140,6 +146,82 @@ const aberto = { estado: "aberto", motivo: "teste", desde: "2026-08-07T06:00:00Z
   const desviado = resumirSaida(linhas, aberto);
   ok(/DESLIGADO/.test(desviado.leitura), "disjuntor aberto domina a leitura", desviado.leitura);
   ok(/Nada foi perdido/.test(desviado.leitura), "e tranquiliza: o desvio funcionou");
+}
+
+
+/* ────── 8 · a trava contra a conclusão falsa (o retorno silencioso novo) ── */
+{
+  /* O CENÁRIO: webhook desconfigurado. Nenhuma confirmação chega, todas as
+     mensagens "vencem" a janela, a varredura concluiria 100% de perda,
+     reenviaria a base inteira e desligaria um servidor que está são. */
+  ok(instrumentoConfiavel({ temConfirmacoes: false, totalObservado: 50 }) === false,
+    "50 mensagens e zero confirmações: instrumento quebrado, não base perdida");
+  ok(instrumentoConfiavel({ temConfirmacoes: true, totalObservado: 50 }) === true,
+    "com ao menos uma confirmação, dá para concluir");
+  /* base vazia é diferente de silêncio: não há o que concluir nem o que
+     reenviar, então não faz sentido gritar "webhook quebrado" */
+  ok(instrumentoConfiavel({ temConfirmacoes: false, totalObservado: 0 }) === true,
+    "base vazia é confiável por vacuidade — não é sintoma de nada");
+  ok(instrumentoConfiavel({ temConfirmacoes: false, totalObservado: 1 }) === false,
+    "uma mensagem sem confirmação já basta para desconfiar do instrumento");
+}
+
+/* ────── 9 · o corpo guardado: só onde precisa, e some quando não precisa ── */
+{
+  ok(deveGuardarCorpo("postal") === true, "guarda o corpo do caminho vigiado");
+  ok(deveGuardarCorpo("brevo") === false,
+    "não guarda o da Brevo — ela resolve síncrono e nunca entra na fila");
+  ok(deveGuardarCorpo("nenhum") === false, "sem caminho, não há corpo a guardar");
+
+  const nasceu = "2026-08-01T12:00:00Z";
+  ok(corpoExpirado(nasceu, new Date("2026-08-07T12:00:00Z")) === false,
+    "6 dias: ainda dentro do prazo de retenção");
+  ok(corpoExpirado(nasceu, new Date("2026-08-08T12:00:00Z")) === true,
+    `${DIAS_ATE_APAGAR_CORPO} dias: o corpo tem que sair do banco`);
+  ok(corpoExpirado(nasceu, new Date("2026-09-01T12:00:00Z")) === true,
+    "e continua expirado depois — retenção não é janela, é limite");
+}
+
+
+/* ────── 10 · o monitor: a quebra tem que doer na tela certa ────────────── */
+{
+  const agora = new Date("2026-08-07T12:00:00Z");
+  const min = (m) => new Date(agora.getTime() - m * 60000).toISOString();
+  const saudavel = { em: min(5), cega: false, aviso: null };
+
+  ok(monitorar(saudavel, fechado, agora).nivel === "ok", "tudo em ordem não alarma");
+  ok(monitorar(saudavel, fechado, agora).acao === null, "e não pede ação nenhuma");
+
+  // nunca rodou: atenção, não crítico — ainda não há promessa quebrada
+  const nunca = monitorar({ em: null, cega: false, aviso: null }, fechado, agora);
+  ok(nunca.nivel === "atencao", "nunca rodou é atenção", nunca.nivel);
+  ok(/cron/i.test(nunca.acao), "e a ação aponta o cron");
+
+  /* CRON PARADO — o silêncio que nenhuma outra coluna denuncia. Vem ANTES da
+     cegueira: se o cron morreu, o dado de cegueira também está velho. */
+  const parado = monitorar({ em: min(MINUTOS_ATE_SUSPEITAR_DO_CRON), cega: false, aviso: null }, fechado, agora);
+  ok(parado.nivel === "critico", "cron parado é crítico", parado.nivel);
+  ok(/não roda há/.test(parado.titulo), "e o título diz há quanto tempo", parado.titulo);
+  ok(monitorar({ em: min(MINUTOS_ATE_SUSPEITAR_DO_CRON - 1), cega: false, aviso: null }, fechado, agora).nivel === "ok",
+    "um minuto antes do limite ainda está normal");
+  // e o cron parado VENCE a cegueira, porque o dado de cegueira já não vale
+  ok(monitorar({ em: min(120), cega: true, aviso: "x" }, fechado, agora).titulo.includes("não roda há"),
+    "cron parado tem prioridade sobre cego");
+
+  // CEGA — o estado que esta série inteira existe para tornar visível
+  const cega = monitorar({ em: min(5), cega: true, aviso: "webhook mudo" }, fechado, agora);
+  ok(cega.nivel === "critico", "varredura cega é crítica", cega.nivel);
+  ok(/EMAIL_WEBHOOK_SEGREDO/.test(cega.acao), "e a ação diz exatamente o que conferir", cega.acao);
+  ok(/proteção de entrega não existe/.test(cega.detalhe),
+    "e o texto é honesto: a trava protege o sistema, não a entrega");
+
+  // DESVIADO — proteção agindo, não falha
+  const desviado = monitorar(saudavel, aberto, agora);
+  ok(desviado.nivel === "atencao", "disjuntor aberto é atenção, não crítico", desviado.nivel);
+  ok(/sendo entregues/.test(desviado.detalhe), "porque as mensagens estão chegando", desviado.detalhe);
+  // e cego vence desviado: sem instrumento não se sabe nem se o desvio adiantou
+  ok(monitorar({ em: min(5), cega: true, aviso: "x" }, aberto, agora).nivel === "critico",
+    "cego vence desviado");
 }
 
 console.log(f === 0 ? "\nTUDO OK (entrega garantida)" : `\n${f} FALHA(S) (entrega garantida)`);
