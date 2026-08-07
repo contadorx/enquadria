@@ -108,6 +108,30 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
     }
   }
 
+  /**
+   * A PRÉVIA SEM CNAE NÃO É PRÉVIA — é o estado ANTERIOR à consulta.
+   *
+   * Custou três diagnósticos errados em 07/08/2026 para isto ficar claro, e
+   * quem se enganou foi quem escreveu o produto. O caminho de colar CNPJs
+   * monta as linhas no navegador, onde só existe o número: a razão social sai
+   * como "(sem razão social)", o CNAE sai vazio, e a triagem local — que
+   * precisa de CNAE para separar qualquer coisa — despeja a carteira inteira
+   * em "baixo risco". A consulta à Receita só acontece no servidor, ao
+   * confirmar.
+   *
+   * O resultado era uma tela que afirmava, com números de 24px sob um título
+   * chamado "Prévia da triagem", o oposto do que estava acontecendo: parecia
+   * carteira analisada e sem risco, quando era carteira ainda não consultada.
+   * A etiqueta "via Receita" na última coluna da tabela existia — e não
+   * segurou. Texto de 12px não desmente número de 24px.
+   *
+   * A regra que fica: número que ainda vai mudar não aparece como resultado.
+   * Sem CNAE em nenhuma linha, os contadores de faixa saem da tela e entra o
+   * que é verdade — o que falta e o que o botão vai fazer.
+   */
+  const semCnae =
+    !!parse && parse.linhas.length > 0 && parse.linhas.every((l) => !l.cnae_principal);
+
   // triagem local só para a prévia — o servidor recalcula ao gravar
   const previaFaixas = parse
     ? parse.linhas.reduce(
@@ -583,7 +607,9 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
         <div className="mt-6" ref={previaRef}>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <div className="text-[15px] font-bold">Prévia da triagem</div>
+              <div className="text-[15px] font-bold">
+                {semCnae ? "Pronto para buscar na Receita" : "Prévia da triagem"}
+              </div>
               <div className="mt-0.5 text-[13px] text-muted">
                 {parse.linhas.length} empresas válidas · {parse.descartadas} descartadas ·{" "}
                 {parse.duplicadas} duplicadas
@@ -597,9 +623,17 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
               className="rounded-sm bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
             >
               {etapa === "gravando"
-                ? "Gravando..."
+                ? semCnae
+                  ? "Buscando na Receita..."
+                  : "Gravando..."
                 : etapa === "analisando"
                 ? "Rodando a primeira análise..."
+                : /* SEM CNAE, O BOTÃO É A ÚNICA COISA QUE EXPLICA O QUE FALTA.
+                     "Gravar e analisar" prometia analisar dado que ainda não
+                     existe; quem lê isso ao lado de uma tabela vazia conclui
+                     que não há o que buscar. */
+                  semCnae
+                ? `Buscar na Receita e analisar ${parse.linhas.length} ${parse.linhas.length === 1 ? "empresa" : "empresas"}`
                 : jaTem > 0
                 ? `Adicionar e analisar ${parse.linhas.length} ${parse.linhas.length === 1 ? "empresa" : "empresas"}`
                 : `Gravar e analisar ${parse.linhas.length} ${parse.linhas.length === 1 ? "empresa" : "empresas"}`}
@@ -658,18 +692,35 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
             )}
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded border border-linesoft bg-linesoft md:grid-cols-6">
-            {ORDEM.map((f) => (
-              <div key={f} className="bg-surface p-3.5">
-                <div className={`font-mono text-[24px] font-semibold leading-none ${COR[f]}`}>
-                  {previaFaixas[f] ?? 0}
-                </div>
-                <div className="mt-1.5 text-[11.5px] leading-tight text-muted">
-                  {ROTULO_FAIXA[f]}
-                </div>
+          {semCnae ? (
+            /* O ESTADO HONESTO: nenhum número de faixa, porque nenhum deles
+               significa alguma coisa ainda. O que entra no lugar é o que vai
+               acontecer quando ele clicar. */
+            <div className="mt-4 rounded border border-accent bg-accentwash p-4">
+              <div className="text-[13.5px] font-semibold text-accentdeep">
+                A triagem ainda não rodou — e não tem como rodar aqui.
               </div>
-            ))}
-          </div>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-slate2">
+                Você colou só os documentos, então por enquanto existe só o número. Razão
+                social, CNAE, porte e situação vêm da base da Receita quando você confirmar,
+                e é o CNAE que separa a carteira por prioridade.{" "}
+                <b>Nada disso você precisa preencher.</b>
+              </p>
+            </div>
+          ) : (
+            <div className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded border border-linesoft bg-linesoft md:grid-cols-6">
+              {ORDEM.map((f) => (
+                <div key={f} className="bg-surface p-3.5">
+                  <div className={`font-mono text-[24px] font-semibold leading-none ${COR[f]}`}>
+                    {previaFaixas[f] ?? 0}
+                  </div>
+                  <div className="mt-1.5 text-[11.5px] leading-tight text-muted">
+                    {ROTULO_FAIXA[f]}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="mt-4 overflow-hidden rounded border border-line">
             <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
@@ -689,8 +740,14 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
                 <tbody>
                   {parse.linhas.slice(0, 8).map((l) => (
                     <tr key={l.cnpj}>
+                      {/* "(sem razão social)" descrevia o ARQUIVO e era lido como
+                          resultado da busca — a frase que mais enganou nesta tela. */}
                       <td className="border-b border-linesoft px-3 py-2 font-medium">
-                        {l.razao_social}
+                        {l.razao_social === "(sem razão social)" ? (
+                          <span className="italic text-muted">vem da Receita ao confirmar</span>
+                        ) : (
+                          l.razao_social
+                        )}
                       </td>
                       <td className="border-b border-linesoft px-3 py-2 font-mono text-[11.5px] text-muted">
                         {l.cnpj}
