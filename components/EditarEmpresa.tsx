@@ -8,18 +8,27 @@ import { moeda } from "@/lib/motor";
  * Edição do que o contador precisa corrigir sem reimportar a carteira:
  * o contato que recebe o termo e a RBT12 que torna a alíquota efetiva.
  */
+/**
+ * Os quatro enquadramentos que o select oferece — o servidor valida contra a
+ * mesma lista. Corrigir o enquadramento RETRIA a empresa (faixa e motivo
+ * acompanham); é o conserto para importação que veio com o regime errado.
+ */
+const ENQUADRAMENTOS = ["Simples Nacional", "MEI", "Lucro Presumido", "Lucro Real"];
+
 export function EditarEmpresa({
   empresaId,
   contatoNome,
   contatoEmail,
   contatoTelefone,
   rbt12,
+  regime,
 }: {
   empresaId: string;
   contatoNome: string | null;
   contatoEmail: string | null;
   contatoTelefone: string | null;
   rbt12: number | null;
+  regime?: string | null;
 }) {
   const router = useRouter();
   const [aberto, setAberto] = useState(false);
@@ -27,6 +36,11 @@ export function EditarEmpresa({
   const [email, setEmail] = useState(contatoEmail ?? "");
   const [tel, setTel] = useState(contatoTelefone ?? "");
   const [rbt, setRbt] = useState(rbt12 != null ? String(rbt12) : "");
+  /* o valor do arquivo pode ser qualquer grafia ("SN", "Sim"); o select mostra
+     a opção equivalente quando reconhece, e "— manter como veio —" quando não */
+  const [enq, setEnq] = useState(
+    ENQUADRAMENTOS.includes((regime ?? "").trim()) ? (regime ?? "").trim() : ""
+  );
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [salvo, setSalvo] = useState(false);
@@ -46,6 +60,7 @@ export function EditarEmpresa({
           contato_email: email,
           contato_telefone: tel,
           rbt12: rbt.replace(/\D/g, "") || null,
+          ...(enq ? { regime: enq } : {}),
         }),
       });
       const json = await resp.json();
@@ -124,6 +139,24 @@ export function EditarEmpresa({
             placeholder="(11) 90000-0000"
             className="w-full rounded-sm border border-line bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-accent"
           />
+        </div>
+        <div>
+          <label className="mb-1 block text-[11.5px] font-semibold text-slate2">
+            Enquadramento tributário
+          </label>
+          <select
+            value={enq}
+            onChange={(ev) => setEnq(ev.target.value)}
+            className="w-full rounded-sm border border-line bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-accent"
+          >
+            <option value="">{regime ? `— manter "${regime}" —` : "— não informado —"}</option>
+            {ENQUADRAMENTOS.map((r) => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+          <p className="mt-0.5 text-[10.5px] text-muted">
+            corrigir o enquadramento reclassifica a empresa na fila
+          </p>
         </div>
         <div>
           <label className="mb-1 block text-[11.5px] font-semibold text-slate2">

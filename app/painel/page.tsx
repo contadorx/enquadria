@@ -89,7 +89,8 @@ export default async function Painel() {
   const { data: empresas } = await supabase
     .from("empresas")
     .select(
-      "id, cnpj, razao_social, cnae_principal, faixa, motivo_triagem, prioridade_maxima, rbt12, anexo, contato_nome, contato_email"
+      // schema-ok: regime gravado por /api/importar (0004) e editável por /api/empresa
+      "id, cnpj, razao_social, cnae_principal, regime, faixa, motivo_triagem, prioridade_maxima, rbt12, anexo, contato_nome, contato_email"
     )
     .is("arquivada_em", null)
     .limit(2000);

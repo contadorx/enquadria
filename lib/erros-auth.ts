@@ -29,7 +29,10 @@ export interface ErroAuth {
 
 /** Mensagens conhecidas do GoTrue → português. Casadas por trecho, minúsculas. */
 const CONHECIDAS: Array<[string, string]> = [
-  ["invalid login credentials", "E-mail ou senha incorretos."],
+  /* precisada em 07/08/2026: um usuário real errou a senha, leu esta frase e
+     ficou SEM caminho — a tela não tinha recuperação. Agora tem, e o erro
+     aponta. Erro que só diagnostica é meio erro. */
+  ["invalid login credentials", "E-mail ou senha incorretos. Se não lembra a senha, use “Esqueci minha senha” ou “Entrar com código por e-mail”, logo abaixo."],
   ["email not confirmed", "Falta confirmar seu e-mail. Procure a mensagem de confirmação na caixa de entrada."],
   ["user already registered", "Já existe uma conta com este e-mail. Use “Entrar”."],
   ["already been registered", "Já existe uma conta com este e-mail. Use “Entrar”."],
@@ -40,6 +43,14 @@ const CONHECIDAS: Array<[string, string]> = [
   ["email rate limit exceeded", "Limite de e-mails atingido. Tente de novo daqui a pouco."],
   ["over_email_send_rate_limit", "Limite de e-mails atingido. Tente de novo daqui a pouco."],
   ["for security purposes", "Aguarde alguns segundos antes de tentar de novo."],
+  // fluxo de código por e-mail (signInWithOtp / verifyOtp)
+  ["signups not allowed for otp", "Não existe conta com este e-mail. Confira o endereço — ou crie a conta."],
+  ["otp_expired", "Código vencido. Peça um novo com “mandar outro código”."],
+  ["token has expired or is invalid", "Código errado ou vencido. Confira os dígitos ou peça um novo."],
+  ["otp_disabled", "Entrada por código está desligada no servidor de autenticação. Use a senha ou a recuperação."],
+  // fluxo de nova senha (updateUser)
+  ["new password should be different", "A nova senha precisa ser diferente da atual."],
+  ["auth session missing", "A sessão do link venceu. Peça um novo link em “Esqueci minha senha”."],
   ["error sending confirmation", "Não foi possível enviar o e-mail de confirmação. A conta NÃO foi criada."],
   ["error sending", "Não foi possível enviar o e-mail. A conta NÃO foi criada."],
   ["failed to fetch", "Não consegui falar com o servidor. Verifique sua conexão."],

@@ -133,6 +133,13 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
   const semCnae =
     !!parse && parse.linhas.length > 0 && parse.linhas.every((l) => !l.cnae_principal);
 
+  /** valor da 1ª linha para um campo — o que denuncia coluna capturada errada */
+  const exemplo = (chave: keyof LinhaCarteira): string | null => {
+    const v = parse?.linhas[0]?.[chave];
+    if (v == null || v === "") return null;
+    return String(v);
+  };
+
   // triagem local só para a prévia — o servidor recalcula ao gravar
   const previaFaixas = parse
     ? parse.linhas.reduce(
@@ -669,6 +676,15 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
                     {c.rotulo}
                     {achou && (
                       <span className="font-mono text-[10px] opacity-70">← {col}</span>
+                    )}
+                    {/* O VALOR DA PRIMEIRA LINHA, no chip (07/08/2026). O mapeamento
+                        sozinho parece certo mesmo quando captura a coluna errada —
+                        "Regime ← Regime de Apuração" só se denuncia mostrando o
+                        valor: "Caixa" não é um regime tributário, e o olho pega. */}
+                    {achou && exemplo(c.chave) && (
+                      <span className="max-w-[10rem] truncate font-mono text-[10px] font-semibold">
+                        &quot;{exemplo(c.chave)}&quot;
+                      </span>
                     )}
                   </span>
                 );

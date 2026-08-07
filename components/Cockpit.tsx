@@ -567,10 +567,29 @@ export function Cockpit({
         </div>
       )}
 
-      {/* ========================================== 4. AVISOS QUE GERAM TRABALHO */}
-      {avisos.length > 0 && (
+      {/* ========================================== 4. AVISOS QUE GERAM TRABALHO
+          SÓ OS NÃO LIDOS (07/08/2026). O card marcado como lido continuava na
+          tela — o selo "novo" sumia e o resto ficava, para sempre, em toda
+          visita. Aviso lido é história, e história mora no radar (aba Reforma),
+          não na mesa de trabalho. O rodapé diz quantos foram para lá. */}
+      {(() => {
+        const vivos = avisos.filter(
+          (av) => av.tipo !== "radar" || (av.nao_lido !== false && !avisosLidos.has(av.id))
+        );
+        const ocultos = avisos.length - vivos.length;
+        if (vivos.length === 0) {
+          return ocultos > 0 ? (
+            <p className="mt-3 text-[11.5px] text-muted">
+              {ocultos} aviso{ocultos > 1 ? "s" : ""} lido{ocultos > 1 ? "s" : ""} —{" "}
+              <Link href="/painel/reforma" className="underline underline-offset-2 hover:text-accentdeep">
+                histórico no radar
+              </Link>
+            </p>
+          ) : null;
+        }
+        return (
         <div className="mt-3 space-y-2">
-          {(todosAvisos ? avisos : avisos.slice(0, 2)).map((av) => (
+          {(todosAvisos ? vivos : vivos.slice(0, 2)).map((av) => (
             <div
               key={av.id}
               className="rounded border border-line bg-surface px-3 py-2.5 shadow-card"
@@ -629,18 +648,27 @@ export function Cockpit({
               </div>
             </div>
           ))}
-          {avisos.length > 2 && (
+          {vivos.length > 2 && (
             <button
               onClick={() => setTodosAvisos((v) => !v)}
               className="w-full rounded border border-dashed border-line px-3 py-2 text-[12.5px] font-semibold text-slate2"
             >
               {todosAvisos
                 ? "Ocultar os avisos extras"
-                : `Ver os outros ${avisos.length - 2} avisos`}
+                : `Ver os outros ${vivos.length - 2} avisos`}
             </button>
           )}
+          {ocultos > 0 && (
+            <p className="text-[11px] text-muted">
+              {ocultos} lido{ocultos > 1 ? "s" : ""} —{" "}
+              <Link href="/painel/reforma" className="underline underline-offset-2 hover:text-accentdeep">
+                histórico no radar
+              </Link>
+            </p>
+          )}
         </div>
-      )}
+        );
+      })()}
 
       {/* ============================================================= 3. A FILA */}
       <div className="mt-3 rounded border border-line bg-surface shadow-card">
@@ -750,11 +778,25 @@ export function Cockpit({
             Nada aqui com estes filtros. Limpe a busca ou troque o grupo.
           </p>
         ) : (
+          <>
+          {/* CABEÇALHO DAS COLUNAS (07/08/2026) — a linha era um parágrafo de
+              chips: com enquadramento numas empresas e não noutras, o olho não
+              tinha coluna para descer. Empresa · RBT12 · Enquadramento · Faixa
+              agora são colunas de verdade; os chips de fluxo (laudo, termo,
+              coleta) continuam na sublinha, porque são estado, não cadastro. */}
+          <div className="hidden border-b border-linesoft px-3 py-1.5 font-mono text-[9.5px] uppercase tracking-[0.12em] text-muted md:grid md:grid-cols-[1.25rem_minmax(0,1fr)_6.5rem_9rem_8.5rem_auto] md:items-center md:gap-x-3">
+            <span />
+            <span>Empresa</span>
+            <span className="text-right">RBT12</span>
+            <span>Enquadramento</span>
+            <span>Faixa</span>
+            <span />
+          </div>
           <ul>
             {visiveis.map((l) => (
               <li
                 key={l.id}
-                className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-linesoft px-3 py-2.5 last:border-b-0"
+                className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-linesoft px-3 py-2.5 last:border-b-0 md:grid md:grid-cols-[1.25rem_minmax(0,1fr)_6.5rem_9rem_8.5rem_auto]"
               >
                 <input
                   type="checkbox"
@@ -766,7 +808,7 @@ export function Cockpit({
 
                 <button
                   onClick={() => setGaveta({ id: l.id, aba: "dossie" })}
-                  className="min-w-0 flex-1 text-left"
+                  className="min-w-0 flex-1 text-left md:flex-none"
                 >
                   <div className="flex flex-wrap items-center gap-1.5">
                     {l.prioridade && (
@@ -778,7 +820,8 @@ export function Cockpit({
                   </div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[10.5px] text-muted">
                     <span>{mascararCnpj(l.cnpj)}</span>
-                    <span className={`rounded-full px-1.5 ${COR_FAIXA[l.faixa]}`}>{ROTULO_FAIXA[l.faixa]}</span>
+                    <span className={`rounded-full px-1.5 md:hidden ${COR_FAIXA[l.faixa]}`}>{ROTULO_FAIXA[l.faixa]}</span>
+                    <span className="md:hidden">{l.regime ?? ""}</span>
                     {l.saida && <span>{l.saida}</span>}
                     {l.re != null && <span>repasse {pct(l.re)}</span>}
                     {l.estimada && <span className="text-amarelo">premissas estimadas</span>}
@@ -801,6 +844,19 @@ export function Cockpit({
                   </div>
                 </button>
 
+                {/* as três colunas de cadastro — só no grid de desktop */}
+                <span className="hidden text-right font-mono text-[11px] text-slate2 md:block">
+                  {l.rbt12 != null ? Math.round(l.rbt12).toLocaleString("pt-BR") : "—"}
+                </span>
+                <span className="hidden truncate font-mono text-[10.5px] text-slate2 md:block" title={l.regime ?? undefined}>
+                  {l.regime ?? "—"}
+                </span>
+                <span className="hidden md:block">
+                  <span className={`rounded-full px-1.5 py-0.5 font-mono text-[10px] ${COR_FAIXA[l.faixa]}`}>
+                    {ROTULO_FAIXA[l.faixa]}
+                  </span>
+                </span>
+
                 <button
                   onClick={() => agir(l)}
                   disabled={ocupado === `linha-${l.id}` || l.acao === "pronto" || l.acao === "fora"}
@@ -821,6 +877,7 @@ export function Cockpit({
               </li>
             ))}
           </ul>
+          </>
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 text-[11.5px] text-muted">

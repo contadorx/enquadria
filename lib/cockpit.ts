@@ -39,6 +39,7 @@ export interface EmpresaCru {
   motivo_triagem: string | null;
   prioridade_maxima: boolean | null;
   rbt12: number | string | null;
+  regime?: string | null;
   anexo: number | null;
   contato_nome: string | null;
   contato_email: string | null;
@@ -93,6 +94,8 @@ export interface Linha {
   razao_social: string;
   cnpj: string;
   cnae: string | null;
+  /** enquadramento como veio do arquivo/edição — a coluna nova da fila */
+  regime: string | null;
   faixa: Faixa;
   motivo: string | null;
   prioridade: boolean;
@@ -190,6 +193,7 @@ export function montarFila(
       razao_social: e.razao_social,
       cnpj: e.cnpj,
       cnae: e.cnae_principal,
+      regime: (e.regime as string | null) ?? null,
       faixa: (e.faixa ?? "C") as Faixa,
       motivo: e.motivo_triagem,
       prioridade: !!e.prioridade_maxima || !!a?.prioridade,

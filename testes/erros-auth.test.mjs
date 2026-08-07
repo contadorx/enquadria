@@ -20,7 +20,22 @@ const RAIZ_E = acharRaiz(process.cwd());
 
 let falhas = 0;
 // o executor conta as asserções pelas linhas que começam com "ok:"
-const ok = (c, m) => { if (c) console.log("ok:", m); else { console.log("FALHOU:", m); falhas++; } };
+const ok = (c, m) => { if (c) console.log("ok:", m); else { /* ═══ A JORNADA DO PRIMEIRO LOGIN (07/08/2026) — as traduções que faltaram
+   para um usuário real que ficou preso na porta ═══ */
+{
+  const t = (m) => traduzirErroAuth({ message: m, status: 400 }, "entrar").texto;
+  ok(/Esqueci minha senha/.test(t("Invalid login credentials")),
+     "senha errada APONTA a recuperação — erro que só diagnostica é meio erro");
+  ok(/não existe conta/i.test(t("Signups not allowed for otp")),
+     "código para e-mail sem conta explica, não assusta");
+  ok(/vencido/i.test(t("otp_expired")), "código vencido pede outro");
+  ok(/errado ou vencido/i.test(t("Token has expired or is invalid")),
+     "código inválido orienta conferir");
+  ok(/peça um novo link/i.test(t("Auth session missing!")),
+     "sessão do link vencida manda pedir outro link");
+}
+
+console.log("FALHOU:", m); falhas++; } };
 
 const semRuido = (fn) => { const o = console.error; console.error = () => {}; try { return fn(); } finally { console.error = o; } };
 

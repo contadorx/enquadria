@@ -509,6 +509,20 @@ export function PainelEmpresa({
           <span className={`rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${COR_FAIXA[faixa]}`}>
             {ROTULO_FAIXA[faixa]}
           </span>
+          {e.regime && (
+            <span className="rounded-full bg-surface2 px-2.5 py-1 font-mono text-[10.5px] text-slate2">
+              {e.regime}
+            </span>
+          )}
+          {/* 07/08/2026: "onde eu corrijo o enquadramento / excluo a empresa?"
+              — existia, no fim do Dossiê, e ninguém achou. O caminho agora tem
+              porta no cabeçalho, visível de qualquer aba. ux-ok: troca de aba */}
+          <button
+            onClick={() => setAba("dossie")}
+            className="text-[11px] font-semibold text-accentdeep underline underline-offset-2"
+          >
+            corrigir dados · arquivar/excluir
+          </button>
           {e.prioridade_maxima && <span className="font-mono text-[10.5px] text-vermelho">· prioridade</span>}
           {estimada && (
             <span className="rounded-full bg-amarelowash px-2.5 py-1 font-mono text-[10.5px] text-amarelo">
@@ -844,6 +858,7 @@ export function PainelEmpresa({
               contatoEmail={e.contato_email}
               contatoTelefone={e.contato_telefone}
               rbt12={e.rbt12 != null ? Number(e.rbt12) : null}
+              regime={e.regime ?? null}
             />
           </Bloco>
 
