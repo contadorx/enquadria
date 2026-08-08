@@ -18,6 +18,15 @@ import type { CriterioRadar } from "./radar";
 
 export interface Rascunho {
   titulo: string;
+  /**
+   * O ENDEREÇO PÚBLICO da matéria em /reforma/<slug>.
+   *
+   * Vazio na criação = "deriva do título" (a rota faz isso, com desempate).
+   * Preenchido na edição = mantém o que já está publicado. A regra é: o título
+   * pode ser corrigido à vontade; o endereço, uma vez no ar, é dívida com quem
+   * o indexou e com quem o colou num grupo. Ver a migration 0064.
+   */
+  slug: string;
   resumo: string;
   o_que_fazer: string;
   fonte: string;

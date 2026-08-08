@@ -29,6 +29,9 @@ export const PAGINAS_PUBLICAS: { rota: string; prioridade: number; frequencia: "
      site, e por isso a frequência é semanal e a prioridade alta */
   { rota: "/reforma", prioridade: 0.9, frequencia: "weekly" },
   { rota: "/precos", prioridade: 0.8, frequencia: "monthly" },
+  /* saiu do MENU, não do índice: o guia continua público e indexado, alcançado
+     pelo rodapé, pelo curso e pelo pé da Reforma. Tirar do menu foi parar de
+     disputar o mesmo clique com o curso — não despublicar. */
   { rota: "/guia", prioridade: 0.7, frequencia: "monthly" },
   { rota: "/faq", prioridade: 0.6, frequencia: "monthly" },
   { rota: "/curso", prioridade: 0.9, frequencia: "weekly" },

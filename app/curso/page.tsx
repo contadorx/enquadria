@@ -29,11 +29,14 @@ export const metadata: Metadata = {
   title: "A decisão de setembro — curso gratuito para contadores | Enquadria",
   description:
     "Quais clientes da sua carteira precisam optar pelo IBS/CBS fora do DAS até 30 de setembro de 2026 — e como cobrar por isso. Nove aulas curtas, gratuitas, com planilhas e modelos.",
-  // O curso público mora no site (enquadria.com.br/curso), onde ninguém precisa
-  // sentir que está entrando num sistema. Esta cópia dentro do app existe para
-  // quem já é usuário — e não disputa busca com a original.
-  alternates: { canonical: "https://enquadria.com.br/curso" },
-  robots: { index: false, follow: true },
+  /* NÃO EXISTE MAIS "a original" EM OUTRO LUGAR. O curso era uma página do
+     site em HostGator e uma cópia dentro do app; depois da fusão dos dois no
+     mesmo deploy, sobrou só esta — e ela estava com `noindex` apontando o
+     canônico para si mesma, ou seja, pedindo ao buscador que ignorasse a única
+     cópia que existe. Numa página que é topo de funil, isso é o funil fechado.
+     A duplicata por host quem resolve é o middleware, com `X-Robots-Tag` no
+     host `app.`. */
+  alternates: { canonical: "/curso" },
 };
 
 

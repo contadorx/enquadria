@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { CascaPublica } from "@/components/CascaPublica";
 import { CursoMateriais } from "@/components/CursoMateriais";
 import { urlDeEmbed } from "@/lib/ajuda";
 import { createClient } from "@/lib/supabase-server";
@@ -77,23 +78,16 @@ export default async function AulaPage({ params }: { params: { slug: string } })
   const embed = urlDeEmbed(url) ?? (url && /^https:\/\//i.test(url) ? url : null);
 
   return (
-    <div className="min-h-screen bg-bg">
-      <header className="border-b border-line bg-ink">
-        <div className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-5 py-3.5">
-          <Link href="/curso" className="text-[15px] font-extrabold tracking-tight text-white">
-            ENQUADRIA<span className="text-accentbright">.</span>
-            <span className="ml-2 font-mono text-[11px] font-normal text-slate-400">
-              a decisão de setembro
-            </span>
-          </Link>
-          <Link href="/curso" className="text-[13px] text-slate-300 hover:text-white">
-            todas as aulas
-          </Link>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-4xl px-5 py-8 md:py-12">
-        <div className="font-mono text-[11.5px] uppercase tracking-[0.14em] text-accentdeep">
+    /* A CASCA É A DO SITE — a mesma de /precos, /reforma e do índice do curso.
+       Esta página tinha cabeçalho próprio, escuro e sem menu: quem chegava
+       numa aula pela busca não tinha para onde ir a não ser voltar. Marca,
+       menu e rodapé agora são os mesmos do resto do site. */
+    <CascaPublica largura="max-w-4xl">
+      <div>
+        <Link href="/curso" className="text-[13px] font-semibold text-accentdeep">
+          ← todas as aulas
+        </Link>
+        <div className="mt-3 font-mono text-[11.5px] uppercase tracking-[0.14em] text-accentdeep">
           Módulo {modulo.numero} · {modulo.titulo} · aula {aula.numero} de {TODAS_AULAS.length}
         </div>
         <h1 className="mt-2 max-w-[24ch] text-[28px] font-extrabold leading-tight tracking-tight text-ink md:text-[36px]">
@@ -186,7 +180,7 @@ export default async function AulaPage({ params }: { params: { slug: string } })
         </nav>
 
         <p className="mt-8 max-w-[80ch] text-[11.5px] leading-relaxed text-muted">{RESSALVA}</p>
-      </main>
-    </div>
+      </div>
+    </CascaPublica>
   );
 }

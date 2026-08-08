@@ -52,9 +52,10 @@ export default async function ReformaPage() {
   );
 
   /* ── o radar, com o alcance na carteira de quem está lendo ─────────────── */
+  // schema-ok: radar_itens vem da 0053, ampliada pela 0056 e pela 0064 (slug)
   const { data: itens } = await supabase
     .from("radar_itens")
-    .select("id, titulo, resumo, o_que_fazer, fonte, publicado_em, vigencia_em, severidade, criterio")
+    .select("id, slug, titulo, resumo, o_que_fazer, fonte, publicado_em, vigencia_em, severidade, criterio")
     .eq("ativo", true);
 
   const { data: empresas } = await supabase

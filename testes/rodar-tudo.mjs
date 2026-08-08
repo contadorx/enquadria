@@ -80,7 +80,7 @@ try {
     "lib/escritorio.ts", "lib/roteiro.ts", "lib/apontamentos.ts", "lib/abertura.ts", "lib/comparativo.ts",
     "lib/curso.ts", "lib/faturas.ts", "lib/filtro-faturas.ts", "lib/email-eventos.ts", "lib/documento.ts", "lib/assinatura.ts",
     "lib/negocio-calc.ts", "lib/projecao.ts", "lib/deriva.ts", "lib/gateway-limpeza.ts",
-    "lib/recalculo.ts", "lib/radar.ts", "lib/radar-form.ts", "lib/radar-aviso.ts", "lib/digest.ts", "lib/reforma.ts",
+    "lib/recalculo.ts", "lib/slug.ts", "lib/reforma-publica.ts", "lib/radar.ts", "lib/radar-form.ts", "lib/radar-aviso.ts", "lib/digest.ts", "lib/reforma.ts",
     "lib/novidade.ts", "lib/mailer/templates.ts", "lib/entrega.ts", "lib/passos.ts", "lib/funil.ts",
     "lib/venda.ts", "lib/proposta.ts", "lib/entrega-garantida.ts",
   ];
@@ -275,6 +275,26 @@ secao("Fronteira servidor ↔ cliente (o proxy que compila e cai no ar)");
   const regras = (saida.match(/^ok: /gm) || []).length;
   ok(`fronteira servidor ↔ cliente (${regras} conferências, com sabotagem)`, r.status === 0,
      r.status === 0 ? undefined : saida.split("\n").filter((l) => /FALHOU|FRONTEIRA/.test(l)).slice(0, 8));
+}
+
+/* ================= 1b5. AS DUAS METADES DO SITE, UM MENU SÓ ============= */
+secao("Casca pública (o menu que existe em dois lugares)");
+{
+  /**
+   * O site é HTML portado com o cabeçalho embutido em cada `const HTML`; o
+   * app é Tailwind, com o cabeçalho em `CascaPublica`. São DUAS cópias do
+   * mesmo menu, e nada aqui olhava para as duas ao mesmo tempo.
+   *
+   * Foi assim que /reforma e /curso foram para o ar com um menu diferente do
+   * de /precos e /faq: marca de outro tamanho, botões de outra forma. Quem
+   * navegava entre as metades tinha a impressão de ter saído do site.
+   * Compilou, buildou, 327 verificações passaram.
+   */
+  const r = spawnSync("node", [path.join(RAIZ, "ferramentas", "auditar-casca.mjs"), "--autoteste"], { encoding: "utf8" });
+  const saida = (r.stdout || "") + (r.stderr || "");
+  const regras = (saida.match(/^ok: /gm) || []).length;
+  ok(`um menu só nas duas metades (${regras} conferências, com sabotagem)`, r.status === 0,
+     r.status === 0 ? undefined : saida.split("\n").filter((l) => /FALHOU|menu/.test(l)).slice(0, 8));
 }
 
 /* ============== 1b4. A PROMESSA DE SEGURANÇA TEM QUE TER LASTRO ========= */

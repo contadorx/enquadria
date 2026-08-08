@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { CriterioRadar } from "@/lib/radar";
 import type { ItemPublicado } from "@/lib/radar-aviso";
 import { ROTULO_SEVERIDADE, COR_SEVERIDADE } from "@/lib/radar";
+import { paraSlug } from "@/lib/slug";
 import {
   SEVERIDADES, validar, bloqueado, descreverCriterio, limparCriterio, divisoesDe,
   type Rascunho, type Problema,
@@ -30,7 +31,7 @@ const SAIDAS = ["S1", "S2", "S3", "S4", "S5"];
 const ANEXOS = [1, 2, 3, 4, 5];
 
 const VAZIO: Rascunho = {
-  titulo: "", resumo: "", o_que_fazer: "", fonte: "",
+  titulo: "", slug: "", resumo: "", o_que_fazer: "", fonte: "",
   publicado_em: new Date().toISOString().slice(0, 10),
   vigencia_em: "", severidade: "media", criterio: {}, ativo: true, no_cockpit: true,
 };
@@ -116,7 +117,11 @@ export function RadarItens({
   function editar(i: ItemPublicado) {
     setEditando(i.id);
     setR({
-      titulo: i.titulo, resumo: i.resumo, o_que_fazer: i.o_que_fazer ?? "",
+      titulo: i.titulo,
+      /* o endereço vem do banco e volta como está: editar o título de uma
+         matéria já publicada não pode mudar a URL dela */
+      slug: i.slug ?? "",
+      resumo: i.resumo, o_que_fazer: i.o_que_fazer ?? "",
       fonte: i.fonte ?? "", publicado_em: i.publicado_em?.slice(0, 10) ?? "",
       vigencia_em: i.vigencia_em?.slice(0, 10) ?? "", severidade: i.severidade,
       /* preserva o estado: forçar `true` aqui republicava sem querer um item
@@ -221,6 +226,23 @@ export function RadarItens({
               placeholder="Duas ou três frases, sem juridiquês. O que mudou e para quem."
               className={campo} />
             <Avisos lista={doCampo("resumo")} />
+          </div>
+
+          <div>
+            <label className={rotulo}>
+              Endereço público {editando ? "— já publicado" : "(deixe vazio: sai do título)"}
+            </label>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="font-mono text-[12px] text-muted">/reforma/</span>
+              <input value={r.slug} onChange={(e) => mexer({ slug: e.target.value })}
+                placeholder={paraSlug(r.titulo) || "sai-do-titulo"}
+                className={`${campo} flex-1 min-w-[220px] font-mono text-[12.5px]`} />
+            </div>
+            <p className="mt-1 text-[11.5px] text-muted">
+              {editando
+                ? "Trocar isto quebra os links já compartilhados e o que o Google indexou. Só mude se a matéria ainda não circulou."
+                : "É a URL da matéria no site, e ela não muda mais depois. O título pode ser corrigido à vontade."}
+            </p>
           </div>
 
           <div>

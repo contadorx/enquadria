@@ -24,6 +24,10 @@ export interface CriterioRadar {
 
 export interface ItemRadar {
   id: string;
+  /** o endereço público em /reforma/<slug> — ver a migration 0064 e lib/slug.ts.
+   *  Opcional porque as telas internas não o consultam e porque o índice único
+   *  é parcial: uma linha sem endereço entra no banco, só não vira página. */
+  slug?: string | null;
   titulo: string;
   resumo: string;
   o_que_fazer: string | null;

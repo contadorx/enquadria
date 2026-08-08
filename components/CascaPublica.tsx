@@ -1,127 +1,167 @@
 import Link from "next/link";
 import { APP } from "@/lib/site";
+import { CascaMenu } from "./CascaMenu";
+import "../app/casca.css";
 
 /**
- * O CABEÇALHO E O RODAPÉ DO SITE — refeitos em Tailwind, de propósito.
+ * O CABEÇALHO E O RODAPÉ DO SITE — agora IGUAIS aos das páginas do site.
  *
  * ---------------------------------------------------------------------------
- * POR QUE NÃO REAPROVEITAR O CABEÇALHO ORIGINAL DO SITE
+ * O QUE ESTAVA ERRADO ANTES, E POR QUE ESTAVA.
  *
- * Porque ele depende de `app/site.css`, e esse arquivo tem regras de ELEMENTO,
- * não só de classe: `body`, `p`, `a`, e `h1` com `clamp(2rem, 4.6vw, 3.35rem)`.
- * Carregá-lo numa página feita em Tailwind — o curso, o exemplo, os documentos
- * legais — reescreveria o tamanho de todos os títulos e o fundo da página. O
- * remédio para "esta página está sem menu" não pode ser "agora ela está com
- * menu e com a tipografia trocada".
+ * A casca nasceu redesenhada em Tailwind por um motivo real: `app/site.css`
+ * tem regras de ELEMENTO (`body`, `p`, `a`, `h1 { clamp(2rem, 4.6vw, 3.35rem) }`),
+ * e carregá-lo numa página feita em Tailwind reescreveria a tipografia dela
+ * inteira. Fugir disso resolveu o problema técnico e criou um pior: DUAS
+ * CASCAS. Quem saía de /precos para /reforma via a marca mudar de tamanho, o
+ * menu mudar de forma e os botões mudarem de cor no meio do mesmo site. Menu
+ * que muda entre páginas não é detalhe de estilo — é o sinal de que o
+ * visitante saiu do site sem querer.
  *
- * Então a marca é a mesma, o desenho é o mesmo, e a folha de estilo é a que a
- * página já usava. É a única forma de as duas metades do produto conviverem sem
- * uma estragar a outra.
+ * O conserto não foi carregar o site.css assim mesmo, nem redesenhar as
+ * páginas do site: foi ISOLAR a casca. `app/casca.css` é o cabeçalho e o
+ * rodapé do site.css copiados com todas as classes prefixadas `casca-` e sem
+ * uma única regra de elemento. As duas folhas convivem na mesma página, o
+ * desenho é o mesmo dos dois lados, e a tipografia de cada página continua
+ * sendo a que ela já usava.
+ *
+ * O PREÇO, declarado: são duas cópias do mesmo desenho. Mudança visual no
+ * cabeçalho do site.css precisa ser repetida no casca.css, senão as metades
+ * divergem de novo. É o custo de o site ser HTML portado e o app ser Tailwind
+ * — e é mais barato do que unificar as duas bases agora.
  *
  * ---------------------------------------------------------------------------
- * ONDE ELE PRECISA ESTAR: em toda página PÚBLICA servida pelo app — curso,
- * exemplo, verificar, documentos legais e o 404. São as páginas em que alguém
- * chega de fora, muitas vezes por busca, sem ter passado pela home. Sem menu,
- * essa pessoa não tem para onde ir a não ser voltar.
+ * ONDE ELE PRECISA ESTAR: em toda página PÚBLICA servida pelo app — a Reforma,
+ * o curso, o exemplo, o verificar, os documentos legais e o 404. São as
+ * páginas em que alguém chega de fora, muitas vezes por busca, sem ter passado
+ * pela home.
  */
 
+/**
+ * O MENU — e por que o Guia saiu dele.
+ *
+ * Menu não é índice do site: é a lista das poucas coisas que a pessoa pode
+ * querer fazer. O Guia e o Curso prometem a MESMA coisa a quem chega — "me
+ * ensina a decisão de setembro" — e duas portas para a mesma sala fazem a
+ * pessoa escolher entre elas em vez de entrar. O curso é a versão maior, com
+ * nove aulas, materiais e certificado; ele fica.
+ *
+ * O Guia continua no ar, indexado e entregue por link: no rodapé, dentro do
+ * curso e ao pé da Reforma, que é onde alguém acabou de sentir a falta dele.
+ * Tirar do menu não é despublicar — é parar de disputar o clique consigo mesmo.
+ */
 const LINKS = [
   { href: "/", rotulo: "Início" },
   { href: "/reforma", rotulo: "Reforma" },
-  { href: "/guia", rotulo: "Guia" },
   { href: "/curso", rotulo: "Curso" },
   { href: "/como-funciona", rotulo: "Como funciona" },
   { href: "/precos", rotulo: "Preços" },
   { href: "/faq", rotulo: "Dúvidas" },
 ];
 
-function Marca() {
+/* o mesmo desenho da marca do site, nas duas cores em que ele aparece */
+function Logo({ fundo }: { fundo: string }) {
   return (
-    <Link href="/" className="flex items-center gap-2 text-[17px] font-extrabold tracking-tight text-ink">
-      <svg width="26" height="26" viewBox="0 0 64 64" aria-hidden>
-        <rect width="64" height="64" rx="14" fill="#0B1220" />
-        <path
-          d="M20 16h24M20 16v32M20 48h24M20 32h16"
-          stroke="#06B6D4"
-          strokeWidth="5"
-          strokeLinecap="round"
-          fill="none"
-        />
-        <circle cx="46" cy="32" r="4" fill="#06B6D4" />
-      </svg>
-      Enquadria
-    </Link>
+    <svg viewBox="0 0 64 64" aria-hidden>
+      <rect width="64" height="64" rx="14" fill={fundo} />
+      <path
+        d="M20 16h24M20 16v32M20 48h24M20 32h16"
+        stroke="#06B6D4"
+        strokeWidth="5"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <circle cx="46" cy="32" r="4" fill="#06B6D4" />
+    </svg>
   );
 }
 
 export function CascaPublica({
   children,
   largura = "max-w-[1100px]",
+  semColuna = false,
 }: {
   children: React.ReactNode;
   /** o curso e os documentos legais pedem coluna estreita; a home, larga */
   largura?: string;
+  /**
+   * Para páginas compostas por FAIXAS de largura total (hero escuro → seção
+   * clara → chamada), como a Reforma. A coluna passa a ser responsabilidade de
+   * cada faixa; se o `main` a impusesse, o fundo escuro terminaria no meio da
+   * tela com margens brancas dos lados — que é a marca de página remendada.
+   */
+  semColuna?: boolean;
 }) {
   return (
     <div className="min-h-screen bg-bg">
-      <header className="border-b border-line bg-surface">
-        <div className={`mx-auto flex ${largura} flex-wrap items-center justify-between gap-3 px-4 py-3`}>
-          <Marca />
-          <nav className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-            {LINKS.map((l) => (
-              <Link
-                key={l.href}
-                href={l.href}
-                className="text-[13.5px] font-semibold text-slate2 hover:text-accentdeep"
-              >
-                {l.rotulo}
-              </Link>
-            ))}
-            <a
-              href={`${APP}/painel`}
-              className="rounded-sm border border-line px-3 py-1.5 text-[13px] font-semibold text-ink"
-            >
-              Entrar
-            </a>
-            <a
-              href={`${APP}/painel`}
-              className="rounded-sm bg-accent px-3.5 py-1.5 text-[13px] font-bold text-[#04212B]"
-            >
-              Fazer a triagem grátis
-            </a>
-          </nav>
+      <header className="casca-header">
+        <div className="casca-container">
+          <div className="casca-nav">
+            <Link href="/" className="casca-brand">
+              <Logo fundo="#0B1220" />
+              Enquadria
+            </Link>
+            <CascaMenu links={LINKS} app={APP} />
+          </div>
         </div>
       </header>
 
-      <main className={`mx-auto ${largura} px-4 py-6`}>{children}</main>
+      {semColuna ? (
+        <main className="casca-main casca-main--faixas">{children}</main>
+      ) : (
+        <main className={`mx-auto ${largura} px-4 py-8`}>{children}</main>
+      )}
 
-      <footer className="mt-10 border-t border-line bg-surface">
-        <div className={`mx-auto ${largura} px-4 py-6`}>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="font-mono text-[11px] text-muted">
-              Enquadria · Leandro Oliveira · CRC 304880/O-8
-            </span>
-            <nav className="flex flex-wrap gap-x-4 gap-y-1.5">
-              {[
-                ["/politicas", "Políticas"],
-                ["/privacidade", "Privacidade"],
-                ["/termos", "Termos"],
-                ["/seguranca", "Segurança"],
-                ["/verificar", "Verificar documento"],
-              ].map(([href, rotulo]) => (
-                <Link key={href} href={href} className="text-[12px] text-slate2 hover:text-accentdeep">
-                  {rotulo}
-                </Link>
-              ))}
-            </nav>
+      <footer className="casca-footer">
+        <div className="casca-container">
+          <div className="casca-footgrid">
+            <div>
+              <div className="casca-footbrand">
+                <Logo fundo="#111C33" />
+                Enquadria
+              </div>
+              <p className="casca-foottexto">
+                O enquadramento de IBS/CBS da carteira do escritório contábil — com triagem,
+                entregável e prova, em cada janela da transição.
+              </p>
+            </div>
+
+            <div className="casca-footcol">
+              <h4>Material gratuito</h4>
+              <Link href="/guia">Guia: a janela de setembro</Link>
+              <Link href="/curso">A decisão de setembro</Link>
+              <Link href="/reforma">Radar da Reforma</Link>
+              <Link href="/curso#materiais">Planilhas e modelos</Link>
+            </div>
+
+            <div className="casca-footcol">
+              <h4>Produto</h4>
+              <Link href="/como-funciona">Como funciona</Link>
+              <Link href="/precos">Preços</Link>
+              <Link href="/faq">Dúvidas</Link>
+              <a href={`${APP}/painel`}>Entrar no app</a>
+              <Link href="/verificar">Verificar documento</Link>
+            </div>
+
+            <div className="casca-footcol">
+              <h4>Documentos</h4>
+              <Link href="/termos">Termos de Uso</Link>
+              <Link href="/privacidade">Privacidade</Link>
+              <Link href="/seguranca">Segurança</Link>
+              <Link href="/politicas">Políticas internas</Link>
+            </div>
           </div>
-          {/* a ressalva que vale em toda página pública: o produto estima
-              cenário, quem decide e assina é o contador */}
-          <p className="mt-3 max-w-[80ch] text-[11px] leading-relaxed text-muted">
-            Estimativa de cenário a partir das premissas informadas. A alíquota de referência de
-            IBS/CBS só é fixada por Resolução do Senado até 31/10/2026. A decisão e a
-            responsabilidade técnica são do contador que assina.
-          </p>
+
+          <div className="casca-footbottom">
+            <span>© 2026 Enquadria. Todos os direitos reservados.</span>
+            {/* a ressalva que vale em toda página pública: o produto estima
+                cenário, quem decide e assina é o contador */}
+            <span>
+              Estimativa de cenário a partir das premissas informadas. A alíquota de referência de
+              IBS/CBS só é fixada por Resolução do Senado até 31/10/2026 — a decisão e a
+              responsabilidade técnica são do contador que assina.
+            </span>
+          </div>
         </div>
       </footer>
     </div>

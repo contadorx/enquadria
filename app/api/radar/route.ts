@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { validar, bloqueado, limparCriterio, type Rascunho } from "@/lib/radar-form";
+import { paraSlug, slugUnico } from "@/lib/slug";
 
 /**
  * PUBLICAR NO RADAR.
@@ -19,6 +20,7 @@ export const dynamic = "force-dynamic";
 function corpoValido(c: Partial<Rascunho>): Rascunho {
   return {
     titulo: String(c.titulo ?? ""),
+    slug: String(c.slug ?? ""),
     resumo: String(c.resumo ?? ""),
     o_que_fazer: String(c.o_que_fazer ?? ""),
     fonte: String(c.fonte ?? ""),
@@ -33,6 +35,29 @@ function corpoValido(c: Partial<Rascunho>): Rascunho {
        omissão — o pior tipo. */
     no_cockpit: c.no_cockpit !== false,
   };
+}
+
+/**
+ * O ENDEREÇO NÃO ENTRA NO `paraBanco`, e isso é a regra inteira.
+ *
+ * `paraBanco` é usado pelo POST e pelo PATCH. Se o slug estivesse aqui, toda
+ * edição de título reescreveria o endereço da matéria — e endereço publicado
+ * que muda é 404 para quem vinha do Google, sem erro em lugar nenhum. Ele é
+ * DECIDIDO uma vez, na criação, e só muda se alguém digitar outro de propósito.
+ */
+async function enderecoLivre(
+  supabase: ReturnType<typeof createClient>,
+  desejado: string,
+  titulo: string,
+  exceto?: string
+): Promise<string> {
+  // schema-ok: radar_itens.slug vem da 0064
+  const { data } = await supabase.from("radar_itens").select("id, slug").limit(1000);
+  const usados = (data ?? [])
+    .filter((l: { id: string; slug: string | null }) => l.id !== exceto)
+    .map((l: { slug: string | null }) => (l.slug ?? "").trim())
+    .filter(Boolean);
+  return slugUnico(paraSlug(desejado) || paraSlug(titulo), usados);
 }
 
 function paraBanco(r: Rascunho) {
@@ -61,7 +86,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ erro: problemas.find((p) => p.bloqueia)!.texto, problemas }, { status: 400 });
   }
 
-  const { data, error } = await supabase.from("radar_itens").insert(paraBanco(r)).select("id").maybeSingle();
+  const slug = await enderecoLivre(supabase, r.slug, r.titulo);
+  const { data, error } = await supabase
+    .from("radar_itens")
+    .insert({ ...paraBanco(r), slug })
+    .select("id")
+    .maybeSingle();
   if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
   return NextResponse.json({ ok: true, id: data?.id });
 }
@@ -85,7 +115,14 @@ export async function PATCH(req: Request) {
   if (bloqueado(problemas)) {
     return NextResponse.json({ erro: problemas.find((p) => p.bloqueia)!.texto, problemas }, { status: 400 });
   }
-  const { error } = await supabase.from("radar_itens").update(paraBanco(r)).eq("id", corpo.id);
+  /* endereço em branco na edição = "deixa como está". Só troca quem digitar
+     outro — e aí ainda passa pelo desempate, porque o índice é único. */
+  const desejado = r.slug.trim();
+  const campos = desejado
+    ? { ...paraBanco(r), slug: await enderecoLivre(supabase, desejado, r.titulo, corpo.id) }
+    : paraBanco(r);
+
+  const { error } = await supabase.from("radar_itens").update(campos).eq("id", corpo.id);
   if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

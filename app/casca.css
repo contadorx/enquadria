@@ -1,0 +1,591 @@
+/* ==========================================================================
+   A CASCA PÚBLICA — cabeçalho e rodapé do site, para as páginas em Tailwind.
+
+   POR QUE ESTE ARQUIVO EXISTE, E POR QUE ELE NÃO É O site.css.
+
+   O site.css tem regras de ELEMENTO: `body`, `p`, `a`, `h1 { clamp(2rem,
+   4.6vw, 3.35rem) }`. Carregá-lo numa página feita em Tailwind — a Reforma, o
+   curso, os documentos legais, o 404 — reescreveria a tipografia inteira da
+   página. Foi por isso que a casca nasceu redesenhada em Tailwind, e foi por
+   isso que ela ficou DIFERENTE do resto do site: duas cascas, dois desenhos.
+
+   O remédio não é "carregar o site.css assim mesmo", é isolar o pedaço dele
+   que é a casca. Aqui está esse pedaço, com duas mudanças cirúrgicas:
+
+     · TODA classe é prefixada `casca-`. Nada aqui colide com `.btn`, `.card`
+       ou `.container` do site.css nem com nada do Tailwind. As duas folhas
+       podem conviver na mesma página sem uma reescrever a outra.
+
+     · ZERO regra de elemento e ZERO `var(--…)`. As cores estão em hexa, iguais
+       às do `:root` do site.css. Se um token mudar lá, muda aqui — é o preço
+       de não deixar a folha do site vazar para dentro das páginas do app.
+
+   O DESENHO É CÓPIA FIEL do `.site-header` / `.site-footer`. Qualquer ajuste
+   visual feito no site.css precisa ser repetido aqui, senão as duas metades
+   voltam a divergir — que é exatamente o defeito que este arquivo conserta.
+   ========================================================================== */
+
+/* ---- cabeçalho --------------------------------------------------------- */
+.casca-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(246, 249, 252, 0.82);
+  backdrop-filter: saturate(160%) blur(12px);
+  border-bottom: 1px solid #e2e8f0;
+  font-family: "Plus Jakarta Sans", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+.casca-container {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+.casca-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 68px;
+  position: relative;
+}
+.casca-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  color: #0b1220;
+  font-size: 19px;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+}
+.casca-brand:hover {
+  color: #0b1220;
+}
+.casca-brand svg {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: block;
+}
+.casca-links {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.casca-links a {
+  color: #475569;
+  font-weight: 600;
+  font-size: 14.5px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  text-decoration: none;
+  white-space: nowrap;
+  line-height: 24px;
+}
+.casca-links a:hover {
+  color: #0b1220;
+  background: #f1f5f9;
+}
+.casca-links a.casca-ativo {
+  color: #0e7490;
+}
+.casca-cta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.casca-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  font-weight: 700;
+  font-size: 15px;
+  padding: 13px 22px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.casca-btn-ghost {
+  background: transparent;
+  color: #0b1220;
+  border-color: #e2e8f0;
+}
+.casca-btn-ghost:hover {
+  border-color: #06b6d4;
+  color: #0e7490;
+}
+.casca-btn-primary {
+  background: #06b6d4;
+  color: #04212b;
+  box-shadow: 0 8px 22px -8px rgba(6, 182, 212, 0.7);
+}
+.casca-btn-primary:hover {
+  background: #22d3ee;
+  color: #04212b;
+  transform: translateY(-2px);
+}
+.casca-mobcta {
+  display: none;
+}
+.casca-toggle {
+  display: none;
+  background: none;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  width: 42px;
+  height: 40px;
+  cursor: pointer;
+  color: #0b1220;
+}
+
+/* ---- miolo ------------------------------------------------------------- */
+.casca-main {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 32px 24px 56px;
+}
+/* quando a página é composta por faixas (hero escuro → seção clara → CTA), o
+   miolo não pode ter coluna nem respiro próprios: cada faixa manda no seu */
+.casca-main--faixas {
+  max-width: none;
+  padding: 0;
+}
+
+/* ==========================================================================
+   O IDIOMA DO SITE — as peças de página, não só a casca.
+
+   A /reforma nasceu escrita em Tailwind: título de um tamanho, cartão de outra
+   borda, nenhuma faixa escura. Ao lado de /como-funciona ela parecia de outro
+   produto. Reproduzir o desenho "no olho" criaria uma terceira cópia dos
+   tokens; o que está aqui é a mesma cópia isolada que já resolveu o cabeçalho,
+   agora estendida ao hero, ao kicker, aos cartões e às faixas.
+
+   Regra que vale para tudo abaixo: mesmos valores do `site.css`, prefixo
+   `casca-`, nenhuma regra de elemento.
+   ========================================================================== */
+
+.casca-hero {
+  background: linear-gradient(180deg, #0b1220, #0e1a30);
+  color: #e2e8f0;
+  padding: 60px 0 66px;
+  position: relative;
+  overflow: hidden;
+  font-family: "Plus Jakarta Sans", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+/* o quadriculado do fundo — o mesmo grafismo das demais páginas */
+.casca-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(700px 360px at 70% 0%, #000, transparent 78%);
+}
+.casca-hero .casca-container {
+  position: relative;
+  z-index: 1;
+}
+.casca-titulo {
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  font-size: clamp(2rem, 4.6vw, 3.35rem);
+  margin: 0 0 0.4em;
+}
+.casca-lead {
+  font-size: 1.18rem;
+  line-height: 1.6;
+  color: #aebed2;
+  max-width: 640px;
+  margin: 0;
+}
+.casca-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: #0e7490;
+  background: #cffafe;
+  border: 1px solid #a5f3fc;
+  padding: 6px 12px;
+  border-radius: 999px;
+  margin-bottom: 18px;
+}
+.casca-kicker--ghost {
+  background: rgba(6, 182, 212, 0.1);
+  border-color: rgba(6, 182, 212, 0.35);
+  color: #67e8f9;
+}
+.casca-kicker .casca-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #06b6d4;
+  box-shadow: 0 0 0 4px rgba(6, 182, 212, 0.18);
+}
+
+.casca-secao {
+  padding: 72px 0;
+  background: #f6f9fc;
+  font-family: "Plus Jakarta Sans", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+.casca-secao--branca {
+  background: #fff;
+}
+
+.casca-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 26px;
+  box-shadow: 0 1px 2px rgba(11, 18, 32, 0.04), 0 12px 30px -12px rgba(11, 18, 32, 0.14);
+}
+.casca-lista {
+  display: grid;
+  gap: 18px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.casca-item-titulo {
+  font-size: 1.22rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: #0b1220;
+  margin: 0;
+}
+.casca-item-titulo a {
+  color: inherit;
+  text-decoration: none;
+}
+.casca-item-titulo a:hover {
+  color: #0e7490;
+}
+.casca-item-resumo {
+  margin: 8px 0 0;
+  font-size: 15px;
+  line-height: 1.65;
+  color: #475569;
+}
+.casca-meta {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: #64748b;
+}
+.casca-sev {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.casca-sev--alta {
+  color: #dc2626;
+}
+.casca-sev--media {
+  color: #d97706;
+}
+.casca-sev--baixa {
+  color: #64748b;
+}
+
+/* ---- paginação --------------------------------------------------------- */
+.casca-paginacao {
+  margin-top: 34px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.casca-pag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  color: #475569;
+  text-decoration: none;
+}
+.casca-pag:hover {
+  border-color: #06b6d4;
+  color: #0e7490;
+}
+.casca-pag[aria-current="page"] {
+  background: #0b1220;
+  border-color: #0b1220;
+  color: #fff;
+}
+.casca-pag--inerte {
+  opacity: 0.4;
+  pointer-events: none;
+}
+.casca-pag-conta {
+  margin: 0 0 18px;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  color: #64748b;
+}
+
+/* ---- faixa de chamada -------------------------------------------------- */
+.casca-faixa {
+  background: #0b1220;
+  color: #cbd5e1;
+  padding: 56px 0;
+  font-family: "Plus Jakarta Sans", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+.casca-faixa-titulo {
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  font-size: clamp(1.5rem, 2.8vw, 2.1rem);
+  margin: 0 0 10px;
+  max-width: 24ch;
+}
+.casca-faixa-texto {
+  margin: 0;
+  max-width: 62ch;
+  font-size: 15.5px;
+  line-height: 1.65;
+  color: #aebed2;
+}
+.casca-botoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-top: 24px;
+}
+.casca-btn-dark {
+  background: #0b1220;
+  color: #fff;
+}
+.casca-btn-dark:hover {
+  background: #1a2740;
+  color: #fff;
+  transform: translateY(-2px);
+}
+.casca-btn-clara {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e2e8f0;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.casca-btn-clara:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+/* ---- corpo de leitura (a matéria) -------------------------------------- */
+.casca-prosa {
+  max-width: 68ch;
+  font-size: 16px;
+  line-height: 1.75;
+  color: #334155;
+}
+.casca-prosa .casca-p {
+  margin: 0 0 1rem;
+}
+.casca-destaque {
+  border-left: 3px solid #06b6d4;
+  background: #fff;
+  border-radius: 0 14px 14px 0;
+  padding: 22px 24px;
+  margin: 26px 0;
+  box-shadow: 0 1px 2px rgba(11, 18, 32, 0.04), 0 12px 30px -12px rgba(11, 18, 32, 0.14);
+}
+.casca-destaque-rotulo {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #0e7490;
+  margin: 0 0 8px;
+}
+.casca-migalhas {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  color: #93a4bc;
+  margin-bottom: 16px;
+}
+.casca-migalhas a {
+  color: #67e8f9;
+  text-decoration: none;
+}
+.casca-vizinhas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 34px;
+}
+.casca-vizinha {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+  padding: 16px 18px;
+  text-decoration: none;
+  display: block;
+}
+.casca-vizinha:hover {
+  border-color: #06b6d4;
+}
+.casca-vizinha-rotulo {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+.casca-vizinha-titulo {
+  margin-top: 4px;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #0b1220;
+  line-height: 1.35;
+}
+
+/* ---- rodapé ------------------------------------------------------------ */
+.casca-footer {
+  background: #0b1220;
+  color: #93a4bc;
+  padding: 54px 0 34px;
+  margin-top: 20px;
+  font-family: "Plus Jakarta Sans", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+.casca-footer a {
+  color: #cbd5e1;
+  text-decoration: none;
+}
+.casca-footer a:hover {
+  color: #fff;
+}
+.casca-footgrid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1fr;
+  gap: 30px;
+}
+.casca-footbrand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #fff;
+  font-weight: 800;
+  font-size: 18px;
+}
+.casca-footbrand svg {
+  width: 28px;
+  height: 28px;
+  display: block;
+}
+.casca-footcol h4 {
+  color: #e2e8f0;
+  font-size: 12px;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin: 0 0 14px;
+  font-weight: 600;
+}
+.casca-footcol a {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 9px;
+}
+.casca-foottexto {
+  margin-top: 14px;
+  max-width: 34ch;
+  color: #93a4bc;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.casca-footbottom {
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  margin-top: 34px;
+  padding-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: #7c8aa3;
+}
+
+/* ---- responsivo — mesmos pontos de quebra do site.css ------------------ */
+@media (max-width: 940px) {
+  .casca-footgrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+/* o menu fecha em 1000px — ver a nota gêmea no site.css */
+@media (max-width: 1000px) {
+  .casca-links,
+  .casca-cta {
+    display: none;
+  }
+  .casca-toggle {
+    display: grid;
+    place-items: center;
+    margin-left: auto;
+  }
+  .casca-links.casca-aberto {
+    display: flex;
+    position: absolute;
+    top: 68px;
+    left: -24px;
+    right: -24px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    background: #fff;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 12px 16px;
+    box-shadow: 0 1px 2px rgba(11, 18, 32, 0.04), 0 12px 30px -12px rgba(11, 18, 32, 0.14);
+    z-index: 30;
+  }
+  .casca-links.casca-aberto a {
+    padding: 12px;
+    font-size: 16px;
+  }
+  .casca-links.casca-aberto .casca-mobcta {
+    display: block;
+    margin-top: 8px;
+    text-align: center;
+    background: #06b6d4;
+    color: #04212b;
+    font-weight: 700;
+    border-radius: 999px;
+  }
+}
+@media (max-width: 760px) {
+  .casca-footgrid {
+    grid-template-columns: 1fr;
+  }
+  .casca-secao {
+    padding: 52px 0;
+  }
+  .casca-hero {
+    padding: 44px 0 48px;
+  }
+  .casca-vizinhas {
+    grid-template-columns: 1fr;
+  }
+}
