@@ -171,7 +171,7 @@ export default async function Relatorio() {
           <tbody>
             {(["S5", "S4", "S3", "S2", "S1"] as Saida[]).map((s) => (
               <tr key={s}>
-                <td>{s} · {SAIDAS[s].titulo}</td>
+                <td>{s} · {SAIDAS[s]?.titulo}</td>
                 <td className="n">{porSaida[s]}</td>
               </tr>
             ))}
@@ -200,7 +200,7 @@ export default async function Relatorio() {
                   <tr key={i}>
                     <td>{x.nome}</td>
                     <td className="mono">{x.cnpj}</td>
-                    <td>{x.saida ? `${x.saida} · ${SAIDAS[x.saida].titulo}` : "—"}</td>
+                    <td>{x.saida ? `${x.saida} · ${SAIDAS[x.saida]?.titulo}` : "—"}</td>
                     <td className="c mono">{x.laudo ? String(x.laudo).padStart(4, "0") : "—"}</td>
                     <td className="c">
                       {x.assinado ? "assinada" : x.temTermo ? "pendente" : "—"}

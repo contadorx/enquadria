@@ -53,7 +53,7 @@ ok    suíte termo (128 asserções)
 ok    suíte venda (80 asserções)
 
 ── Auditoria de UX (percepção, não estética) ───────────────────
-ok    auditoria de UX (6 regras limpas)
+ok    auditoria de UX (7 regras limpas)
 
 ── Auditoria de texto (as telas de trabalho, não os documentos) 
 ok    auditoria de texto (3 regras limpas)

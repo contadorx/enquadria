@@ -366,6 +366,38 @@ for (const arq of arquivos) {
 }
 
 /* ───────────────────────────────────────────────────────── relatório */
+/* ═══ 7 · MAPA INDEXADO POR DADO DO BANCO, SEM `?.` ═══════════════════════
+ *
+ * `EXPLICA_FAIXA[l.faixa].oQueE` derrubou o cockpit inteiro em 08/08/2026 com
+ * "Application error: a client-side exception has occurred" — a tela em branco
+ * que não volta nem recarregando, no meio de um deploy de produção.
+ *
+ * A chave vinha do BANCO, e banco devolve o que quiser: `null` numa empresa
+ * antiga, uma faixa nova amanhã. O TypeScript não pega, porque o tipo declarado
+ * promete o que o dado não garante. Um `?.` teria custado dois caracteres.
+ *
+ * Procura MAPA_MAIÚSCULO[algo.dinamico].propriedade sem interrogação. Índice
+ * literal (`X["a"]`) e com `?.` passam.
+ */
+{
+  const PADRAO = /\b([A-Z][A-Z0-9_]{3,})\[\s*([a-z][\w.]*)\s*\]\s*\.\s*(\w+)/g;
+  for (const arq of arquivos) {
+    const linhas = fs.readFileSync(arq, "utf8").split("\n");
+    linhas.forEach((linha, i) => {
+      if (/^\s*(\*|\/\/)/.test(linha)) return;
+      for (const m of linha.matchAll(PADRAO)) {
+        if (dispensado(linhas, i)) continue;
+        achado(
+          arq,
+          i + 1,
+          "mapa-sem-guarda",
+          `${m[1]}[${m[2]}].${m[3]} — chave que não existe derruba a tela inteira. Use ${m[1]}[${m[2]}]?.${m[3]}`
+        );
+      }
+    });
+  }
+}
+
 const porRegra = {};
 for (const a of achados) (porRegra[a.regra] ??= []).push(a);
 
@@ -378,6 +410,7 @@ const REGRAS = {
   "erro-engolido": "Erro engolido pela interface",
   "espera-solta-antes-do-fim": "Espera que termina antes do efeito",
   "gravou-sem-avisar-servidor": "Gravou no banco e não invalidou a tela",
+  "mapa-sem-guarda": "Mapa indexado por dado do banco, sem `?.`",
 };
 
 for (const [regra, titulo] of Object.entries(REGRAS)) {

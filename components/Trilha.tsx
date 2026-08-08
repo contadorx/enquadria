@@ -224,7 +224,11 @@ export function Trilha({
         onClick={() => aoAbrirEmpresa(estado.proxima!.id, "decisao")}
         className="shrink-0 rounded-sm border border-ink px-3 py-1.5 text-[12.5px] font-semibold text-ink"
       >
-        {ROTULO[estado.proximaAcao].replace(/ de$/, "")}
+        {/* `?.` e um texto de reserva: `proximaAcao` chega do cockpit com um
+            `as` que promete cinco valores, e a fila produz mais — "contato",
+            por exemplo. Sem a guarda, uma empresa sem e-mail cadastrado no topo
+            da fila derruba o cockpit inteiro. Mesmo defeito do EXPLICA_FAIXA. */}
+        {ROTULO[estado.proximaAcao]?.replace(/ de$/, "") ?? "Continuar"}
       </button>
     </div>
   );

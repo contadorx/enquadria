@@ -956,7 +956,17 @@ export function Cockpit({
                 <button
                   onClick={() => agir(l)}
                   disabled={ocupado === `linha-${l.id}` || l.acao === "pronto" || l.acao === "fora"}
-                  title={l.acao === "fora" || l.acao === "pronto" ? EXPLICA_FAIXA[l.faixa].oQueE : undefined}
+                  /* `?.` e não acesso direto: `EXPLICA_FAIXA` é indexado pela
+                     faixa que veio do BANCO, e banco devolve o que quiser —
+                     null numa empresa antiga, uma faixa nova amanhã. Sem a
+                     interrogação, uma linha fora do mapa derruba o cockpit
+                     inteiro com "client-side exception", e a tela não volta
+                     nem recarregando. Foi o que aconteceu em 08/08/2026. */
+                  title={
+                    l.acao === "fora" || l.acao === "pronto"
+                      ? EXPLICA_FAIXA[l.faixa]?.oQueE
+                      : undefined
+                  }
                   className={`shrink-0 truncate whitespace-nowrap rounded-sm px-3 py-2 text-center text-[12.5px] font-semibold md:w-full ${
                     FORTE.includes(l.acao)
                       ? "bg-ink text-white"
