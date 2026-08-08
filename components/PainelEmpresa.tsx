@@ -15,6 +15,7 @@ import { Comparativo } from "@/components/Comparativo";
 import { PedirDados, type ColetaGravada } from "@/components/PedirDados";
 import { RoteiroEmpresa } from "@/components/RoteiroEmpresa";
 import { ArquivarEmpresa } from "@/components/ArquivarEmpresa";
+import { ApontamentosEmpresa } from "@/components/ApontamentosEmpresa";
 import type { Derivadas } from "@/lib/coleta";
 import type { DetalheQual } from "@/lib/motor";
 import { crescimentoPorRBT12Anterior } from "@/lib/projecao";
@@ -154,10 +155,34 @@ export function PainelEmpresa({
   useEffect(() => {
     setAba(abaInicial);
   }, [abaInicial]);
+
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [bloqueio, setBloqueio] = useState<string | null>(null);
   const [muro, setMuro] = useState<Muro | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
+  /**
+   * O MURO NASCE FORA DA VISTA — e por isso o botão "não funcionava".
+   *
+   * O bloco do limite de plano fica ACIMA das abas, porque precisa aparecer
+   * venha o clique de onde vier. Só que quem clica em "Emitir laudo" está lá
+   * embaixo — no fim da aba Analisar ou dentro do dossiê — e a resposta explode
+   * a duas telas de distância, fora do campo de visão. O relato que chega é
+   * exatamente este: "o botão não funcionou, e não disse por quê".
+   *
+   * A ref leva o olho até lá. É a mesma correção dos dois botões que nasceram
+   * "quebrados" e não estavam.
+   */
+  const avisoRef = useRef<HTMLDivElement>(null);
+
+  /* levar o olho até a resposta: ver o comentário de `avisoRef` */
+  useEffect(() => {
+    if (muro || bloqueio) {
+      requestAnimationFrame(() =>
+        avisoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+      );
+    }
+  }, [muro, bloqueio]);
+
   const [aplicado, setAplicado] = useState(false);
   const [link, setLink] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
@@ -600,6 +625,7 @@ export function PainelEmpresa({
           o fallback para erro que não é de plano — e não cita cifra nenhuma,
           porque preço escrito à mão na tela é preço que um dia diverge da
           página de planos sem ninguém perceber. */}
+      <div ref={avisoRef} />
       {muro ? (
         <div className="mb-3">
           <MuroPlano muro={muro} aoFechar={() => setMuro(null)} />
@@ -626,6 +652,7 @@ export function PainelEmpresa({
             estado={{
               temColeta: d.coleta?.status === "respondida",
               temAnalise: !!a,
+              premissasEstimadas: estimada,
               temLaudo: !!d.laudo,
               temTermo: !!d.termo,
               assinado,
@@ -957,6 +984,15 @@ export function PainelEmpresa({
               rbt12={e.rbt12 != null ? Number(e.rbt12) : null}
               regime={e.regime ?? null}
             />
+          </Bloco>
+
+          {/* O MONITOR DA REFORMA, NESTA EMPRESA.
+              Fica no dossiê e não na aba de análise porque é HISTÓRICO, não
+              trabalho da janela: é a lista que responde "o que aconteceu com
+              este cliente desde que ele entrou" — e é ela que vira o relatório
+              do fim do ano. */}
+          <Bloco titulo="Apontamentos da Reforma">
+            <ApontamentosEmpresa empresaId={e.id} />
           </Bloco>
 
           <Bloco titulo="Decisão registrada">

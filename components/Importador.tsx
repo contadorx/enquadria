@@ -81,6 +81,7 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
     receita_ativa: boolean;
     receita_configurada?: boolean;
     receita_falhas?: number;
+    com_rbt12?: number;
     triagem_cega?: boolean;
     regime_suspeito?: { quantas: number; total: number; exemplo: string | null } | null;
     analisadas?: number;
@@ -374,6 +375,19 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
             ? "A Receita não respondeu — a triagem usou os dados do arquivo."
             : "A Receita não está ligada — a triagem usou os dados do arquivo."}
         </p>
+
+        {/* O DADO, NÃO O CABEÇALHO. A linha acima do arquivo fala de colunas
+            encontradas; esta fala de quantas empresas ficaram com RBT12 de
+            verdade — que é o que muda a alíquota de estimada para efetiva. */}
+        {feito.com_rbt12 != null && (
+          <p className="mt-1 text-[13.5px] text-slate2">
+            {feito.com_rbt12 === 0
+              ? "Nenhuma linha trouxe RBT12 — a alíquota sai estimada pelo topo da faixa até você informar a receita."
+              : feito.com_rbt12 === feito.gravadas
+                ? "Todas trouxeram RBT12 — a alíquota já sai efetiva."
+                : `${feito.com_rbt12} de ${feito.gravadas} trouxeram RBT12. Nas outras a alíquota sai estimada até você informar a receita.`}
+          </p>
+        )}
 
         {!feito.receita_ativa && feito.receita_configurada && (
           <button
@@ -705,9 +719,10 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
               if (faltando.length === 0) return null;
               return (
                 <p className="mt-2.5 text-[11.5px] leading-relaxed text-muted">
-                  Não encontrei {faltando.map((f) => f.rotulo).join(", ")}. Isso não impede a
-                  importação — o que der, o enriquecimento pela Receita completa. Sem RBT12, a
-                  alíquota do laudo sai estimada pelo topo da faixa.
+                  Não encontrei {faltando.map((f) => f.rotulo).join(", ")}{" "}
+                  <b className="font-semibold">neste arquivo</b>. Isso não apaga o que a empresa já
+                  tem cadastrado, e não impede a importação — o que der, a Receita completa. Sem
+                  RBT12, a alíquota do laudo sai estimada pelo topo da faixa.
                 </p>
               );
             })()}

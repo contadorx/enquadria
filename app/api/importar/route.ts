@@ -71,10 +71,23 @@ export async function POST(req: Request) {
       situacao: enriquecido.situacao ?? null,
       regime: enriquecido.regime ?? null,
       faturamento_faixa: enriquecido.faturamento_faixa ?? null,
-      rbt12: l.rbt12 ?? null,
-      contato_nome: l.contato_nome ?? null,
-      contato_email: l.contato_email ?? null,
-      contato_telefone: l.contato_telefone ?? null,
+      /**
+       * O QUE NÃO VEIO NO ARQUIVO NÃO APAGA O QUE JÁ EXISTE — 08/08/2026.
+       *
+       * Isto é um UPSERT por (tenant_id, cnpj). Escrever `?? null` nestes quatro
+       * campos fazia a reimportação ZERAR a RBT12 e o contato que o contador
+       * tinha corrigido à mão, silenciosamente, no meio de uma operação que ele
+       * fez para acrescentar empresas novas. E era o mesmo defeito visto do
+       * outro lado: a tela dizia "não veio RBT12" e a empresa aparecia com
+       * RBT12 — ou sem, dependendo de qual importação foi a última.
+       *
+       * `undefined` some do objeto e a coluna fica como está. Só o valor que
+       * VEIO no arquivo sobrescreve.
+       */
+      rbt12: l.rbt12 ?? undefined,
+      contato_nome: l.contato_nome ?? undefined,
+      contato_email: l.contato_email ?? undefined,
+      contato_telefone: l.contato_telefone ?? undefined,
       faixa: t.faixa,
       motivo_triagem: t.motivo,
       prioridade_maxima: t.prioridade_maxima,
@@ -135,6 +148,16 @@ export async function POST(req: Request) {
     ok: true,
     gravadas: registros.length,
     enriquecidas,
+    /**
+     * QUANTAS LINHAS TROUXERAM RBT12 DE VERDADE.
+     *
+     * A tela dizia "não encontrei RBT12" olhando o CABEÇALHO do arquivo, não os
+     * valores. Arquivo com a coluna certa e as células vazias passava como se
+     * tivesse trazido tudo; arquivo com a coluna de nome estranho passava como
+     * se não tivesse trazido nada, mesmo quando a empresa já tinha o número
+     * gravado de antes. Contar o dado é a única versão que não mente.
+     */
+    com_rbt12: registros.filter((r) => r.rbt12 != null && Number(r.rbt12) > 0).length,
     receita_ativa: ativo,
     receita_configurada: configurado,
     receita_falhas: falhas,

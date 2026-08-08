@@ -609,9 +609,27 @@ export function FormAnalise({
                 <span>Soma das participações</span>
                 <b className="font-mono">{(somaPct).toFixed(1).replace(".", ",")}%</b>
               </div>
+              {/**
+                * A FRASE PROMETIA UMA TRAVA QUE NÃO EXISTIA — achado da
+                * auditoria de uso, 08/08/2026.
+                *
+                * Ela dizia "precisa fechar 100% para salvar" e o botão de salvar
+                * continuava ativo. Quem segregava 60% + 30% e salvava recebia
+                * "Análise salva ✓" em verde — e o que foi gravado era
+                * `segmentos: null` com o anexo do seletor ÚNICO, aquele que ele
+                * nunca tocou porque estava segregando. O dDAS sai do anexo
+                * errado, e o comentário logo acima já dizia o tamanho do estrago:
+                * erro de quase metade, capaz de trocar a saída da árvore num
+                * documento assinado.
+                *
+                * Agora a trava existe de verdade (ver o `disabled` do botão) e a
+                * frase diz quanto falta, em vez de mandar fechar sem dizer o
+                * tamanho do buraco.
+                */}
               {!fechado && (
                 <p className="mt-1 text-[11px] text-amarelo">
-                  Precisa fechar 100% para salvar. Enquanto não fechar, a prévia usa o anexo único.
+                  Falta {(100 - somaPct).toFixed(1).replace(".", ",")}% para fechar — e sem fechar
+                  não dá para salvar: a conta usaria um anexo só.
                 </p>
               )}
               {fechado && (
@@ -980,9 +998,17 @@ export function FormAnalise({
 
       {erro && <p className="rounded-sm bg-vermelhowash px-3 py-2 text-[12.5px] text-vermelho">{erro}</p>}
 
+      {/* texto-ok: a explicação do bloqueio fica no aviso da segregação, a três
+          linhas do checkbox que o causa — pô-la aqui, no rodapé do formulário,
+          seria repetir longe de onde a pessoa mexeu. */}
       <button
         onClick={salvar}
-        disabled={salvando}
+        disabled={salvando || (segregar && !fechado)}
+        title={
+          segregar && !fechado
+            ? "Feche 100% da segregação por anexo para salvar"
+            : undefined
+        }
         className="w-full rounded-sm bg-ink px-4 py-3 text-sm font-semibold text-white disabled:opacity-40"
       >
         {salvando ? "Salvando..." : salvo ? "Análise salva ✓" : "Salvar análise"}

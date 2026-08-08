@@ -1,7 +1,15 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { SITE } from "@/lib/site";
 
 export const metadata: Metadata = {
+  /**
+   * A BASE DAS URLs — sem ela, `canonical` e Open Graph saem relativos, e link
+   * relativo em metadado é link que o buscador e o WhatsApp não resolvem. Com
+   * dois domínios servindo o mesmo código, é ela que declara qual dos dois é o
+   * endereço de verdade.
+   */
+  metadataBase: new URL(SITE),
   title: "Enquadria — decisão de enquadramento IBS/CBS",
   description:
     "Triagem da carteira, decisão de regime e prova documental para a janela de opção do Simples Nacional.",

@@ -129,6 +129,11 @@ export const ABAS_ESCRITORIO: ItemNav[] = [
  */
 export const ABAS_APRENDER: ItemNav[] = [
   { href: "/painel/reforma", label: "Reforma" },
+  /* A Reforma mostra O QUE SAIU; os Apontamentos, O QUE FAZER com isso na
+     carteira. Duas telas porque são dois estados mentais — quem lê está se
+     informando, quem trata está trabalhando —, e uma aba porque é o mesmo
+     assunto. Sem item de menu novo: ele tem seis e já foi quinze. */
+  { href: "/painel/apontamentos", label: "Apontamentos" },
   { href: "/curso", label: "Curso" },
 ];
 

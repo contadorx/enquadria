@@ -3,8 +3,67 @@ import { NextResponse, type NextRequest } from "next/server";
 
 type CookieItem = { name: string; value: string; options?: CookieOptions };
 
+/**
+ * DOIS DOMÍNIOS, UM CÓDIGO, PAPÉIS DIFERENTES.
+ *
+ *   enquadria.com.br      → o site. É o que o Google indexa.
+ *   app.enquadria.com.br  → o painel. Não aparece em busca nenhuma.
+ *
+ * O painel NÃO se muda para o domínio raiz, e a razão é concreta: as URLs de
+ * redirect do Supabase, os cookies de sessão e o `/auth/callback` estão
+ * configurados para o host `app.` Trocar host de autenticação no mesmo dia em
+ * que se troca o DNS é juntar dois problemas que se disfarçam um do outro.
+ *
+ * O que NUNCA pode ser redirecionado de `app.` para a raiz: `/assinar`,
+ * `/laudo`, `/termo`, `/coleta`, `/comparativo`, `/abertura`, `/verificar`.
+ * Esses links já saíram por e-mail para clientes e precisam responder no
+ * endereço em que foram enviados, para sempre. Por isso a lista abaixo é de
+ * INCLUSÃO — o que não está nela fica onde está.
+ */
+const SO_NO_PAINEL = ["/painel", "/doc", "/login", "/redefinir", "/auth"];
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
+
+  /* ---- cada endereço no seu domínio --------------------------------- */
+  const host = (request.headers.get("host") ?? "").toLowerCase();
+  const caminho = request.nextUrl.pathname;
+  if (host.endsWith("enquadria.com.br")) {
+    const noPainel = host.startsWith("app.");
+
+    // pediram trabalho no endereço do site → vai para onde a sessão vive
+    if (!noPainel && SO_NO_PAINEL.some((p) => caminho.startsWith(p))) {
+      const destino = request.nextUrl.clone();
+      destino.host = `app.${host.replace(/^www\./, "")}`;
+      destino.port = "";
+      destino.protocol = "https";
+      return NextResponse.redirect(destino, 308);
+    }
+
+    /* a raiz de `app.` continua levando ao painel: é o endereço que os
+       contadores têm no favorito desde antes de o site morar aqui */
+    if (noPainel && caminho === "/") {
+      const painel = request.nextUrl.clone();
+      painel.pathname = "/painel";
+      return NextResponse.redirect(painel);
+    }
+
+    /**
+     * `app.` NÃO ENTRA NO ÍNDICE — nenhuma página dele.
+     *
+     * O mesmo código serve os dois domínios, então as páginas do site também
+     * respondem em `app.enquadria.com.br/precos`. Se o buscador achar as duas
+     * versões, ele divide a autoridade entre elas — o oposto do motivo pelo
+     * qual o site veio para cá. O `canonical` já declara qual é a verdadeira;
+     * este cabeçalho fecha a porta em vez de só apontar a certa.
+     *
+     * Vai por cabeçalho e não pelo `robots.txt` porque o robots é um arquivo
+     * só para os dois domínios: ele não sabe por qual host foi pedido.
+     */
+    if (noPainel) {
+      response.headers.set("X-Robots-Tag", "noindex, nofollow");
+    }
+  }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

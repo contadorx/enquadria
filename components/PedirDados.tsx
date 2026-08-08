@@ -344,6 +344,16 @@ export function PedirDados({
         Cinco das seis perguntas não estão na escrituração — só o cliente sabe. Sem elas, o laudo
         carrega estimativa com cara de apuração.
       </p>
+      {/* ISTO É UMA ESCOLHA, E A TELA NÃO DIZIA.
+          O bloco aparecia como etapa obrigatória no caminho da análise, e o
+          contador que já conhece o cliente ficava esperando uma resposta que
+          ele mesmo poderia ter dado. Quem atende a empresa há dez anos sabe
+          para quem ela vende; quem pegou o cliente semana passada, não. As duas
+          rotas são legítimas e o produto tem de dizer isso em voz alta. */}
+      <p className="mt-2 max-w-[68ch] rounded-sm border border-linesoft bg-surface2 px-3 py-2 text-[12px] leading-relaxed text-slate2">
+        <b className="font-semibold">Você escolhe:</b> manda o link, ou preenche as premissas você
+        mesmo no formulário abaixo. Uma coisa não trava a outra.
+      </p>
       {erro && <p className="mt-2 text-[12px] text-vermelho">{erro}</p>}
       {bloqueio && (
         <div className="mt-3 rounded-sm border border-accent bg-accentwash p-3.5">

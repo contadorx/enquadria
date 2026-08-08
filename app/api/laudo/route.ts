@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase-server";
 import { situacaoPlano, mensagemBloqueio, montarMuro, type Assinatura } from "@/lib/plano";
 import { garantirAnaliseCoerente } from "@/lib/recalculo-server";
 import { HONORARIO_PADRAO } from "@/lib/potencial";
+import { honorarioSugerido } from "@/lib/proposta";
 import { COLUNAS_ESCRITORIO, type Escritorio } from "@/lib/escritorio";
 import { responsavelDoTenant } from "@/lib/escritorio-server";
 
@@ -61,13 +62,38 @@ export async function POST(req: Request) {
         .limit(1)
         .maybeSingle();
 
+      /**
+       * O HONORÁRIO DO MURO É O DESTA EMPRESA — conserto de 08/08/2026.
+       *
+       * O muro dizia "Referência da sua tela: R$ 600,00 por empresa" usando
+       * HONORARIO_PADRAO, que é a média da CARTEIRA usada no mapa. Só que a
+       * proposta que o contador acabou de emitir para aquele cliente podia
+       * dizer R$ 250 — e o argumento comercial virava contra o produto: a tela
+       * seguinte inflava o número da tela anterior para justificar a assinatura.
+       *
+       * Agora o valor sai de `honorarioSugerido()`, a mesma função que a
+       * proposta usa: mesma faixa, mesma RBT12, mesma saída. Se não der para
+       * saber (empresa desconhecida), cai na média — e a média é honesta ali,
+       * porque não há um número específico para contradizer.
+       */
+      const { data: alvo } = await supabase
+        .from("analises")
+        .select("saida, empresas(faixa, rbt12)")
+        .eq("id", corpo.analise_id)
+        .maybeSingle();
+      const emp = (alvo?.empresas ?? null) as { faixa?: string | null; rbt12?: number | null } | null;
+      const honorario = emp
+        ? honorarioSugerido(emp.faixa, emp.rbt12 != null ? Number(emp.rbt12) : null, alvo?.saida as never)
+            .projeto
+        : HONORARIO_PADRAO;
+
       return NextResponse.json(
         {
           erro: mensagemBloqueio(situacao),
           bloqueado_por_plano: true,
           usados: situacao.usados,
           limite: situacao.limite,
-          muro: montarMuro(situacao, HONORARIO_PADRAO, plano?.preco_centavos ?? null),
+          muro: montarMuro(situacao, honorario, plano?.preco_centavos ?? null),
         },
         { status: 402 }
       );

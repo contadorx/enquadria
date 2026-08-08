@@ -26,6 +26,7 @@ import {
 } from "@/lib/cockpit";
 import { PainelEmpresa } from "@/components/PainelEmpresa";
 import { Trilha, type EstadoTrilha } from "@/components/Trilha";
+import { PassosEmpresa } from "@/components/PassosEmpresa";
 
 /**
  * O COCKPIT — uma tela onde havia sete.
@@ -841,19 +842,20 @@ export function Cockpit({
               tinha coluna para descer. Empresa · RBT12 · Enquadramento · Faixa
               agora são colunas de verdade; os chips de fluxo (laudo, termo,
               coleta) continuam na sublinha, porque são estado, não cadastro. */}
-          <div className="hidden border-b border-linesoft px-3 py-1.5 font-mono text-[9.5px] uppercase tracking-[0.12em] text-muted md:grid md:grid-cols-[1.25rem_minmax(0,1fr)_6.5rem_9rem_8.5rem_auto] md:items-center md:gap-x-3">
+          <div className="hidden border-b border-linesoft px-3 py-1.5 font-mono text-[9.5px] uppercase tracking-[0.12em] text-muted md:grid md:grid-cols-[1.25rem_minmax(0,1fr)_9.5rem_8.5rem_5.5rem_5.5rem_10.5rem] md:items-center md:gap-x-3">
             <span />
             <span>Empresa</span>
             <span className="text-right">RBT12</span>
             <span>Enquadramento</span>
             <span>Faixa</span>
+            <span title="dados · análise · laudo · termo · assinatura">Passos</span>
             <span />
           </div>
           <ul>
             {visiveis.map((l) => (
               <li
                 key={l.id}
-                className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-linesoft px-3 py-2.5 last:border-b-0 md:grid md:grid-cols-[1.25rem_minmax(0,1fr)_6.5rem_9rem_8.5rem_auto]"
+                className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-linesoft px-3 py-2.5 last:border-b-0 md:grid md:grid-cols-[1.25rem_minmax(0,1fr)_9.5rem_8.5rem_5.5rem_5.5rem_10.5rem]"
               >
                 <input
                   type="checkbox"
@@ -907,8 +909,18 @@ export function Cockpit({
                 </button>
 
                 {/* as três colunas de cadastro — só no grid de desktop */}
-                <span className="hidden text-right font-mono text-[11px] text-slate2 md:block">
-                  {l.rbt12 != null ? Math.round(l.rbt12).toLocaleString("pt-BR") : "—"}
+                {/* MILHAR E CENTAVOS. `Math.round(...).toLocaleString` imprimia
+                    "3550000" como "3.550.000" e escondia a diferença entre uma
+                    empresa a R$ 3.599.900,00 e outra a R$ 3.600.100,00 — que é
+                    exatamente a linha do sublimite. Valor de decisão se lê com
+                    as duas casas. */}
+                <span className="hidden text-right font-mono text-[11px] tabular-nums text-slate2 md:block">
+                  {l.rbt12 != null
+                    ? l.rbt12.toLocaleString("pt-BR", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })
+                    : "—"}
                 </span>
                 <span className="hidden truncate font-mono text-[10.5px] text-slate2 md:block" title={l.regime ?? undefined}>
                   {l.regime ?? "—"}
@@ -919,10 +931,33 @@ export function Cockpit({
                   </span>
                 </span>
 
+                {/* O QUE ESTA EMPRESA JÁ FEZ — ver components/PassosEmpresa. A
+                    coluna de ação diz o que falta; esta diz o que andou. */}
+                <span className="hidden md:block">
+                  <PassosEmpresa
+                    compacto
+                    estado={{
+                      faixa: l.faixa,
+                      coleta: l.coleta,
+                      analise_id: l.analise_id,
+                      estimada: l.estimada,
+                      laudo_id: l.laudo_id,
+                      termo_id: l.termo_id,
+                      assinado: l.assinado,
+                    }}
+                  />
+                </span>
+
+                {/* LARGURA FIXA, e não `auto`. Com `auto`, "Confirmar premissas"
+                    e "Analisar" tinham larguras diferentes — e como é a última
+                    coluna do grid, cada linha empurrava RBT12 e Enquadramento
+                    para um lugar diferente. As colunas da esquerda deixavam de
+                    ser colunas. */}
                 <button
                   onClick={() => agir(l)}
                   disabled={ocupado === `linha-${l.id}` || l.acao === "pronto" || l.acao === "fora"}
-                  className={`shrink-0 whitespace-nowrap rounded-sm px-3 py-2 text-[12.5px] font-semibold ${
+                  title={l.acao === "fora" || l.acao === "pronto" ? EXPLICA_FAIXA[l.faixa].oQueE : undefined}
+                  className={`shrink-0 truncate whitespace-nowrap rounded-sm px-3 py-2 text-center text-[12.5px] font-semibold md:w-full ${
                     FORTE.includes(l.acao)
                       ? "bg-ink text-white"
                       : l.acao === "cobrar"

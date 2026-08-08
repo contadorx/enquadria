@@ -21,8 +21,15 @@ export function RoteiroEmpresa({ estado }: { estado: EstadoDaEmpresa }) {
   const { feitos, total } = progressoRoteiro(passos);
   const atual = passos.find((p) => p.estado === "agora") ?? null;
   const [aberto, setAberto] = useState(feitos === 0);
+  /* fechar reduz a uma linha; OCULTAR tira da tela. São gestos diferentes e
+     quem já sabe o caminho pede o segundo — mesmo gesto da Trilha no cockpit.
+     Volta ao recarregar de propósito: esconder para sempre o que responde
+     "e agora?" é decisão grande demais para um clique sem volta. */
+  const [oculto, setOculto] = useState(false);
 
   const completo = feitos === total;
+
+  if (oculto) return null;
 
   return (
     <div className="rounded-sm border border-line bg-surface p-3.5">
@@ -48,6 +55,14 @@ export function RoteiroEmpresa({ estado }: { estado: EstadoDaEmpresa }) {
         <span aria-hidden className="shrink-0 text-[12px] text-muted">
           {aberto ? "▲" : "▼"}
         </span>
+      </button>
+
+      <button
+        // ux-ok: o clique remove este próprio bloco da tela — o efeito é o bloco sumir
+        onClick={() => setOculto(true)}
+        className="mt-1 text-[11px] font-semibold text-muted underline underline-offset-2"
+      >
+        ocultar o roteiro
       </button>
 
       {aberto && (

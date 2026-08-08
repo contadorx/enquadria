@@ -141,6 +141,70 @@ export function proximaAcao(l: Omit<Linha, "acao" | "etapa">): Acao {
   return "pronto";
 }
 
+/**
+ * OS CINCO PASSOS DA ESTEIRA, para desenhar na linha.
+ *
+ * Função pura e separada de `proximaAcao` de propósito: aquela responde "o que
+ * falta AGORA" e devolve uma coisa só; esta responde "onde esta empresa está no
+ * caminho" e devolve as cinco. São perguntas diferentes e a interface precisa
+ * das duas — o botão vem de lá, o gráfico vem daqui.
+ *
+ * A ordem é a mesma de `lib/roteiro.ts` porque é a mesma esteira; se um dia
+ * divergirem, a tela da empresa e a linha da fila passam a contar histórias
+ * diferentes sobre o mesmo cliente.
+ *
+ * `null` para quem está fora da janela: MEI e empresa baixada não têm esteira, e
+ * cinco marcas vazias sugeririam trabalho que não existe.
+ */
+export interface EstadoEsteira {
+  faixa: Faixa;
+  coleta: EstadoColeta;
+  analise_id: string | null;
+  estimada: boolean;
+  laudo_id: string | null;
+  termo_id: string | null;
+  assinado: boolean;
+}
+
+export interface PassoEsteira {
+  chave: "dados" | "analise" | "laudo" | "termo" | "assinatura";
+  rotulo: string;
+  feito: boolean;
+  /** é o passo da vez — o primeiro não concluído */
+  atual: boolean;
+}
+
+export function passosDaEsteira(e: EstadoEsteira): PassoEsteira[] | null {
+  if (FAIXAS_FORA.includes(e.faixa)) return null;
+
+  /* "dados" fecha por coleta respondida OU por análise salva: quem preencheu na
+     mão não deve a ninguém o formulário do cliente. E análise ESTIMADA não
+     fecha o passo da análise — é rascunho do CNAE, não decisão do contador. */
+  const feitos: Record<PassoEsteira["chave"], boolean> = {
+    dados: e.coleta === "respondida" || e.coleta === "usada" || (!!e.analise_id && !e.estimada),
+    analise: !!e.analise_id && !e.estimada,
+    laudo: !!e.laudo_id,
+    termo: !!e.termo_id,
+    assinatura: e.assinado,
+  };
+
+  const ROTULOS: Record<PassoEsteira["chave"], string> = {
+    dados: "Premissas reunidas",
+    analise: "Análise salva",
+    laudo: "Laudo emitido",
+    termo: "Termo gerado",
+    assinatura: "Assinado pelo cliente",
+  };
+
+  let achouAtual = false;
+  return (Object.keys(ROTULOS) as PassoEsteira["chave"][]).map((chave) => {
+    const feito = feitos[chave];
+    const atual = !feito && !achouAtual;
+    if (atual) achouAtual = true;
+    return { chave, rotulo: ROTULOS[chave], feito, atual };
+  });
+}
+
 export function etapaDe(l: Omit<Linha, "acao" | "etapa">): Etapa {
   if (l.assinado) return "assinado";
   if (l.laudo_id) return "laudo";

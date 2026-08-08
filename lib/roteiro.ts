@@ -33,6 +33,16 @@ export interface EstadoDaEmpresa {
   temColeta: boolean;
   /** existe análise salva */
   temAnalise: boolean;
+  /**
+   * As premissas vieram do lote por CNAE e ninguém confirmou.
+   *
+   * Muda o TEXTO do passo da análise, não o passo. O contador que abre uma
+   * empresa da faixa A encontra o formulário INTEIRO já preenchido e conclui,
+   * razoavelmente, que não há nada a fazer ali — a tela parece pronta. O
+   * roteiro é o lugar onde essa armadilha é desarmada, porque é a única peça da
+   * tela que fala de ORDEM.
+   */
+  premissasEstimadas?: boolean;
   temLaudo: boolean;
   temTermo: boolean;
   assinado: boolean;
@@ -85,7 +95,19 @@ export function roteiroDaEmpresa(e: EstadoDaEmpresa): PassoRoteiro[] {
   };
 
   let achouAtual = false;
-  return PASSOS.map((p) => {
+  return PASSOS.map((base) => {
+    /* o passo é o mesmo; o que muda é o que ele PEDE. Com premissas estimadas,
+       "salvar a análise" esconde a tarefa real, que é conferir o que o CNAE
+       chutou antes de assinar em cima. */
+    const p =
+      base.chave === "analise" && e.premissasEstimadas
+        ? {
+            ...base,
+            titulo: "Conferir as premissas e salvar",
+            detalhe:
+              "O formulário já vem preenchido pelo perfil do CNAE — é estimativa, não a sua análise. Percorra as respostas, ajuste o que não corresponder ao cliente e salve.",
+          }
+        : base;
     if (feitos[p.chave]) return { ...p, estado: "feito" as EstadoPasso };
     if (!achouAtual) {
       achouAtual = true;

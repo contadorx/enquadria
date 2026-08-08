@@ -71,6 +71,20 @@ const PALAVRA = /[A-Za-zÀ-ÿ]/;
  * minúsculas, dígitos e pontuação de classe) e pelo menos uma tem hífen ou
  * dois-pontos. Frase de gente não sobrevive a isso.
  */
+/**
+ * ISTO É CÓDIGO, NÃO FRASE.
+ *
+ * O recorte `>(…)<` de nó de texto do JSX casa também com um pedaço de código
+ * quando o `>` vem de uma seta (`=>`) e o `<` de um genérico (`useState<…>`).
+ * Aconteceu em `RoteiroEmpresa.tsx` e o auditor acusou 196 "caracteres de
+ * parágrafo" numa linha de TypeScript. Auditor que acusa código de ser texto
+ * perde a autoridade para acusar texto — é a mesma regra do falso positivo de
+ * CSS, e chegou pelo mesmo caminho.
+ */
+function ehCodigo(s) {
+  return /=>|;\s|\bconst\b|\breturn\b|\?\?|\)\s*\.|useState|=\s*\(/.test(s);
+}
+
 function ehClasseCss(s) {
   const palavras = s.split(/\s+/);
   if (palavras.length < 2) return false;
@@ -117,7 +131,7 @@ for (const rel of TELAS_DE_TRABALHO) {
     const s = cru.replace(/\s+/g, " ").trim();
     if (!s.includes(" ") || !PALAVRA.test(s[0])) continue;
     if (/^[a-z-]+:|^\//.test(s)) continue;
-    if (ehClasseCss(s)) continue;
+    if (ehClasseCss(s) || ehCodigo(s)) continue;
 
     const linha = linhaDe(src, idx);
 
