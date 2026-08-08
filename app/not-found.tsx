@@ -1,3 +1,18 @@
+/**
+ * O CSS DO SITE, IMPORTADO NA PRÓPRIA PÁGINA.
+ *
+ * Ele morava num layout de route group (`app/(site)/layout.tsx`) — e o route
+ * group foi desfeito porque quebrava o build na Vercel: o empacotador não
+ * emitia o `page_client-reference-manifest.js` do grupo e o deploy morria
+ * DEPOIS de compilar com sucesso (ENOENT no rastreamento dos arquivos).
+ *
+ * Importar aqui dá o mesmo resultado prático: o Next carrega este CSS só nas
+ * rotas que o importam, então o painel continua sem pagar 35 KB de estilo
+ * institucional. E como o import acontece depois do `globals.css` do layout
+ * raiz, as regras do site continuam vencendo as do Tailwind onde as duas
+ * falarem da mesma coisa.
+ */
+import "./site.css";
 import { FolhaDoSite } from "@/components/FolhaDoSite";
 
 /**
