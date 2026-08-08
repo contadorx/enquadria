@@ -184,8 +184,9 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
         texto = await planilhaParaCsv(bytes);
         codificacao = "planilha do Excel";
       } catch {
+        /* saída primeiro: o que fazer, e só depois por quê */
         setErro(
-          "Não consegui abrir esta planilha. Se ela tiver senha ou for muito antiga, salve como CSV UTF-8 e tente de novo."
+          "Salve como CSV UTF-8 e tente de novo. Não consegui abrir esta planilha — pode ter senha ou ser muito antiga."
         );
         return;
       }
@@ -208,7 +209,7 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
     }
     if (resultado.linhas.length === 0) {
       setErro(
-        `Reconheci o cabeçalho, mas nenhuma linha tinha CNPJ válido — ${resultado.descartadas} descartadas. Confira se os documentos estão completos (14 dígitos).`
+        `Confira se os documentos têm os 14 dígitos. Li o cabeçalho, mas nenhuma linha tinha CNPJ válido — ${resultado.descartadas} descartadas.`
       );
       setParse(null);
       return;
@@ -260,7 +261,7 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
 
     if (achados.length === 0) {
       setErro(
-        "Não achei nenhum CNPJ completo aí. Cole os documentos com os 14 dígitos — um por linha, ou separados por vírgula."
+        "Cole os documentos com os 14 dígitos — um por linha, ou separados por vírgula. Nenhum CNPJ completo veio aí."
       );
       setParse(null);
       return;
@@ -370,8 +371,8 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
           {feito.receita_ativa
             ? `${feito.enriquecidas} enriquecidas contra a base da Receita.`
             : feito.receita_configurada
-            ? "A base da Receita não respondeu agora — a triagem usou os dados do arquivo. Os dados que faltarem entram na próxima importação."
-            : "Enriquecimento da Receita não configurado — a triagem usou os dados do arquivo."}
+            ? "A Receita não respondeu — a triagem usou os dados do arquivo."
+            : "A Receita não está ligada — a triagem usou os dados do arquivo."}
         </p>
 
         {!feito.receita_ativa && feito.receita_configurada && (
@@ -393,11 +394,14 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
         )}
 
         {feito.triagem_cega && (
+          /* A SAÍDA PRIMEIRO, A CAUSA DEPOIS (08/08/2026).
+             Eram três frases de diagnóstico e uma de saída — e a saída por
+             último. Quem lê mensagem de erro lê a primeira linha e procura o
+             botão; o resto é para quem quiser entender. */
           <p className="mt-3 rounded-sm bg-amarelowash px-3 py-2 text-[12.5px] leading-relaxed text-amarelo">
-            <b>Atenção:</b> o arquivo não trouxe CNAE e a base da Receita não respondeu, então
-            a triagem não teve com que separar a carteira — quase tudo caiu em &quot;baixo
-            risco&quot;. Isso não é diagnóstico, é falta de dado. Suba o CSV com a coluna de
-            CNAE, ou repita a importação quando a base voltar.
+            <b>Suba o CSV com a coluna de CNAE</b> — ou repita a importação mais tarde. Sem CNAE e
+            sem resposta da Receita, a triagem não teve com que separar: quase tudo caiu em
+            &quot;baixo risco&quot;.
           </p>
         )}
 
@@ -473,9 +477,12 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
           {jaTem > 0 ? "Cole os CNPJs das novas empresas" : "Cole o CNPJ de um cliente do Simples"}
         </div>
         <p className="mt-1 max-w-[68ch] text-[13px] leading-relaxed text-muted">
+          {/* A MESMA FRASE VIVIA TRÊS VEZES NESTA TELA — aqui, no resumo do que
+              vai acontecer e no aviso do caminho 1. Fica UMA, e é esta: é a que
+              o contador lê antes de colar. */}
           {jaTem > 0
-            ? "Um por linha, ou separados por vírgula. Razão social, CNAE, porte e situação vêm da base da Receita."
-            : "Só o número, um por linha. Razão social, CNAE, porte e situação vêm da base da Receita — você não precisa preencher nada disso, nem planilha nenhuma."}
+            ? "Um por linha, ou separados por vírgula."
+            : "Só o número, um por linha. O resto vem da base da Receita — nem planilha, nem digitação."}
         </p>
 
         <textarea
@@ -516,7 +523,7 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
               onClick={usarPrimeiroCaso}
               className="font-semibold text-accentdeep underline underline-offset-2"
             >
-              Use um caso de exemplo
+              Use um exemplo
             </button>{" "}
             — uma empresa fictícia, com os dados prontos, que vai até o laudo.
           </p>
@@ -544,7 +551,7 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
               onClick={usarExemplo}
               className="rounded-sm border border-line px-4 py-2.5 text-sm font-semibold text-slate2"
             >
-              Ver com carteira de exemplo (3 empresas)
+              Usar carteira de exemplo
             </button>
             <button
               onClick={baixarModelo}
@@ -718,13 +725,11 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
                acontecer quando ele clicar. */
             <div className="mt-4 rounded border border-accent bg-accentwash p-4">
               <div className="text-[13.5px] font-semibold text-accentdeep">
-                A triagem ainda não rodou — e não tem como rodar aqui.
+                A triagem roda quando você confirmar.
               </div>
               <p className="mt-1.5 text-[13px] leading-relaxed text-slate2">
-                Você colou só os documentos, então por enquanto existe só o número. Razão
-                social, CNAE, porte e situação vêm da base da Receita quando você confirmar,
-                e é o CNAE que separa a carteira por prioridade.{" "}
-                <b>Nada disso você precisa preencher.</b>
+                Razão social, CNAE, porte e situação vêm da base da Receita — e é o CNAE que separa
+                a carteira por prioridade. <b>Nada disso você precisa preencher.</b>
               </p>
             </div>
           ) : (

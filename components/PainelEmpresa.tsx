@@ -45,6 +45,10 @@ const COR_SAIDA: Record<string, string> = {
 
 type Aba = "decisao" | "dossie" | "comparativo";
 
+/** o mesmo recado saía escrito duas vezes, nas duas funções de envio — e duas
+    cópias de uma frase são duas frases que um dia divergem */
+const SEM_CONTATO = "Cadastre o e-mail no bloco Contato, aqui embaixo, para enviar.";
+
 const ROTULO_ENVIO: Record<string, string> = {
   laudo: "Laudo",
   comparativo: "Comparativo",
@@ -122,6 +126,23 @@ export function PainelEmpresa({
   const [d, setD] = useState<Dossie | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [aba, setAba] = useState<Aba>(abaInicial);
+
+  /**
+   * A ABA SEGUE A AÇÃO — conserto de 07/08/2026, com um caso concreto.
+   *
+   * `useState(abaInicial)` lê a prop UMA VEZ, na montagem. A gaveta do cockpit
+   * não desmonta entre um clique e outro: quem estava com a empresa aberta no
+   * Dossiê e clicava em "Confirmar premissas" continuava no Dossiê, porque a
+   * prop mudava e o estado não. O contador via a ficha da empresa, não o
+   * formulário — e concluía que não havia nada para analisar.
+   *
+   * O efeito sincroniza sem remontar. Remontar (via `key`) também resolveria,
+   * mas jogaria fora o que já foi carregado e o que estiver preenchido no
+   * formulário — caro para consertar uma aba.
+   */
+  useEffect(() => {
+    setAba(abaInicial);
+  }, [abaInicial]);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [bloqueio, setBloqueio] = useState<string | null>(null);
   const [muro, setMuro] = useState<Muro | null>(null);
@@ -326,7 +347,24 @@ export function PainelEmpresa({
   }
 
   async function emitirLaudo() {
-    if (!a) return;
+    /**
+     * SEM ANÁLISE SALVA NÃO HÁ O QUE EMITIR — e isto precisa ser DITO.
+     *
+     * O `return` mudo daqui era um dos "botões que não funcionam": o botão de
+     * emitir no dossiê aparece sempre que ainda não existe laudo, inclusive
+     * quando ainda não existe análise. Clicar não fazia nada, não avisava nada,
+     * e a leitura razoável de quem clicou é que o produto quebrou justamente no
+     * documento que sustenta o honorário.
+     *
+     * Agora ele diz o que falta e leva para onde se resolve.
+     */
+    if (!a) {
+      setBloqueio(
+        "Salve a análise primeiro — o laudo é emitido em cima dela. O botão de emitir aparece logo abaixo do formulário."
+      );
+      setAba("decisao");
+      return;
+    }
     setOcupado("laudo");
     setBloqueio(null);
     setMuro(null);
@@ -386,7 +424,7 @@ export function PainelEmpresa({
         setAvisoEnvio({ ok: true, texto: `Laudo enviado para ${para}.` });
         mudou();
       } else if (json.sem_contato > 0) {
-        setAvisoEnvio({ ok: false, texto: "Esta empresa não tem e-mail de contato cadastrado — preencha no bloco Contato, aqui embaixo." });
+        setAvisoEnvio({ ok: false, texto: SEM_CONTATO });
       } else {
         setAvisoEnvio({
           ok: false,
@@ -419,7 +457,7 @@ export function PainelEmpresa({
         });
         mudou();
       } else if (json.sem_contato > 0) {
-        setAvisoEnvio({ ok: false, texto: "Esta empresa não tem e-mail de contato cadastrado — preencha no bloco Contato, aqui embaixo." });
+        setAvisoEnvio({ ok: false, texto: SEM_CONTATO });
       } else {
         setAvisoEnvio({
           ok: false,
@@ -812,6 +850,29 @@ export function PainelEmpresa({
             </Bloco>
           )}
 
+          {/**
+            * O LUGAR DO LAUDO, ANTES DE ELE PODER EXISTIR.
+            *
+            * O bloco "Documentos da empresa" só nasce quando há análise salva —
+            * e some inteiro quando não há. Quem chega para emitir o primeiro
+            * laudo não vê botão desabilitado: não vê NADA, e procurar um botão
+            * que não está na tela é a pior versão do problema, porque não deixa
+            * nem o que perguntar.
+            *
+            * Esta linha ocupa o lugar dele e diz a condição. Custa três linhas
+            * e responde a pergunta antes de ela virar chamado.
+            */}
+          {!a && (
+            <div className="rounded-sm border border-dashed border-line bg-surface2 px-3.5 py-3">
+              <div className="text-[12.5px] font-semibold text-slate2">
+                O laudo aparece aqui depois que você salvar a análise.
+              </div>
+              <p className="mt-0.5 text-[11.5px] text-muted">
+                Ele sai com a sua assinatura em cima das premissas que você salvar.
+              </p>
+            </div>
+          )}
+
           {/* A PROPOSTA FICA FORA DO `a &&` de propósito: propor ANTES de
               analisar é o caminho mais comum de verdade — o contador fecha o
               serviço e só então levanta as premissas com o cliente. Exigir a
@@ -987,19 +1048,36 @@ export function PainelEmpresa({
                       {new Date(d.laudo.emitido_em).toLocaleDateString("pt-BR")}
                     </p>
                   ) : (
-                    <p className="mt-0.5 font-mono text-[10.5px] text-muted">não emitido</p>
+                    /* "não emitido" descreve o estado e esconde a causa. Quando
+                       falta a análise, o que o contador precisa ler é o que
+                       falta — não o que não existe. */
+                    <p className="mt-0.5 font-mono text-[10.5px] text-muted">
+                      {a ? "não emitido" : "falta a análise"}
+                    </p>
                   )}
                 </div>
                 {/* O botão de emitir vivia só na aba Decisão. Quem chegava no
                     dossiê para conferir o que existe lia "não emitido" e tinha
                     de descobrir sozinho que a ação morava em outra aba. */}
-                {!d.laudo && (
+                {!d.laudo && a && (
                   <button
                     onClick={emitirLaudo}
                     disabled={ocupado === "laudo"}
                     className="shrink-0 rounded-sm bg-ink px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
                   >
                     {ocupado === "laudo" ? "Emitindo…" : "Emitir laudo"}
+                  </button>
+                )}
+                {/* SEM ANÁLISE, O BOTÃO CERTO É OUTRO. Oferecer "Emitir laudo"
+                    aqui era prometer uma ação impossível: o clique caía no
+                    `return` mudo. O passo que existe de verdade é a análise —
+                    então é ele que o botão oferece. */}
+                {!d.laudo && !a && (
+                  <button
+                    onClick={() => setAba("decisao")}
+                    className="shrink-0 rounded-sm bg-ink px-3 py-1.5 text-[12px] font-semibold text-white"
+                  >
+                    Fazer a análise
                   </button>
                 )}
                 {d.laudo && (

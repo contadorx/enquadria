@@ -72,14 +72,20 @@ const sit = (o = {}) => ({
   ok(dicaDaTela("/painel/importar", sit({ empresas: 5 })) === null,
      "quem já importou não recebe mais a dica de importar");
 
-  ok(dicaDaTela("/painel", sit({ empresas: 5 }))?.chave === "cockpit-sem-analise",
-     "com carteira e sem análise, a dica é clicar na primeira linha");
+  ok(dicaDaTela("/painel/importar/", sit())?.chave === "importar-vazio",
+     "barra no fim da rota não muda a dica — /painel/importar e /painel/importar/ são a mesma tela");
 
-  ok(dicaDaTela("/painel/", sit({ empresas: 5 }))?.chave === "cockpit-sem-analise",
-     "barra no fim da rota não muda a dica — /painel e /painel/ são a mesma tela");
+  /* UMA TELA, UM ORIENTADOR (08/08/2026).
+   * O cockpit já tem dois: a Trilha e o Empurrão. A bolha dizia por cima deles
+   * exatamente a mesma ordem ("comece pela primeira empresa", "falta emitir o
+   * laudo"), e três vozes com a mesma instrução fazem o leitor ignorar as três.
+   * Estes dois testes agora GUARDAM o silêncio — se alguém recolocar uma dica
+   * de próximo passo no cockpit, a suíte reclama. */
+  ok(dicaDaTela("/painel", sit({ empresas: 5 })) === null,
+     "no cockpit a bolha se cala: quem orienta ali é a Trilha ou o Empurrão");
 
-  ok(dicaDaTela("/painel", sit({ empresas: 5, analises: 2 }))?.chave === "cockpit-sem-laudo",
-     "analisou e não emitiu: a dica passa a ser o laudo");
+  ok(dicaDaTela("/painel/", sit({ empresas: 5, analises: 2 })) === null,
+     "e continua calada depois da análise — o Empurrão é quem pede o laudo");
 
   /* o escritório só é cobrado quando já existe documento saindo sem nome */
   ok(dicaDaTela("/painel/config", sit({ laudos: 1 }))?.chave === "sem-escritorio",

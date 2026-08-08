@@ -180,6 +180,23 @@ secao("Auditoria de UX (percepção, não estética)");
      r.status === 0 ? undefined : saida.split("\n").filter((l) => l.trim().startsWith("components/") || l.trim().startsWith("app/")).slice(0, 8));
 }
 
+/* ================================== 1b1. TEXTO QUE VOLTA A CRESCER ==== */
+secao("Auditoria de texto (as telas de trabalho, não os documentos)");
+{
+  /**
+   * A limpeza de 08/08/2026 cortou centenas de palavras das telas onde o
+   * contador trabalha todo dia. Sem limite escrito elas voltam — e voltam com
+   * boas intenções, uma frase por correção. Este auditor é o limite escrito:
+   * parágrafo na tela de trabalho, frase repetida no mesmo arquivo e rótulo de
+   * botão que não cabe numa promessa.
+   */
+  const r = spawnSync("node", [path.join(RAIZ, "testes", "auditar-texto.mjs")], { encoding: "utf8" });
+  const saida = (r.stdout || "") + (r.stderr || "");
+  const regras = (saida.match(/^ok: /gm) || []).length;
+  ok(`auditoria de texto (${regras} regras limpas)`, r.status === 0,
+     r.status === 0 ? undefined : saida.split("\n").filter((l) => l.trim().startsWith("components/")).slice(0, 8));
+}
+
 /* ============================================ 1b2. SCHEMA SEM LASTRO ==== */
 secao("Auditoria de schema (colunas que ninguém garante que existem)");
 {
@@ -1380,6 +1397,30 @@ if (!fs.existsSync(CSV)) {
   ok("'Situação Cadastral' continua caindo em situação", c3.situacao === "Situação Cadastral", c3);
   const c4 = cab("CNPJ;Anexo Simples\n33.000.167/0001-01;2");
   ok("'Anexo Simples' continua caindo em anexo, não em regime", c4.anexo === "Anexo Simples", c4);
+}
+
+/* ══ A ABA SEGUE A AÇÃO, E A TELA DIZ O QUE FAZER (07/08/2026) ═════════════
+   "Confirmar premissas" abria o Dossiê quando a gaveta já estava aberta:
+   `useState(abaInicial)` lê a prop uma vez, e a gaveta não desmonta entre um
+   clique e outro. O contador via a ficha, não o formulário — e concluía que
+   não havia o que analisar. ══════════════════════════════════════════════ */
+secao("Primeiro acesso da empresa: a aba certa e a instrução certa");
+{
+  const painel = fs.readFileSync(path.join(RAIZ, "components/PainelEmpresa.tsx"), "utf8");
+  ok("a aba sincroniza quando a ação muda de destino",
+     /useEffect\(\s*\(\)\s*=>\s*\{\s*setAba\(abaInicial\);?\s*\}\s*,\s*\[abaInicial\]\)/.test(painel));
+
+  const cock = fs.readFileSync(path.join(RAIZ, "components/Cockpit.tsx"), "utf8");
+  ok("a ação de confirmar/analisar abre a ANÁLISE, não o dossiê",
+     /aba:\s*l\.acao === "contato" \|\| l\.acao === "fora" \? "dossie" : "decisao"/.test(cock));
+  ok("clicar no nome de empresa SEM análise leva ao formulário",
+     /aba:\s*l\.analise_id \? "dossie" : "decisao"/.test(cock));
+
+  const form = fs.readFileSync(path.join(RAIZ, "components/FormAnalise.tsx"), "utf8");
+  ok("premissa estimada vira TAREFA numerada, não só aviso de estado",
+     /confirme antes de emitir/.test(form) && /Salve a an\u00e1lise/.test(form));
+  ok("empresa sem análise nenhuma também recebe instrução",
+     /semAnalise/.test(form) && /ainda n\u00e3o tem an\u00e1lise/.test(form));
 }
 
 /* ============================ 2a. ROTAS CITADAS NOS E-MAILS EXISTEM? ===== */

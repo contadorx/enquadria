@@ -93,7 +93,7 @@ export function Trilha({
         n: 2,
         titulo: "Comece por uma empresa",
         texto:
-          "Cole UM CNPJ e veja a triagem funcionar — não precisa da carteira inteira agora. Depois, um CSV com a coluna de CNPJ sobe o resto de uma vez; razão social e CNAE deixam a triagem mais precisa.",
+          "Cole UM CNPJ e veja a triagem funcionar. A carteira inteira sobe depois, por CSV.",
         feito: estado.empresas > 0,
         extra: <SegurancaDoDado compacto />,
         cta: (
@@ -121,9 +121,15 @@ export function Trilha({
         texto:
           "O documento sai numerado, com a sua marca e um código de verificação pública. Na sequência dá para enviar o termo ao cliente.",
         feito: estado.laudos > 0,
+        /* O RÓTULO MENTIA. O passo 4 é "emita o laudo" e o botão dizia "fazer a
+           análise" — o mesmo texto do passo 3. Quem chegava aqui com a análise
+           pronta clicava procurando o emitir, caía no formulário que já tinha
+           preenchido, e concluía que o sistema não habilitou a emissão. O
+           destino continua a aba Analisar, porque é lá que o botão de emitir
+           vive — mas o rótulo agora diz o que se vai fazer. */
         cta: estado.proxima ? (
           <button onClick={() => aoAbrirEmpresa(estado.proxima!.id, "decisao")} className="btn">
-            Fazer a análise
+            {estado.analises > 0 ? "Emitir o laudo" : "Fazer a análise"}
           </button>
         ) : null,
       },
@@ -211,11 +217,14 @@ export function Trilha({
           — próximo: {ROTULO[estado.proximaAcao]} {estado.proxima.nome}
         </span>
       </p>
+      {/* "Continuar" não diz o que vai acontecer — e botão que não promete nada
+          não é clicado. O rótulo agora é a própria próxima ação, que a faixa já
+          calculou: "Analisar", "Emitir o laudo de", "Cobrar a assinatura de". */}
       <button
         onClick={() => aoAbrirEmpresa(estado.proxima!.id, "decisao")}
         className="shrink-0 rounded-sm border border-ink px-3 py-1.5 text-[12.5px] font-semibold text-ink"
       >
-        Continuar
+        {ROTULO[estado.proximaAcao].replace(/ de$/, "")}
       </button>
     </div>
   );

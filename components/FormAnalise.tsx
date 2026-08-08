@@ -175,6 +175,8 @@ export function FormAnalise({
   aoSalvar?: (analiseId: string) => void;
 }) {
   const inicial = respostasIniciais ?? RESPOSTAS_PADRAO;
+  /* nunca houve análise: nem respostas salvas, nem premissas estimadas do lote */
+  const semAnalise = !respostasIniciais && !estimada;
 
   const [r, setR] = useState<Respostas>(inicial);
   // ao reabrir uma análise antiga sem detalhes, o desdobramento parte do valor
@@ -306,11 +308,47 @@ export function FormAnalise({
 
   return (
     <div className="space-y-4">
+      {/**
+        * O QUE FAZER NESTA TELA — acrescentado em 07/08/2026.
+        *
+        * O aviso anterior explicava a SITUAÇÃO ("as premissas foram estimadas")
+        * e não a TAREFA. Quem abria a empresa pela primeira vez lia, concordava,
+        * e saía sem tocar em nada — porque nada dizia que havia trabalho a
+        * fazer, nem quanto. Aviso que descreve estado não move ninguém; os três
+        * passos numerados movem, e o último é o que o contador entrega.
+        */}
       {estimada && (
-        <div className="rounded-sm border border-amarelo bg-amarelowash px-3 py-2.5 text-[12.5px] text-slate2">
-          <b className="text-ink">Premissas estimadas pelo CNAE.</b> Vieram da análise em lote e ainda
-          não foram confirmadas por você. Confira cada resposta antes de emitir o laudo — o documento
-          sai com a sua assinatura.
+        <div className="rounded border border-amarelo bg-amarelowash px-3.5 py-3">
+          <div className="text-[13px] font-bold text-ink">
+            Estas premissas foram estimadas pelo CNAE — confirme antes de emitir.
+          </div>
+          <p className="mt-1 text-[12.5px] leading-relaxed text-slate2">
+            Elas ordenam a fila; não assinam um laudo.
+          </p>
+          <ol className="mt-2.5 space-y-1 pl-4 text-[12.5px] leading-relaxed text-slate2">
+            <li style={{ listStyle: "decimal" }}>
+              Informe a <b>RBT12</b> — é o que troca a alíquota estimada pela efetiva.
+            </li>
+            <li style={{ listStyle: "decimal" }}>
+              Percorra as <b>perguntas</b> e ajuste o que não corresponder ao cliente.
+            </li>
+            <li style={{ listStyle: "decimal" }}>
+              <b>Salve a análise.</b> Só então o laudo sai com a sua assinatura em cima.
+            </li>
+          </ol>
+        </div>
+      )}
+
+      {/* Sem análise nenhuma: a tela precisa dizer que ESTE formulário é o
+          trabalho, senão ele parece um cadastro opcional. */}
+      {!estimada && semAnalise && (
+        <div className="rounded border border-accent bg-accentwash px-3.5 py-3">
+          <div className="text-[13px] font-bold text-accentdeep">
+            Esta empresa ainda não tem análise.
+          </div>
+          <p className="mt-1 text-[12.5px] leading-relaxed text-slate2">
+            Responda e salve. Nenhuma pergunta exige consultar documento.
+          </p>
         </div>
       )}
 
@@ -380,9 +418,7 @@ export function FormAnalise({
               <span className="font-normal text-muted">· opcional</span>
             </div>
             <p className="mb-2 mt-0.5 max-w-[70ch] text-[12px] text-muted">
-              Com ela o laudo projeta a RBT12 até junho de 2027 — o fim do período em que a opção
-              produz efeito — e confere se a decisão continua a mesma. Sem ela, o laudo usa apenas a
-              foto de hoje.
+              Com ela o laudo projeta até junho/2027. Sem ela, só a foto de hoje.
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center rounded-sm border border-line px-2.5 focus-within:border-accent">
@@ -456,8 +492,7 @@ export function FormAnalise({
           </button>
           {!segregar && (
             <p className="mt-1.5 text-[11.5px] leading-relaxed text-muted">
-              Marque se a receita se divide entre anexos diferentes — comércio e serviço, por
-              exemplo. A alíquota muda, e com ela a conclusão do laudo.
+              Comércio e serviço, por exemplo. A alíquota muda, e com ela a conclusão.
             </p>
           )}
 
@@ -484,8 +519,7 @@ export function FormAnalise({
                   errar o dDAS em quase metade, e isso vira outra saída da
                   árvore num documento assinado. */}
               <p className="mb-2 text-[12px] leading-relaxed text-muted">
-                Informe quanto da receita cai em cada anexo, como no PGDAS. A alíquota de cada um
-                é calculada com a RBT12 da empresa; o que sai do DAS é a soma ponderada.
+                Quanto da receita cai em cada anexo, como no PGDAS.
               </p>
               <div className="space-y-1.5">
                 {[1, 2, 3, 4, 5].map((a) => {
@@ -559,9 +593,12 @@ export function FormAnalise({
                 />
                 Confirmo que o Anexo {alerta.anexoDeclarado} é o correto para esta empresa
               </label>
+              {/* "Isto é um aviso, não um bloqueio" saiu: se não bloqueia, não
+                  precisa dizer que não bloqueia — o botão de salvar segue ativo
+                  e isso já é a prova. Fica só o que o contador não sabe: que a
+                  confirmação dele vira registro. */}
               <p className="mt-1 text-[11px] text-muted">
-                Isto é um aviso, não um bloqueio: a folha aqui é uma faixa, não a apuração. A
-                confirmação fica registrada na análise.
+                A confirmação fica registrada na análise.
               </p>
             </div>
           )}
@@ -572,8 +609,8 @@ export function FormAnalise({
             Custo anual de apurar IBS/CBS fora do DAS <span className="font-normal text-muted">(opcional)</span>
           </div>
           <p className="mb-2 mt-0.5 text-[12px] text-muted">
-            Premissa sua, não do sistema: honorário adicional, sistema, obrigações acessórias. Sem
-            este valor o laudo não calcula payback — e diz que não calculou, em vez de estimar.
+            Honorário adicional, sistema, obrigações acessórias. Sem ele, o laudo não calcula
+            payback.
           </p>
           <div className="flex items-center rounded-sm border border-line px-2.5 focus-within:border-accent">
             <span className="font-mono text-[12px] text-muted">R$</span>
@@ -638,8 +675,9 @@ export function FormAnalise({
           O que a empresa compra com crédito
         </div>
         <p className="mb-3 text-[12px] text-muted">
-          Três perguntas em vez de uma: somadas, dão a fatia da receita que gera crédito. Não entram
-          folha, pró-labore, aluguel de pessoa física nem compras de fornecedor do Simples.
+          Somadas, dão a fatia da receita que gera crédito.{" "}
+          <b className="font-semibold">Fora:</b> folha, pró-labore, aluguel de PF, compras do
+          Simples.
         </p>
 
         <Escolha

@@ -235,31 +235,23 @@ export function dicaDaTela(rota: string, s: Situacao): Dica | null {
     };
   }
 
-  /* COCKPIT com carteira e sem análise: a fila está montada e a pessoa não
-     sabe que é para clicar na primeira linha. */
-  if (r === "/painel" && s.empresas > 0 && s.analises === 0) {
-    return {
-      chave: "cockpit-sem-analise",
-      titulo: `Comece pela primeira empresa da fila`,
-      texto:
-        "A ordem já é a de prioridade: quem está no topo é quem tem mais a ganhar (ou a perder) com a decisão. Clique na linha para abrir e responder as perguntas da análise.",
-      ctaRotulo: "Como fazer a análise",
-    };
-  }
+  /* AS DUAS DICAS DO COCKPIT SAÍRAM DAQUI (08/08/2026).
+   *
+   * "Comece pela primeira empresa da fila" e "Falta emitir o laudo" diziam,
+   * palavra por palavra, o que a Trilha e o Empurrão já dizem naquela mesma
+   * tela — e a bolha aparecia POR CIMA dos dois. Três vozes com a mesma ordem
+   * não orientam mais: quem lê três "faça isto agora" não sabe qual obedecer, e
+   * a saída natural é ignorar as três.
+   *
+   * A regra da casa agora é UMA TELA, UM ORIENTADOR. No cockpit o orientador é
+   * o Empurrão (cita a empresa pelo nome e o botão executa ali mesmo) ou a
+   * Trilha; a bolha se cala. Nas telas SEM orientador — importar e curso — ela
+   * continua, porque lá é a única voz.
+   */
 
-  /* Analisou e não emitiu: o laudo é o que vira honorário. */
-  if (r === "/painel" && s.analises > 0 && s.laudos === 0) {
-    return {
-      chave: "cockpit-sem-laudo",
-      titulo: "Falta emitir o laudo",
-      texto:
-        "A análise já está salva. O laudo é o documento que você entrega ao cliente — numerado, com a memória de cálculo e o seu escritório na capa.",
-      ctaRotulo: "Como emitir o laudo",
-    };
-  }
-
-  /* Laudo emitido e escritório em branco: agora o pedido faz sentido, porque
-     o documento existe e vai sair sem nome. */
+  /* Laudo emitido e escritório em branco: sobrevive porque não é "o que fazer
+     a seguir" — é um defeito no documento que JÁ SAIU, e nenhum dos dois
+     orientadores do cockpit fala disso. */
   if (s.laudos > 0 && !s.temEscritorio) {
     return {
       chave: "sem-escritorio",

@@ -54,6 +54,9 @@ ok    suíte venda (80 asserções)
 ── Auditoria de UX (percepção, não estética) ───────────────────
 ok    auditoria de UX (6 regras limpas)
 
+── Auditoria de texto (as telas de trabalho, não os documentos) 
+ok    auditoria de texto (3 regras limpas)
+
 ── Auditoria de schema (colunas que ninguém garante que existem) 
 ok    auditoria de schema (29 tabelas com proveniência)
 
@@ -274,6 +277,13 @@ ok    coluna 'Situação Simples Nacional' cai em REGIME, não em situação
 ok    'Situação Cadastral' continua caindo em situação
 ok    'Anexo Simples' continua caindo em anexo, não em regime
 
+── Primeiro acesso da empresa: a aba certa e a instrução certa ─
+ok    a aba sincroniza quando a ação muda de destino
+ok    a ação de confirmar/analisar abre a ANÁLISE, não o dossiê
+ok    clicar no nome de empresa SEM análise leva ao formulário
+ok    premissa estimada vira TAREFA numerada, não só aviso de estado
+ok    empresa sem análise nenhuma também recebe instrução
+
 ── Links das réguas apontam para rotas que existem ─────────────
 ok    rotas citadas nos e-mails: importar
 ok    nenhum e-mail semeado aponta para rota removida
@@ -363,4 +373,4 @@ ok    pergunta de sim/não NÃO ganha percentual
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 320 verificações automáticas
+TUDO PASSOU — 326 verificações automáticas

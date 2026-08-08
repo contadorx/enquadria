@@ -182,6 +182,15 @@ export function Cockpit({
   // digitou algo na busca.
   const empurrao = useMemo(() => proximoEmpurrao(linhas), [linhas]);
 
+  /**
+   * QUEM ORIENTA ESTA TELA — a Trilha ou o Empurrão, nunca os dois.
+   *
+   * Sem escritório preenchido a Trilha manda, porque é a única que pede nome e
+   * CRC. Fora isso, quem existir: o Empurrão tem prioridade porque é a
+   * instrução melhor (empresa pelo nome, botão que executa).
+   */
+  const mostrarTrilha = !trilha.temEscritorio || !empurrao;
+
   function agirEmpurrao() {
     if (!empurrao) return;
     if (empurrao.tipo === "emitir_primeiro" && empurrao.alvo?.analise_id) {
@@ -302,10 +311,23 @@ export function Cockpit({
     }
     if (chave === "emitir") {
       return chamar("/api/laudo/lote", { analise_ids: analises }, "lote-emitir", (j) => {
-        const r = j as { emitidos: number; ja_tinham: number; bloqueados: number };
-        return `${r.emitidos} laudos emitidos${r.ja_tinham ? `, ${r.ja_tinham} já existiam` : ""}${
-          r.bloqueados ? `, ${r.bloqueados} bloqueados pelo limite do plano gratuito` : ""
-        }.`;
+        const r = j as {
+          emitidos: number;
+          ja_tinham: number;
+          bloqueados: number;
+          sem_confirmar?: number;
+        };
+        /* O QUE FICOU DE FORA É A PARTE IMPORTANTE DESTE RECADO. O lote não
+           emite sobre premissa estimada — e se a tela não contar quantas
+           ficaram, o contador conclui que emitiu a carteira inteira. */
+        return (
+          `${r.emitidos} laudos emitidos${r.ja_tinham ? `, ${r.ja_tinham} já existiam` : ""}${
+            r.bloqueados ? `, ${r.bloqueados} bloqueados pelo limite do plano gratuito` : ""
+          }.` +
+          (r.sem_confirmar
+            ? ` ${r.sem_confirmar} ficaram de fora porque as premissas ainda são estimadas — abra cada uma, confira e salve.`
+            : "")
+        );
       });
     }
     if (chave === "enviar") {
@@ -344,39 +366,26 @@ export function Cockpit({
     return (
       <>
         <Trilha estado={trilha} aoAbrirEmpresa={(id, aba) => setGaveta({ id, aba })} />
-        <div className="rounded border border-line bg-surface p-6 shadow-card">
-        <div className="mx-auto max-w-md text-center">
-          <h2 className="text-[16px] font-bold text-ink">Comece pela sua carteira</h2>
-          <p className="mt-1.5 text-[13.5px] text-slate2">
-            Suba um CSV com CNPJ e razão social. Em segundos você vê quantos clientes precisam
-            decidir até 30 de setembro — e quanto isso vale em honorário.
+        {/* OS OUTROS TRÊS PASSOS NUMERADOS SAÍRAM DAQUI (08/08/2026).
+            Esta tela mostrava DUAS listas numeradas do mesmo assunto — os 4
+            passos da Trilha e mais 3 aqui, ambas começando em 1. Sete passos
+            para um único caminho, e o segundo bloco era o mais fraco: não sabia
+            o que já tinha sido feito, não marcava nada como concluído, e ainda
+            pedia a carteira inteira ("suba um CSV") quando a Trilha pede — com
+            razão — uma empresa só.
+
+            Sobra o que ele tinha de útil e a Trilha não garante: um caminho
+            para importar mesmo se a pessoa ocultar a Trilha. */}
+        <div className="rounded border border-line bg-surface p-5 text-center shadow-card">
+          <p className="text-[13px] text-slate2">
+            Sua carteira ainda está vazia.
           </p>
-        </div>
-        <div className="mx-auto mt-6 grid max-w-lg gap-2.5">
-          {[
-            ["1", "Importe a carteira", "Aceita a exportação do seu sistema, sem formato rígido."],
-            ["2", "Veja quem precisa decidir", "A triagem elimina 60-80% da base sozinha."],
-            ["3", "Emita laudo e termo", "Papel cobrável com a sua marca, sem trocar de tela."],
-          ].map(([n, t, dsc]) => (
-            <div key={n} className="flex items-start gap-3 rounded-sm border border-linesoft bg-surface2 px-3.5 py-3">
-              <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink font-mono text-[11px] text-white">
-                {n}
-              </span>
-              <div>
-                <div className="text-[13px] font-semibold">{t}</div>
-                <div className="text-[12px] text-muted">{dsc}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="mt-6 text-center">
           <Link
             href="/painel/importar"
-            className="inline-block rounded-sm bg-ink px-5 py-3 text-sm font-semibold text-white"
+            className="mt-3 inline-block rounded-sm bg-ink px-5 py-2.5 text-[13px] font-semibold text-white"
           >
-            Importar carteira
+            Adicionar empresas
           </Link>
-        </div>
         </div>
       </>
     );
@@ -384,7 +393,24 @@ export function Cockpit({
 
   return (
     <div className="pb-2">
-      <Trilha estado={trilha} aoAbrirEmpresa={(id, aba) => setGaveta({ id, aba })} />
+      {/* UMA TELA, UM ORIENTADOR (08/08/2026).
+       *
+       * A Trilha e o Empurrão diziam a mesma coisa ao mesmo tempo — "emita o
+       * primeiro laudo" aparecia nos dois, um em cima do outro. Duas vozes com
+       * a mesma ordem não orientam mais: orientam menos.
+       *
+       * A escolha entre elas não é de gosto, é de qualidade da instrução: o
+       * Empurrão cita a empresa pelo nome, sabe qual é o gargalo da carteira e
+       * o botão dele EXECUTA ali mesmo. A Trilha é genérica. Então o Empurrão
+       * ganha sempre que existe.
+       *
+       * A exceção é o escritório em branco. Aí a Trilha volta, porque é a única
+       * que pede nome e CRC — e deixar o Empurrão emitir o primeiro laudo antes
+       * disso seria entregar ao cliente o documento sem a marca de quem assina.
+       */}
+      {mostrarTrilha && (
+        <Trilha estado={trilha} aoAbrirEmpresa={(id, aba) => setGaveta({ id, aba })} />
+      )}
 
       {/* ================================================= 2. LINHA DE PRODUÇÃO */}
       <div className="rounded border border-line bg-surface p-3.5 shadow-card">
@@ -548,8 +574,12 @@ export function Cockpit({
       {/* ================================= 3b. O EMPURRÃO — a UMA coisa a fazer
           Vem ANTES dos avisos de propósito. Avisos são uma lista do que existe;
           o empurrão é a próxima ação, com a empresa pelo nome. Quando os dois
-          aparecem juntos, o que decide se o contador age é qual está no topo. */}
-      {empurrao && (
+          aparecem juntos, o que decide se o contador age é qual está no topo.
+
+          `!mostrarTrilha` é o outro lado da regra de um orientador só: enquanto
+          o escritório não tem nome, quem manda é a Trilha e este bloco se cala.
+          Sem isso, o Empurrão emitiria o primeiro laudo sem marca nenhuma. */}
+      {empurrao && !mostrarTrilha && (
         <div className="mt-3 rounded border-l-[3px] border-accent border-y border-r border-line bg-accentwash px-4 py-3.5 shadow-card">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="max-w-[62ch]">
@@ -806,8 +836,13 @@ export function Cockpit({
                   className="shrink-0"
                 />
 
+                {/* Clicar no NOME abre a ficha — menos quando não há análise:
+                    aí a ficha só diz "nenhuma análise registrada", e o clique
+                    que deveria começar o trabalho o esconde. (07/08/2026) */}
                 <button
-                  onClick={() => setGaveta({ id: l.id, aba: "dossie" })}
+                  onClick={() =>
+                    setGaveta({ id: l.id, aba: l.analise_id ? "dossie" : "decisao" })
+                  }
                   className="min-w-0 flex-1 text-left md:flex-none"
                 >
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -896,10 +931,13 @@ export function Cockpit({
         </div>
       </div>
 
+      {/* O DISCLAIMER COMPLETO MORA NO DOCUMENTO, não aqui. É no laudo que ele
+          protege — é o laudo que vai ao cliente e, um dia, a um processo. Na
+          tela de trabalho ele é ruído: o contador já sabe, e leu ontem. Fica a
+          versão curta, com os três fatos que mudam decisão. */}
       <p className="mt-3 max-w-[80ch] text-[11px] leading-relaxed text-muted">
-        Os números são estimativas de cenário a partir das premissas informadas. A alíquota de
-        referência de IBS/CBS só é fixada por Resolução do Senado até 31/10/2026 — depois do
-        fechamento desta janela. A decisão e a responsabilidade técnica são do contador que assina.
+        Estimativa de cenário. A alíquota de referência só é fixada até 31/10/2026. Quem assina
+        decide.
       </p>
 
       {/* ====================================================== 2. A GAVETA */}

@@ -240,9 +240,8 @@ export function PedirDados({
             e o caminho é pedir de novo. */}
         {!coleta.derivadas && (
           <p className="mt-2.5 rounded-sm bg-amarelowash px-3 py-2 text-[12px] leading-relaxed text-amarelo">
-            <b>Não dá para aplicar estas respostas.</b> O formulário foi respondido, mas as seis
-            perguntas não vieram completas — sem elas não há o que preencher no cálculo. Clique em
-            &quot;Pedir de novo&quot; e reenvie o link à empresa.
+            <b>Clique em &quot;Pedir de novo&quot; e reenvie o link.</b> Vieram respostas
+            incompletas — sem as seis não há o que preencher no cálculo.
           </p>
         )}
 
@@ -325,8 +324,7 @@ export function PedirDados({
 
         {erro && <p className="mt-2 text-[12px] text-vermelho">{erro}</p>}
         <p className="mt-2.5 text-[11px] leading-relaxed text-muted">
-          O link não pede cadastro nem login — se pedisse, ninguém responderia. Ele mostra só o
-          nome da empresa e as seis perguntas, e você encerra quando quiser.
+          O link não pede cadastro nem login. Você encerra quando quiser.
         </p>
       </div>
     );
@@ -338,12 +336,13 @@ export function PedirDados({
       <div className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
         O que só a empresa sabe
       </div>
+      {/* A LISTA DAS CINCO PERGUNTAS SAIU DAQUI (08/08/2026).
+          O parágrafo enumerava as cinco perguntas logo acima do botão que manda
+          exatamente essas cinco — o leitor lia a mesma lista duas vezes. Elas
+          não sumiram: são o conteúdo do formulário que o botão envia. */}
       <p className="mt-1.5 max-w-[68ch] text-[12.5px] leading-relaxed text-slate2">
-        Cinco das perguntas da análise não estão na escrituração: quanto das vendas vai para outra
-        empresa, se essas empresas são grandes, se algum cliente já cobrou crédito na nota, se dá
-        para repassar preço e se o concorrente é maior. Sem elas você estima — e a estimativa entra
-        no laudo com a mesma cara de um número apurado. Mande as seis perguntas para o cliente
-        responder pelo celular.
+        Cinco das seis perguntas não estão na escrituração — só o cliente sabe. Sem elas, o laudo
+        carrega estimativa com cara de apuração.
       </p>
       {erro && <p className="mt-2 text-[12px] text-vermelho">{erro}</p>}
       {bloqueio && (
