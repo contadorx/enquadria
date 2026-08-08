@@ -1417,7 +1417,54 @@ if (!fs.existsSync(CSV)) {
   ok("'Situação Cadastral' continua caindo em situação", c3.situacao === "Situação Cadastral", c3);
   const c4 = cab("CNPJ;Anexo Simples\n33.000.167/0001-01;2");
   ok("'Anexo Simples' continua caindo em anexo, não em regime", c4.anexo === "Anexo Simples", c4);
+
+
 }
+
+/* ═══ A COLUNA DE ANEXO LIDA COMO REGIME (08/08/2026) ══════════════════════
+   O caso que o teste acima quase pegava e não pegava: "Anexo Simples" tem 13
+   caracteres e vence "simples" (7) — mas "Anexo Simples NACIONAL" contém
+   "simples nacional", de 16, e 16 vence 13. A coluna com os valores 1..5 ia
+   para REGIME, `leRegime("3")` devolvia "fora", e toda empresa de Anexo II a
+   V sumia da fila rotulada "Empresa já fora do Simples". Em silêncio: a rede
+   do importador só acende acima de 55% de FORA, e o Anexo I continuava
+   entrando como optante, segurando o total abaixo do corte.
+   É o defeito mais caro que este produto pode ter — acontece no primeiro
+   contato, com a carteira real, e o contador conclui que o produto não leu o
+   arquivo dele. Duas travas: o mapeamento da coluna e a leitura do valor. */
+/* helper próprio: estes casos rodam SEMPRE, inclusive em máquina sem o CSV de
+   conferência. O defeito que eles guardam é caro demais para ficar atrás de um
+   arquivo que pode não estar lá — foi assim que ele passou despercebido. */
+const cabecalhoDe = (csv) => csvlib.parsearCarteira(csv).colunas_reconhecidas;
+
+const c5 = cabecalhoDe("CNPJ;Anexo Simples Nacional\n33.000.167/0001-01;3");
+ok("'Anexo Simples Nacional' cai em ANEXO, não em regime (a carteira sumia)",
+   c5.anexo === "Anexo Simples Nacional" && !c5.regime, c5);
+const c6 = cabecalhoDe("CNPJ;ANEXO DO SIMPLES NACIONAL\n33.000.167/0001-01;5");
+ok("qualquer cabeçalho que comece com 'anexo' é anexo", c6.anexo === "ANEXO DO SIMPLES NACIONAL", c6);
+
+const linhaAnexo = csvlib.parsearCarteira(
+  "CNPJ;Razao Social;Anexo Simples Nacional;CNAE\n33.000.167/0001-01;ACME;3;2599399"
+).linhas[0];
+ok("...e o valor vira o anexo da empresa", linhaAnexo.anexo === 3, linhaAnexo.anexo);
+ok("...com o regime intocado, para a triagem decidir pelo CNAE",
+   linhaAnexo.regime === undefined, linhaAnexo.regime);
+ok("...e a empresa entra na fila em vez de sumir",
+   triagem.triar(linhaAnexo).faixa === "A", triagem.triar(linhaAnexo).faixa);
+
+/* a segunda trava: dígito sozinho é anexo, não regime — "não sei" segue pela
+   triagem por CNAE, "fora" some da tela */
+ok("leRegime('3') é 'não sei', não 'fora'", triagem.leRegime("3") === null, triagem.leRegime("3"));
+ok("leRegime('1') idem — sem inventar que é optante", triagem.leRegime("1") === null);
+ok("mas '1 - Simples Nacional' continua sendo Simples",
+   triagem.leRegime("1 - Simples Nacional") === "simples");
+
+/* o anexo em romano vinha do export e virava NaN, caindo no chute por CNAE */
+ok("parseAnexo lê romano", csvlib.parseAnexo("Anexo III") === 3, csvlib.parseAnexo("Anexo III"));
+ok("parseAnexo lê 'ANEXO V'", csvlib.parseAnexo("ANEXO V") === 5, csvlib.parseAnexo("ANEXO V"));
+ok("parseAnexo lê dígito", csvlib.parseAnexo("2") === 2);
+ok("parseAnexo recusa lixo", csvlib.parseAnexo("x") === undefined);
+ok("parseAnexo recusa fora da faixa 1..5", csvlib.parseAnexo("9") === undefined);
 
 /* ══ A ABA SEGUE A AÇÃO, E A TELA DIZ O QUE FAZER (07/08/2026) ═════════════
    "Confirmar premissas" abria o Dossiê quando a gaveta já estava aberta:

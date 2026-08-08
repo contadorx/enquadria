@@ -8,6 +8,21 @@ import { conteudoDaProposta, sha256, novoToken, CLAUSULAS_CIENCIA } from "@/lib/
 import { enviarEmail, htmlConviteAssinatura } from "@/lib/email";
 
 /**
+ * TEMPO DE FUNÇÃO — declarado em 08/08/2026.
+ *
+ * Nenhuma rota de lote declarava `maxDuration`: rodavam no default da
+ * plataforma, enquanto os crons — que ninguém espera na frente da tela — já
+ * pediam 60 s. Esta rota trabalha por item (RPC, gravação, e às vezes um
+ * e-mail que pode levar segundos), e estourar no meio não é uma tela lenta: é
+ * documento criado e e-mail já enviado, com "falha de rede" escrito para o
+ * contador. Sessenta segundos não resolvem uma carteira de 400 de uma vez —
+ * resolvem a maioria dos lotes reais, e o que passa disso agora é interrompido
+ * com aviso honesto em vez de silêncio.
+ */
+export const maxDuration = 60;
+
+
+/**
  * TERMOS EM LOTE — o último gargalo da esteira.
  *
  * Gera o termo de ciência de todas as análises que já têm laudo e cujo cliente
@@ -36,6 +51,22 @@ export async function POST(req: Request) {
     corpo = {};
   }
   const enviarConvite = corpo.enviar_email !== false;
+
+  /**
+   * LISTA VAZIA NÃO É "TODAS" — conserto de 08/08/2026. Esta é a mais grave das
+   * três rotas de lote, porque aqui `[]` não gerava só documento: disparava
+   * e-mail de convite de assinatura para todos os clientes da carteira que
+   * tivessem laudo e contato. Não há desfazer para e-mail enviado.
+   *
+   * Campo ausente continua sendo "todas"; campo presente e vazio é seleção
+   * vazia, e seleção vazia não manda e-mail para ninguém.
+   */
+  if (Array.isArray(corpo.analise_ids) && corpo.analise_ids.length === 0) {
+    return NextResponse.json(
+      { erro: "nenhuma empresa selecionada — selecione ao menos uma para enviar o termo" },
+      { status: 400 }
+    );
+  }
 
   // nome do escritório para assinar o e-mail
   const { data: perfil } = await supabase

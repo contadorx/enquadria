@@ -1,11 +1,33 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
-import { situacaoPlano, mensagemBloqueio, montarMuro, type Assinatura } from "@/lib/plano";
+import {
+  situacaoPlano,
+  mensagemBloqueio,
+  montarMuro,
+  avisoLimite,
+  type Assinatura,
+} from "@/lib/plano";
 import { garantirAnaliseCoerente } from "@/lib/recalculo-server";
 import { HONORARIO_PADRAO } from "@/lib/potencial";
 import { honorarioSugerido } from "@/lib/proposta";
 import { COLUNAS_ESCRITORIO, type Escritorio } from "@/lib/escritorio";
 import { responsavelDoTenant } from "@/lib/escritorio-server";
+import { ORIGEM_LOTE } from "@/lib/premissas-padrao";
+
+/**
+ * TEMPO DE FUNÇÃO — declarado em 08/08/2026.
+ *
+ * Nenhuma rota de lote declarava `maxDuration`: rodavam no default da
+ * plataforma, enquanto os crons — que ninguém espera na frente da tela — já
+ * pediam 60 s. Esta rota trabalha por item (RPC, gravação, e às vezes um
+ * e-mail que pode levar segundos), e estourar no meio não é uma tela lenta: é
+ * documento criado e e-mail já enviado, com "falha de rede" escrito para o
+ * contador. Sessenta segundos não resolvem uma carteira de 400 de uma vez —
+ * resolvem a maioria dos lotes reais, e o que passa disso agora é interrompido
+ * com aviso honesto em vez de silêncio.
+ */
+export const maxDuration = 60;
+
 
 /**
  * Emite o laudo de uma análise (RPC atômica que numera por tenant).
@@ -28,6 +50,38 @@ export async function POST(req: Request) {
   }
   if (!corpo.analise_id) {
     return NextResponse.json({ erro: "analise_id obrigatório" }, { status: 400 });
+  }
+
+  /**
+   * A ROTA INDIVIDUAL TAMBÉM NÃO EMITE SOBRE PREMISSA ESTIMADA — 08/08/2026.
+   *
+   * O comentário do lote afirma que "esta rota era a única porta que furava a
+   * regra". Não era: sobrou esta. `PainelEmpresa` mostra o botão "Emitir laudo"
+   * ativo assim que existe análise, inclusive a estimada pelo CNAE na
+   * importação, com apenas um aviso amarelo embaixo — e aviso não é trava. Saía
+   * documento numerado, com o CRC do contador na capa, sobre premissa que
+   * ninguém conferiu.
+   *
+   * A recusa é 409 (conflito de estado), não 400: não é o pedido que está
+   * malformado, é a análise que ainda não está pronta. E a mensagem diz o que
+   * fazer, porque o contador resolve isso sozinho em dois cliques.
+   */
+  const { data: analiseAlvo } = await supabase
+    .from("analises")
+    .select("parametros")
+    .eq("id", corpo.analise_id)
+    .maybeSingle();
+  const origem = (analiseAlvo?.parametros as { origem_premissas?: string } | null)
+    ?.origem_premissas;
+  if (origem === ORIGEM_LOTE) {
+    return NextResponse.json(
+      {
+        erro:
+          "As premissas desta empresa ainda são a estimativa do CNAE. Abra a análise, confira os números e salve — aí o laudo sai com a sua assinatura em cima de dado conferido.",
+        premissas_estimadas: true,
+      },
+      { status: 409 }
+    );
   }
 
   // reemitir um laudo que já existe nunca consome cota
@@ -166,5 +220,34 @@ export async function POST(req: Request) {
     console.error("[laudo] identidade não entrou no snapshot:", e instanceof Error ? e.message : e);
   }
 
-  return NextResponse.json({ ok: true, laudo_id: laudo.id, numero: laudo.numero, recalculada });
+  /**
+   * O AVISO ANTES DO MURO — 08/08/2026.
+   *
+   * `avisoLimite()` estava escrita em lib/plano.ts desde sempre e não era
+   * importada em lugar nenhum: código morto. O contador emitia o 1º e o 2º
+   * laudo sem um único sinal de que a conta estava andando e batia no muro de
+   * surpresa. Surpresa no momento da compra não vende, assusta — e a conta do
+   * muro ("uma análise paga o ano") funciona muito melhor quando ele já sabia
+   * que ela vinha.
+   *
+   * Sai só quando falta pouco, e só para quem tem teto: assinante nunca vê.
+   */
+  let aviso: string | null = null;
+  try {
+    const { data: assinRaw } = await supabase.rpc("assinatura_ativa");
+    const { count } = await supabase.from("laudos").select("id", { count: "exact", head: true });
+    aviso = avisoLimite(
+      situacaoPlano((Array.isArray(assinRaw) ? assinRaw[0] : assinRaw) as Assinatura | null, count ?? 0)
+    );
+  } catch {
+    /* o aviso é cortesia; falhar aqui não pode derrubar a emissão */
+  }
+
+  return NextResponse.json({
+    ok: true,
+    laudo_id: laudo.id,
+    numero: laudo.numero,
+    recalculada,
+    aviso_plano: aviso,
+  });
 }

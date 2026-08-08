@@ -50,12 +50,32 @@ export default function Equipe() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    const { data: ms } = await supabase.from("profiles").select("id, email, nome, role");
+    const { data: ms, error: errM } = await supabase
+      .from("profiles")
+      .select("id, email, nome, role");
     const { data: cs } = await supabase
       .from("convites")
       .select("id, email, papel, expira_em, criado_em")
       .is("aceito_em", null)
       .order("criado_em", { ascending: false });
+
+    /**
+     * A LEITURA FALHANDO NÃO PODE PARECER PERDA DE PERMISSÃO — 08/08/2026.
+     *
+     * Nenhuma das duas consultas verificava `error`. Com a de `profiles`
+     * falhando, `ms` vinha nulo: a lista ficava vazia, `eu` ficava indefinido,
+     * `meuPapel` caía em "membro" e o painel de convite SUMIA da tela. O dono
+     * do escritório concluía que tinha sido rebaixado — e o produto não dizia
+     * uma palavra. Erro de leitura é erro de leitura, e precisa ter cara disso.
+     */
+    if (errM) {
+      setErro(
+        "não foi possível carregar a equipe agora. Recarregue a página — se continuar, o problema é do nosso lado e nada da sua equipe foi alterado."
+      );
+      setCarregando(false);
+      return;
+    }
+
     setMembros((ms ?? []) as Membro[]);
     setConvites((cs ?? []) as Convite[]);
     const eu = (ms ?? []).find((m) => m.id === user?.id);
@@ -101,9 +121,21 @@ export default function Equipe() {
 
   async function revogar(id: string) {
     setOcupado(true);
+    setErro(null);
+    setAviso(null);
     try {
-      await fetch(`/api/equipe?id=${id}`, { method: "DELETE" });
+      /* `resp.ok` não era conferido: uma revogação recusada pelo servidor
+         recarregava a lista com o convite ainda lá, sem uma linha de erro — e
+         quem revoga um convite precisa saber se ele deixou de valer */
+      const resp = await fetch(`/api/equipe?id=${id}`, { method: "DELETE" });
+      if (!resp.ok) {
+        const json = await resp.json().catch(() => ({}));
+        throw new Error(json.erro ?? "não foi possível revogar este convite");
+      }
+      setAviso("Convite revogado. O link enviado deixa de valer.");
       await carregar();
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "não foi possível revogar este convite");
     } finally {
       setOcupado(false);
     }

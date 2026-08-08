@@ -114,12 +114,49 @@ const PARES = Object.entries(SINONIMOS)
   .flatMap(([campo, nomes]) => nomes.map((n) => ({ campo: campo as keyof LinhaCarteira, n })))
   .sort((a, b) => b.n.length - a.n.length);
 
+/**
+ * A PALAVRA "ANEXO" DECIDE ANTES DE QUALQUER SINÔNIMO — conserto de 08/08/2026.
+ *
+ * "Anexo Simples Nacional" é o cabeçalho mais comum de export contábil, e ele
+ * casava `regime`: "simples nacional" tem 16 caracteres e vencia "anexo
+ * simples", de 13. A coluna com os valores 1..5 ia para o campo de REGIME, e
+ * `leRegime("3")` devolvia "fora" — a carteira inteira de Anexo II a V sumia
+ * da fila rotulada "Empresa já fora do Simples", em silêncio, e a rede do
+ * importador não disparava porque ela só acende acima de 80% de FORA (o Anexo
+ * I continuava entrando como optante).
+ *
+ * Ordenar por comprimento resolve colisões entre sinônimos parecidos, mas não
+ * resolve esta: qualquer sinônimo de regime que apareça DENTRO do nome da
+ * coluna de anexo vence pelo tamanho. Aqui a regra é semântica, não métrica —
+ * cabeçalho que começa com "anexo" é anexo, e ponto.
+ */
 function casarColuna(cabecalho: string): keyof LinhaCarteira | null {
   const h = semAcento(cabecalho);
+  if (/^anexo\b/.test(h)) return "anexo";
   for (const { campo, n } of PARES) {
     if (h === n || (n.length > 3 && h.includes(n))) return campo;
   }
   return null;
+}
+
+/**
+ * O anexo vem como "3", "Anexo III", "ANEXO V" ou "III". Só dígito perdia os
+ * romanos e caía no chute por CNAE, calado.
+ */
+const ROMANOS: Record<string, number> = { i: 1, ii: 2, iii: 3, iv: 4, v: 5 };
+
+export function parseAnexo(bruto?: string | null): number | undefined {
+  const v = semAcento(bruto ?? "");
+  if (!v) return undefined;
+  const digitos = v.replace(/\D/g, "");
+  if (digitos) {
+    const n = parseInt(digitos, 10);
+    return n >= 1 && n <= 5 ? n : undefined;
+  }
+  /* a palavra "anexo" sai ANTES da leitura do romano: o "x" dela é algarismo
+     romano e transformava "Anexo III" em "xiii" */
+  const romano = v.replace(/anexo/g, " ").replace(/[^iv]/g, "");
+  return ROMANOS[romano];
 }
 
 export function parsearCarteira(texto: string): ResultadoParse {
@@ -162,8 +199,7 @@ export function parsearCarteira(texto: string): ResultadoParse {
     }
     vistos.add(cnpj);
 
-    const anexoBruto = pega(row, "anexo");
-    const anexo = anexoBruto ? parseInt(anexoBruto.replace(/\D/g, ""), 10) : undefined;
+    const anexo = parseAnexo(pega(row, "anexo"));
 
     const fatRaw = pega(row, "faturamento_faixa");
     const rbtRaw = pega(row, "rbt12");
@@ -176,7 +212,7 @@ export function parsearCarteira(texto: string): ResultadoParse {
       porte: pega(row, "porte") || undefined,
       situacao: pega(row, "situacao") || undefined,
       regime: pega(row, "regime") || undefined,
-      anexo: Number.isFinite(anexo) ? anexo : undefined,
+      anexo,
       faturamento_faixa: fatRaw || rbtRaw || undefined,
       rbt12,
       contato_nome: pega(row, "contato_nome") || undefined,

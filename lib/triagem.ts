@@ -77,6 +77,15 @@ const semAcentoV = (s?: string | null) =>
 export function leRegime(bruto?: string | null): "simples" | "mei" | "fora" | null {
   const v = semAcentoV(bruto);
   if (!v) return null;
+  /**
+   * A SEGUNDA REDE DO ANEXO (08/08/2026): um valor que é SÓ um dígito de 1 a 5
+   * não é regime — é anexo numa coluna que veio parar aqui. O mapeamento já foi
+   * corrigido em `casarColuna`, mas o custo do erro é a carteira inteira sumindo
+   * calada, então ele merece duas travas. "não sei" segue pela triagem por CNAE;
+   * "fora" some da tela. Note que "1 - Simples Nacional" continua casando em
+   * `^1\b` mais abaixo: aqui só cai o dígito sozinho.
+   */
+  if (/^[1-5]$/.test(v)) return null;
   if (/\bMEI\b|MICROEMPREENDEDOR/.test(v)) return "mei";
   // a negação vem ANTES do resto: "NAO OPTANTE" contém "OPTANTE"
   if (/\bNAO\b|^N$|^0$/.test(v)) return "fora";

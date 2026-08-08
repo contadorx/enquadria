@@ -44,14 +44,26 @@ export interface RespostaAgente {
   pedirEmail?: boolean;
 }
 
-/** Onde o agente pode mandar a pessoa. Nada aqui é inventado na hora. */
+/**
+ * Onde o agente pode mandar a pessoa. Nada aqui é inventado na hora.
+ *
+ * 08/08/2026: `app` apontava para `/cadastro`, rota que NÃO EXISTE — só há
+ * `/login` (que já abre com a aba de criar conta) e `/descadastro`. Não havia
+ * redirect em next.config nem entrada no middleware. Todo prospecto que
+ * clicava no botão principal do balão de vendas caía no not-found, e este é o
+ * único ponto de uso do destino mais importante da lista.
+ *
+ * Os `.html` dos outros destinos funcionavam por redirect declarado em
+ * next.config.mjs; passam a apontar direto para o endereço canônico, porque um
+ * 308 no meio do caminho do prospecto é latência sem contrapartida.
+ */
 export const DESTINOS = {
-  app: { rotulo: "Fazer a triagem grátis", url: "https://app.enquadria.com.br/cadastro" },
-  precos: { rotulo: "Ver os planos", url: "https://enquadria.com.br/precos.html" },
+  app: { rotulo: "Fazer a triagem grátis", url: "https://app.enquadria.com.br/login" },
+  precos: { rotulo: "Ver os planos", url: "https://enquadria.com.br/precos" },
   curso: { rotulo: "Ver as nove aulas", url: "https://enquadria.com.br/curso/" },
   guia: { rotulo: "Baixar o guia", url: "https://enquadria.com.br/guia/" },
-  faq: { rotulo: "Ver as dúvidas", url: "https://enquadria.com.br/faq.html" },
-  comoFunciona: { rotulo: "Ver como funciona", url: "https://enquadria.com.br/como-funciona.html" },
+  faq: { rotulo: "Ver as dúvidas", url: "https://enquadria.com.br/faq" },
+  comoFunciona: { rotulo: "Ver como funciona", url: "https://enquadria.com.br/como-funciona" },
 } as const;
 
 interface Regra {

@@ -78,10 +78,19 @@ export async function POST(req: Request) {
   }
 
   // rota aberta precisa de teto: sem isso, varrer a base é só questão de tempo
-  const { data: tentativas } = await supabase.rpc("registrar_tentativa_verificacao", {
-    p_origem: origemHash(req),
-    p_janela_minutos: JANELA_MINUTOS,
-  });
+  const { data: tentativas, error: erroLimite } = await supabase.rpc(
+    "registrar_tentativa_verificacao",
+    { p_origem: origemHash(req), p_janela_minutos: JANELA_MINUTOS }
+  );
+  /* O LIMITADOR FALHAVA ABERTO E CALADO — 08/08/2026. O `error` da RPC não era
+     lido: se ela sumisse, mudasse de assinatura ou desse erro, `data` vinha
+     nulo, `typeof null !== "number"` e o teto desaparecia sem um único registro.
+     Rota pública sem teto é rota que alguém varre. Não recuso a consulta por
+     causa disso (derrubar a verificação do cliente por defeito nosso seria
+     pior), mas o log tem de existir para alguém descobrir. */
+  if (erroLimite) {
+    console.error("[verificar] limitador indisponível:", erroLimite.message);
+  }
   if (typeof tentativas === "number" && tentativas > LIMITE_TENTATIVAS) {
     return NextResponse.json(
       {
@@ -163,16 +172,46 @@ export async function POST(req: Request) {
 
   // laudo: número é por escritório, então pode repetir entre escritórios —
   // o CNPJ é o que identifica o documento certo
-  const { data: candidatos } = await supabase
-    .from("laudos")
-    .select("numero, emitido_em, snapshot")
-    .eq("numero", numero)
-    .limit(50);
+  /**
+   * O NÚMERO É POR ESCRITÓRIO — E ERA POR ISSO QUE A VERIFICAÇÃO IA QUEBRAR.
+   *
+   * Conserto de 08/08/2026. A consulta era `.eq("numero", n).limit(50)`, SEM
+   * ordenação. Como cada escritório numera a partir do 0001, o laudo nº 1
+   * existe uma vez por tenant: passando de cinquenta escritórios, o documento
+   * legítimo do cliente podia não estar entre os cinquenta que o banco
+   * devolvesse — e sem `order by` o corte é arbitrário, então nem sempre o
+   * mesmo. A resposta era "Nenhum documento corresponde aos dados informados".
+   *
+   * É o pior tipo de defeito que este produto pode ter: silencioso, do lado do
+   * cliente do contador, no momento em que ele foi conferir se o papel é
+   * verdadeiro — e piorando conforme a base cresce.
+   *
+   * O CNPJ não dá para filtrar no banco (mora dentro do snapshot, e a grafia
+   * gravada varia), então a comparação continua em memória; o que muda é que a
+   * varredura agora é paginada e ORDENADA, até achar ou acabar. Ordem estável
+   * = resposta estável.
+   */
+  const POR_PAGINA = 200;
+  const MAX_PAGINAS = 25; // 5.000 laudos com o mesmo número: aí o desenho muda, não o limite
+  let achado: { numero: number; emitido_em: string; snapshot: unknown } | undefined;
 
-  const achado = (candidatos ?? []).find((l) => {
-    const snap = l.snapshot as { empresa?: { cnpj?: string } } | null;
-    return limparCnpj(snap?.empresa?.cnpj ?? "") === cnpj;
-  });
+  for (let pagina = 0; pagina < MAX_PAGINAS && !achado; pagina++) {
+    const { data: candidatos } = await supabase
+      .from("laudos")
+      .select("numero, emitido_em, snapshot")
+      .eq("numero", numero)
+      .order("emitido_em", { ascending: true })
+      .range(pagina * POR_PAGINA, pagina * POR_PAGINA + POR_PAGINA - 1);
+
+    if (!candidatos?.length) break;
+
+    achado = candidatos.find((l) => {
+      const snap = l.snapshot as { empresa?: { cnpj?: string } } | null;
+      return limparCnpj(snap?.empresa?.cnpj ?? "") === cnpj;
+    });
+
+    if (candidatos.length < POR_PAGINA) break;
+  }
 
   if (!achado) return NextResponse.json(NAO_ENCONTRADO);
 

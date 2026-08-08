@@ -5,6 +5,21 @@ import { enriquecer, fundir } from "@/lib/receita";
 import type { LinhaCarteira } from "@/lib/csv";
 
 /**
+ * TEMPO DE FUNÇÃO — declarado em 08/08/2026.
+ *
+ * Nenhuma rota de lote declarava `maxDuration`: rodavam no default da
+ * plataforma, enquanto os crons — que ninguém espera na frente da tela — já
+ * pediam 60 s. Esta rota trabalha por item (RPC, gravação, e às vezes um
+ * e-mail que pode levar segundos), e estourar no meio não é uma tela lenta: é
+ * documento criado e e-mail já enviado, com "falha de rede" escrito para o
+ * contador. Sessenta segundos não resolvem uma carteira de 400 de uma vez —
+ * resolvem a maioria dos lotes reais, e o que passa disso agora é interrompido
+ * com aviso honesto em vez de silêncio.
+ */
+export const maxDuration = 60;
+
+
+/**
  * Recebe as linhas já parseadas no navegador, enriquece contra a Receita,
  * roda a triagem e grava tudo em lote. O parse fica no cliente (papaparse no
  * browser aguenta arquivo grande sem estourar o payload); aqui roda o que
@@ -179,7 +194,13 @@ export async function POST(req: Request) {
       const porRegime = registros.filter(
         (r) => r.faixa === "FORA" && (r.motivo_triagem ?? "").includes("fora do Simples")
       );
-      if (registros.length < 5 || porRegime.length / registros.length < 0.8) return null;
+      /* 08/08/2026: era 0.8, e a carteira que motivou esta rede não a acendia.
+         Com a coluna de anexo lida como regime, o Anexo I continuava entrando
+         como optante e segurava o total abaixo do corte — a rede existia e não
+         disparava. O aviso não bloqueia nada, só mostra o valor bruto que
+         causou: falso positivo custa uma linha de texto, falso negativo custa
+         a carteira inteira sumindo da tela. */
+      if (registros.length < 5 || porRegime.length / registros.length < 0.55) return null;
       const exemplo = porRegime.find((r) => r.regime)?.regime ?? null;
       return { quantas: porRegime.length, total: registros.length, exemplo };
     })(),

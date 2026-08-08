@@ -57,6 +57,21 @@ const COR: Record<Faixa, string> = {
   FORA: "text-muted",
 };
 
+/** o que a tela de sucesso da importação mostra */
+interface Feito {
+  gravadas: number;
+  enriquecidas: number;
+  receita_ativa: boolean;
+  receita_configurada?: boolean;
+  receita_falhas?: number;
+  com_rbt12?: number;
+  triagem_cega?: boolean;
+  regime_suspeito?: { quantas: number; total: number; exemplo: string | null } | null;
+  analisadas?: number;
+  /** a primeira passada falhou; a carteira está salva e dá para refazer */
+  avisoAnalise?: string;
+}
+
 export function Importador({ jaTem = 0 }: { jaTem?: number }) {
   const router = useRouter();
   const [codificacao, setCodificacao] = useState<string | null>(null);
@@ -75,22 +90,35 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
       previaRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
     );
   }
-  const [feito, setFeito] = useState<{
-    gravadas: number;
-    enriquecidas: number;
-    receita_ativa: boolean;
-    receita_configurada?: boolean;
-    receita_falhas?: number;
-    com_rbt12?: number;
-    triagem_cega?: boolean;
-    regime_suspeito?: { quantas: number; total: number; exemplo: string | null } | null;
-    analisadas?: number;
-  } | null>(null);
+  const [feito, setFeito] = useState<Feito | null>(null);
   const [diag, setDiag] = useState<{
     veredito: string; sugestao: string | null; url: string | null;
     tem_token: boolean; tempo_ms: number; detalhe: string | null;
   } | null>(null);
   const [testando, setTestando] = useState(false);
+
+  /**
+   * A RESPOSTA PODE NÃO SER JSON — 08/08/2026.
+   *
+   * `await resp.json()` era incondicional. O enriquecimento contra a Receita
+   * roda em blocos de 200 CNPJs com 12 s de teto cada, então uma carteira
+   * grande pode estourar o tempo da função — e aí a plataforma responde HTML.
+   * O `json()` lançava, o catch escrevia `e.message`, e o contador lia, em
+   * inglês, `Unexpected token '<', "<!DOCTYPE "... is not valid JSON`.
+   */
+  async function lerResposta(resp: Response): Promise<Record<string, unknown>> {
+    const texto = await resp.text().catch(() => "");
+    try {
+      return texto ? (JSON.parse(texto) as Record<string, unknown>) : {};
+    } catch {
+      return {
+        erro:
+          resp.status === 504 || resp.status === 502
+            ? "o servidor demorou demais e interrompeu no meio. Parte da carteira pode ter sido gravada — abra o cockpit e confira antes de importar de novo."
+            : `o servidor respondeu ${resp.status} sem detalhe. Abra o cockpit e confira o que entrou antes de importar de novo.`,
+      };
+    }
+  }
 
   /** o instrumento: uma chamada com CNPJ conhecido, e o motivo exato do erro */
   async function testarReceita() {
@@ -302,8 +330,8 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
           },
         }),
       });
-      const json = await resp.json();
-      if (!resp.ok) throw new Error(json.erro ?? "falha ao gravar");
+      const json = await lerResposta(resp);
+      if (!resp.ok) throw new Error((json.erro as string) ?? "falha ao gravar");
 
       /**
        * A PRIMEIRA PASSADA, ENCADEADA — o conserto de maior impacto do funil.
@@ -320,11 +348,19 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
        * estimada (origem lote_cnae), e o laudo não sai sem ele confirmar.
        *
        * Falhar aqui NÃO desfaz a importação: as empresas já estão gravadas, e
-       * o contador roda o lote pelo cockpit quando quiser. Por isso o catch é
-       * silencioso — um erro na cereja não pode parecer erro no bolo.
+       * o contador roda o lote pelo cockpit quando quiser.
+       *
+       * O QUE MUDOU EM 08/08/2026: o catch era MUDO. `analisadas` ficava
+       * indefinida, o bloco que a exibe simplesmente não renderizava, e a tela
+       * de sucesso saía idêntica à de quem teve tudo analisado — sem dizer que
+       * a primeira passada falhou nem que dá para refazer. "Um erro na cereja
+       * não pode parecer erro no bolo" continua valendo; parecer que não houve
+       * erro nenhum é outra coisa. Agora a falha vira uma linha de aviso, com
+       * a saída escrita, e a importação segue sendo sucesso.
        */
       let analisadas: number | undefined;
-      const ids: string[] = json.empresas_para_analisar ?? [];
+      let avisoAnalise: string | undefined;
+      const ids: string[] = (json.empresas_para_analisar as string[]) ?? [];
       if (ids.length > 0) {
         setEtapa("analisando");
         try {
@@ -333,18 +369,31 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ empresa_ids: ids }),
           });
-          if (rl.ok) analisadas = (await rl.json()).gravadas ?? 0;
+          const jl = await lerResposta(rl);
+          if (rl.ok) analisadas = (jl.gravadas as number) ?? 0;
+          else
+            avisoAnalise = `A carteira foi gravada, mas a primeira análise automática não rodou (${
+              (jl.erro as string) ?? `erro ${rl.status}`
+            }). Abra o cockpit, selecione as empresas e clique em “Analisar”.`;
         } catch {
-          /* a carteira está salva; o lote pode ser refeito no cockpit */
+          avisoAnalise =
+            "A carteira foi gravada, mas a primeira análise automática não rodou. Abra o cockpit, selecione as empresas e clique em “Analisar”.";
         }
       }
 
-      setFeito({ ...json, analisadas });
+      setFeito({ ...(json as unknown as Feito), analisadas, avisoAnalise });
       setParse(null);
       setTexto("");
       router.refresh();
     } catch (e) {
-      setErro(e instanceof Error ? e.message : "erro inesperado");
+      /* a mensagem do servidor já vem em português por `lerResposta`; o que
+         sobra aqui é falha de rede de verdade, e ela precisa dizer que nada
+         foi gravado — senão o contador não sabe se pode repetir */
+      setErro(
+        e instanceof Error && e.message
+          ? e.message
+          : "não foi possível falar com o servidor — nada foi gravado. Confira a conexão e tente de novo."
+      );
     } finally {
       setEnviando(false);
       setEtapa(null);
@@ -405,6 +454,10 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
             pelo perfil típico do CNAE. As premissas estão marcadas como{" "}
             <b>estimadas</b> — confirme antes de emitir qualquer laudo.
           </p>
+        )}
+
+        {feito.avisoAnalise && (
+          <p className="mt-1.5 text-[13.5px] text-amarelo">{feito.avisoAnalise}</p>
         )}
 
         {feito.triagem_cega && (

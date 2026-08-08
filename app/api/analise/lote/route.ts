@@ -17,6 +17,21 @@ import { anexoPorCnae } from "@/lib/triagem";
 import { premissasPadrao, ORIGEM_LOTE } from "@/lib/premissas-padrao";
 
 /**
+ * TEMPO DE FUNÇÃO — declarado em 08/08/2026.
+ *
+ * Nenhuma rota de lote declarava `maxDuration`: rodavam no default da
+ * plataforma, enquanto os crons — que ninguém espera na frente da tela — já
+ * pediam 60 s. Esta rota trabalha por item (RPC, gravação, e às vezes um
+ * e-mail que pode levar segundos), e estourar no meio não é uma tela lenta: é
+ * documento criado e e-mail já enviado, com "falha de rede" escrito para o
+ * contador. Sessenta segundos não resolvem uma carteira de 400 de uma vez —
+ * resolvem a maioria dos lotes reais, e o que passa disso agora é interrompido
+ * com aviso honesto em vez de silêncio.
+ */
+export const maxDuration = 60;
+
+
+/**
  * ANÁLISE EM LOTE — a primeira passada da carteira inteira.
  *
  * Recebe a lista de empresas, aplica as premissas típicas do CNAE de cada uma e
@@ -47,6 +62,17 @@ export async function POST(req: Request) {
     corpo = await req.json();
   } catch {
     return NextResponse.json({ erro: "corpo inválido" }, { status: 400 });
+  }
+
+  /* lista vazia não é "todas" — mesma guarda das rotas de laudo e termo
+     (08/08/2026). O importador chama esta rota SEM o campo, que continua
+     significando "toda a fila A/B"; o Cockpit sempre manda a seleção, e
+     seleção vazia não deve varrer a carteira. */
+  if (Array.isArray(corpo.empresa_ids) && corpo.empresa_ids.length === 0) {
+    return NextResponse.json(
+      { erro: "nenhuma empresa selecionada — selecione ao menos uma para analisar em lote" },
+      { status: 400 }
+    );
   }
 
   // empresas alvo: as informadas, ou toda a fila de análise (faixas A e B)

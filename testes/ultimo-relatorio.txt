@@ -3,7 +3,7 @@
 ok    compila sem erro
 
 ── Suítes de função pura ───────────────────────────────────────
-ok    47 suítes encontradas na pasta
+ok    49 suítes encontradas na pasta
 ok    suíte abertura (34 asserções)
 ok    suíte absorcao (32 asserções)
 ok    suíte ajuda (41 asserções)
@@ -44,10 +44,12 @@ ok    suíte radar-aviso (39 asserções)
 ok    suíte recalculo (31 asserções)
 ok    suíte recibo (18 asserções)
 ok    suíte reforma (25 asserções)
+ok    suíte reforma-publica (36 asserções)
 ok    suíte reguas (52 asserções)
 ok    suíte reguas-indicacao (40 asserções)
 ok    suíte repasse (26 asserções)
 ok    suíte roteiro (24 asserções)
+ok    suíte slug (21 asserções)
 ok    suíte tabela-2027 (82 asserções)
 ok    suíte termo (128 asserções)
 ok    suíte venda (80 asserções)
@@ -69,6 +71,9 @@ ok    um texto, um dono (4 conferências, com sabotagem)
 
 ── Fronteira servidor ↔ cliente (o proxy que compila e cai no ar) 
 ok    fronteira servidor ↔ cliente (6 conferências, com sabotagem)
+
+── Casca pública (o menu que existe em dois lugares) ───────────
+ok    um menu só nas duas metades (32 conferências, com sabotagem)
 
 ── Segurança do dado — o que a tela promete no momento da fricção 
 ok    a tela promete "separação no banco, não filtro de tela" e o documento sustenta
@@ -248,35 +253,20 @@ ok    a tela de planos tem onde mostrar o erro da contratação
 ok    e trata o pop-up bloqueado, que também parece clique perdido
 
 ── Massa de empresas no parser do app ──────────────────────────
-ok    lê 47 linhas
-ok    importa 45
-ok    acha 1 duplicada
-ok    descarta 1
-ok    e-mail inválido NÃO é gravado
-ok    RBT12 escrito como moeda vira número
-ok    linha sem razão social entra com rótulo
-ok    faturamento em faixa textual não vira RBT12
-ok    triagem: faixa A = 23
-ok    triagem: faixa B = 6
-ok    triagem: faixa C = 1
-ok    triagem: faixa D = 9
-ok    triagem: faixa MEI = 2
-ok    triagem: faixa FORA = 4
-ok    prioridade máxima na de faixa textual
-ok    regime 'SN' é Simples (era o bug: virava FORA)
-ok    regime 'Sim' é Simples
-ok    regime 'Optante' é Simples
-ok    regime '1 - Simples Nacional' é Simples
-ok    regime 'Não' é FORA (o silencioso: entrava na fila)
-ok    regime 'Não optante' é FORA — a negação vence o 'optante' contido
-ok    regime 'Lucro Presumido' segue FORA
-ok    porte por extenso vira MEI
-ok    situação desconhecida NÃO derruba (falso-FORA é carteira sumindo)
-ok    situação '8 - BAIXADA' derruba
-ok    coluna 'Optante pelo Simples' cai em regime (era ignorada)
-ok    coluna 'Situação Simples Nacional' cai em REGIME, não em situação
-ok    'Situação Cadastral' continua caindo em situação
-ok    'Anexo Simples' continua caindo em anexo, não em regime
+FALHA CSV da massa encontrado → "/root/work/Enquadria_Massa_Empresas_Teste.csv"
+ok    'Anexo Simples Nacional' cai em ANEXO, não em regime (a carteira sumia)
+ok    qualquer cabeçalho que comece com 'anexo' é anexo
+ok    ...e o valor vira o anexo da empresa
+ok    ...com o regime intocado, para a triagem decidir pelo CNAE
+ok    ...e a empresa entra na fila em vez de sumir
+ok    leRegime('3') é 'não sei', não 'fora'
+ok    leRegime('1') idem — sem inventar que é optante
+ok    mas '1 - Simples Nacional' continua sendo Simples
+ok    parseAnexo lê romano
+ok    parseAnexo lê 'ANEXO V'
+ok    parseAnexo lê dígito
+ok    parseAnexo recusa lixo
+ok    parseAnexo recusa fora da faixa 1..5
 
 ── Primeiro acesso da empresa: a aba certa e a instrução certa ─
 ok    a aba sincroniza quando a ação muda de destino
@@ -358,20 +348,8 @@ ok    condição sobre o fator R (há serviço no mix)
 ok    análise de um anexo só mantém o passo 1 de sempre
 
 ── Navegador — curso estático e formulário da coleta ───────────
-ok    medalhão com CSS = 32px
-ok    medalhão SEM css continua 32px (não vira cartaz)
-ok    assets carimbados com ?v=
-ok    materiais travados antes do e-mail
-ok    materiais liberam depois do e-mail
-ok    progresso começa em 0
-ok    progresso vai a 9 de 9
-ok    certificado libera com 9 de 9
-ok    desmarcar uma aula tranca o certificado de novo
-ok    LinkedIn: mês da EMISSÃO, não de hoje
-ok    LinkedIn: código e url de verificação
-ok    cada opção mostra o percentual equivalente
-ok    pergunta de sim/não NÃO ganha percentual
+FALHA playwright disponível → "instale para rodar as checagens de navegador"
 
 ── Resultado ───────────────────────────────────────────────────
 
-TUDO PASSOU — 327 verificações automáticas
+2 FALHA(S) em 303 verificações

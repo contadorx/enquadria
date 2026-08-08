@@ -817,9 +817,22 @@ export function quadroComparativo(a: AnaliseGravada): LinhaQuadro[] {
       rotulo: "Repasse de preço necessário para equilibrar",
       dentro: "—",
       fora: a.re != null ? pct(Number(a.re)) : "—",
-      diferenca: a.re != null && a.fc != null
-        ? `folga de ${((Number(a.fc) - Number(a.re)) * 100).toFixed(1).replace(".", ",")} p.p.`
-        : "—",
+      /**
+       * A FOLGA AQUI É A MESMA DA MEMÓRIA DE CÁLCULO — conserto de 08/08/2026.
+       *
+       * Este quadro media a folga sobre o repasse CHEIO (`fc − re`), enquanto o
+       * passo 9 da memória, o `Resultado.folga` do motor e a leitura da pressão
+       * medem sobre o repasse LÍQUIDO (`fc − reLiquido`). O mesmo laudo
+       * imprimia dois números diferentes com o mesmo nome, com uns 0,4 p.p. de
+       * diferença — exatamente o tipo de coisa que a memória de cálculo existe
+       * para não ter. A migração está documentada em lib/deriva.ts; este quadro
+       * tinha ficado para trás.
+       */
+      diferenca: (() => {
+        const liq = reLiquidoDe(a);
+        if (liq == null || a.fc == null) return "—";
+        return `folga de ${((Number(a.fc) - liq) * 100).toFixed(1).replace(".", ",")} p.p.`;
+      })(),
     },
   ];
 }

@@ -24,8 +24,10 @@ import {
   type Esteira,
   type Linha,
 } from "@/lib/cockpit";
+import { MuroPlano } from "@/components/MuroPlano";
+import type { Muro as MuroDoPlano } from "@/lib/plano";
 import { PainelEmpresa } from "@/components/PainelEmpresa";
-import { Trilha, type EstadoTrilha } from "@/components/Trilha";
+import { Trilha, type EstadoTrilha, type AcaoDaFila } from "@/components/Trilha";
 import { PassosEmpresa } from "@/components/PassosEmpresa";
 
 /**
@@ -117,6 +119,7 @@ export function Cockpit({
   const [honorario, setHonorario] = useState(HONORARIO_PADRAO);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [recado, setRecado] = useState<string | null>(null);
+  const [muro, setMuro] = useState<MuroDoPlano | null>(null);
   const [mostrar, setMostrar] = useState(PAGINA);
   const [copiado, setCopiado] = useState<string | null>(null);
   const [avisosLidos, setAvisosLidos] = useState<Set<string>>(new Set());
@@ -169,9 +172,10 @@ export function Cockpit({
     laudos: esteira.laudos,
     assinados: esteira.assinados,
     proxima: proxima ? { id: proxima.id, nome: proxima.razao_social } : null,
-    proximaAcao: proxima
-      ? (proxima.acao as "analisar" | "confirmar" | "emitir" | "termo" | "cobrar")
-      : null,
+    /* o `as` prometia cinco valores e a fila produz seis com trabalho pendente
+       ("contato" é o sexto). O tipo agora é o da própria fila — quem inventar
+       uma ação nova não consegue compilar sem dar rótulo e destino a ela. */
+    proximaAcao: proxima ? (proxima.acao as AcaoDaFila) : null,
   };
 
   const visiveis = filtradas.slice(0, mostrar);
@@ -264,28 +268,77 @@ export function Cockpit({
     );
   }
 
+  /**
+   * LER A RESPOSTA SEM CONFIAR QUE ELA É JSON — conserto de 08/08/2026.
+   *
+   * `await resp.json()` era incondicional. Quando a função estoura o tempo, a
+   * plataforma responde HTML, o `json()` lança, o `catch` escreve "falha de
+   * rede" — e "falha de rede" é mentira perigosa num lote de termos, porque o
+   * servidor pode ter criado dezenas de documentos e disparado dezenas de
+   * e-mails antes de cair. O contador precisa saber que o trabalho pode ter
+   * saído pela metade, não que nada aconteceu.
+   */
+  async function lerResposta(resp: Response): Promise<Record<string, unknown>> {
+    const texto = await resp.text().catch(() => "");
+    try {
+      return texto ? (JSON.parse(texto) as Record<string, unknown>) : {};
+    } catch {
+      return {
+        erro:
+          resp.status === 504 || resp.status === 502
+            ? "o servidor demorou demais e interrompeu no meio. Parte do lote pode ter sido processada — recarregue a tela e confira antes de repetir."
+            : `o servidor respondeu ${resp.status} sem detalhe. Recarregue a tela e confira o que foi feito antes de repetir.`,
+      };
+    }
+  }
+
   async function chamar(url: string, corpo: unknown, chave: string, sucesso: (j: unknown) => string) {
     setOcupado(chave);
     setRecado(null);
+    setMuro(null);
     try {
       const resp = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(corpo),
       });
-      const json = await resp.json();
+      const json = await lerResposta(resp);
       if (!resp.ok) {
-        setRecado(json.erro ?? "não foi possível concluir");
+        /* O MURO É O CORPO DO 402, E ELE ERA JOGADO FORA AQUI. A API devolve a
+           conta montada com o honorário DESTA empresa e o preço real do banco;
+           a tela mostrava só `erro`, uma linha de bloqueio sem conta, sem link
+           e sem a garantia de que o já emitido continua válido. O caminho da
+           fila é o mais usado do produto — era o muro certo na porta errada. */
+        const m = (json as { muro?: MuroDoPlano }).muro;
+        if (m) setMuro(m);
+        else setRecado((json.erro as string) ?? "não foi possível concluir");
         return;
       }
       setRecado(sucesso(json));
       setSelecao(new Set());
       router.refresh();
     } catch {
-      setRecado("falha de rede");
+      setRecado("falha de rede — nada foi enviado. Confira a conexão e tente de novo.");
     } finally {
       setOcupado(null);
     }
+  }
+
+  /**
+   * O RELATÓRIO PARCIAL QUE O SERVIDOR JÁ MANDAVA E A TELA DESCARTAVA.
+   *
+   * As rotas de lote montam `falhas: [{ empresa, erro }]` e devolvem. O recado
+   * lia só os contadores — "370 termos gerados, 370 enviados" com 30 falhas
+   * invisíveis. Quem não sabe quais falharam repete o lote inteiro, e no termo
+   * repetir é e-mail duplicado no cliente.
+   */
+  function comFalhas(j: unknown, texto: string): string {
+    const falhas = (j as { falhas?: { empresa?: string; erro?: string }[] }).falhas ?? [];
+    if (!falhas.length) return texto;
+    const nomes = falhas.slice(0, 3).map((f) => f.empresa || "empresa sem nome");
+    const resto = falhas.length > nomes.length ? ` e mais ${falhas.length - nomes.length}` : "";
+    const motivo = falhas[0]?.erro ? ` Primeiro motivo: ${falhas[0].erro}.` : "";
+    return `${texto} ${falhas.length} não saíram: ${nomes.join(", ")}${resto}.${motivo}`;
   }
 
   /** a ação da LINHA: o que falta naquela empresa, executado ali mesmo */
@@ -296,9 +349,10 @@ export function Cockpit({
         { analise_id: l.analise_id },
         `linha-${l.id}`,
         (j) => {
-          const laudo = (j as { laudo_id?: string }).laudo_id;
-          if (laudo) window.open(`/doc/laudo/${laudo}`, "_blank");
-          return `Laudo emitido para ${l.razao_social}.`;
+          const r = j as { laudo_id?: string; aviso_plano?: string | null };
+          if (r.laudo_id) window.open(`/doc/laudo/${r.laudo_id}`, "_blank");
+          /* o aviso de cota vem junto com a boa notícia, não como interrupção */
+          return `Laudo emitido para ${l.razao_social}.${r.aviso_plano ? ` ${r.aviso_plano}` : ""}`;
         }
       );
     }
@@ -329,6 +383,30 @@ export function Cockpit({
   function lote(chave: "analisar" | "emitir" | "enviar" | "termo") {
     const ids = selecionadas.map((l) => l.id);
     const analises = selecionadas.map((l) => l.analise_id).filter(Boolean) as string[];
+
+    /**
+     * A SELEÇÃO VAZIA NÃO PODE VIRAR CHAMADA — conserto de 08/08/2026.
+     *
+     * `selecionadas` é derivada de `filtradas`, e a busca não limpa a seleção:
+     * "Selecionar tudo" seguido de uma digitação na busca deixava a barra
+     * aberta, dizendo "0 selecionadas", com os quatro botões ativos. Vazio ia
+     * para a API, e lá vazio significava "todas". A API agora recusa; a tela
+     * também não deve chegar lá, e precisa explicar o que aconteceu — sumir em
+     * silêncio é o mesmo defeito com outra roupa.
+     */
+    if (ids.length === 0) {
+      setRecado(
+        "Nenhuma empresa selecionada. A busca não limpa a seleção — limpe o filtro ou selecione de novo."
+      );
+      return;
+    }
+    if (chave !== "analisar" && analises.length === 0) {
+      setRecado(
+        "As empresas selecionadas ainda não têm análise. Rode “Analisar” nelas antes de emitir laudo ou termo."
+      );
+      return;
+    }
+
     if (chave === "analisar") {
       return chamar("/api/analise/lote", { empresa_ids: ids }, "lote-analisar", (j) => {
         const r = j as { gravadas: number; puladas: number };
@@ -348,22 +426,26 @@ export function Cockpit({
         /* O QUE FICOU DE FORA É A PARTE IMPORTANTE DESTE RECADO. O lote não
            emite sobre premissa estimada — e se a tela não contar quantas
            ficaram, o contador conclui que emitiu a carteira inteira. */
-        return (
+        return comFalhas(
+          j,
           `${r.emitidos} laudos emitidos${r.ja_tinham ? `, ${r.ja_tinham} já existiam` : ""}${
             r.bloqueados ? `, ${r.bloqueados} bloqueados pelo limite do plano gratuito` : ""
           }.` +
-          (r.sem_confirmar
-            ? ` ${r.sem_confirmar} ficaram de fora porque as premissas ainda são estimadas — abra cada uma, confira e salve.`
-            : "")
+            (r.sem_confirmar
+              ? ` ${r.sem_confirmar} ficaram de fora porque as premissas ainda são estimadas — abra cada uma, confira e salve.`
+              : "")
         );
       });
     }
     if (chave === "enviar") {
       return chamar("/api/laudo/enviar", { analise_ids: analises }, "lote-enviar", (j) => {
         const r = j as { enviados: number; sem_contato: number; sem_laudo: number };
-        return `${r.enviados} laudos enviados ao cliente${
-          r.sem_contato ? `, ${r.sem_contato} sem e-mail de contato` : ""
-        }${r.sem_laudo ? `, ${r.sem_laudo} ainda sem laudo emitido` : ""}.`;
+        return comFalhas(
+          j,
+          `${r.enviados} laudos enviados ao cliente${
+            r.sem_contato ? `, ${r.sem_contato} sem e-mail de contato` : ""
+          }${r.sem_laudo ? `, ${r.sem_laudo} ainda sem laudo emitido` : ""}.`
+        );
       });
     }
     return chamar(
@@ -372,9 +454,12 @@ export function Cockpit({
       "lote-termo",
       (j) => {
         const r = j as { criados: number; enviados: number; sem_contato: number; sem_laudo: number };
-        return `${r.criados} termos gerados, ${r.enviados} enviados por e-mail${
-          r.sem_contato ? `, ${r.sem_contato} sem contato cadastrado` : ""
-        }${r.sem_laudo ? `, ${r.sem_laudo} ainda sem laudo` : ""}.`;
+        return comFalhas(
+          j,
+          `${r.criados} termos gerados, ${r.enviados} enviados por e-mail${
+            r.sem_contato ? `, ${r.sem_contato} sem contato cadastrado` : ""
+          }${r.sem_laudo ? `, ${r.sem_laudo} ainda sem laudo` : ""}.`
+        );
       }
     );
   }
@@ -800,7 +885,11 @@ export function Cockpit({
           )}
         </div>
 
-        {/* barra de lote */}
+        {/* BARRA DE LOTE. A contagem é `selecionadas` (o que a fila mostra), e é
+            ela que também governa os botões — a versão anterior abria a barra
+            por `selecao.size` e deixava os quatro botões ativos exibindo "0
+            selecionadas" depois de uma busca. Botão que age sobre nada é botão
+            que age sobre tudo. */}
         {selecao.size > 0 && (
           <div className="flex flex-wrap items-center gap-2 border-b border-linesoft bg-surface2 p-3">
             <span className="text-[12.5px] font-semibold">{selecionadas.length} selecionadas</span>
@@ -809,7 +898,7 @@ export function Cockpit({
                 key={ac.chave}
                 title={ac.ajuda}
                 onClick={() => lote(ac.chave)}
-                disabled={!!ocupado}
+                disabled={!!ocupado || selecionadas.length === 0}
                 className="rounded-sm border border-ink bg-ink px-3 py-2 text-[12.5px] font-semibold text-white disabled:opacity-40"
               >
                 {ocupado === `lote-${ac.chave}` ? "…" : ac.rotulo}
@@ -821,6 +910,18 @@ export function Cockpit({
             >
               cancelar
             </button>
+            {selecionadas.length === 0 && (
+              <span className="basis-full text-[12px] text-muted">
+                As {selecao.size} empresas selecionadas estão fora do filtro atual. Limpe a busca
+                para agir sobre elas, ou clique em cancelar.
+              </span>
+            )}
+          </div>
+        )}
+
+        {muro && (
+          <div className="border-b border-linesoft p-3">
+            <MuroPlano muro={muro} aoFechar={() => setMuro(null)} />
           </div>
         )}
 

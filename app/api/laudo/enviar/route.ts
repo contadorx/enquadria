@@ -8,6 +8,21 @@ import { ehOptar } from "@/lib/motor";
 import { ehLaudoCurto } from "@/lib/laudo";
 
 /**
+ * TEMPO DE FUNÇÃO — declarado em 08/08/2026.
+ *
+ * Nenhuma rota de lote declarava `maxDuration`: rodavam no default da
+ * plataforma, enquanto os crons — que ninguém espera na frente da tela — já
+ * pediam 60 s. Esta rota trabalha por item (RPC, gravação, e às vezes um
+ * e-mail que pode levar segundos), e estourar no meio não é uma tela lenta: é
+ * documento criado e e-mail já enviado, com "falha de rede" escrito para o
+ * contador. Sessenta segundos não resolvem uma carteira de 400 de uma vez —
+ * resolvem a maioria dos lotes reais, e o que passa disso agora é interrompido
+ * com aviso honesto em vez de silêncio.
+ */
+export const maxDuration = 60;
+
+
+/**
  * ENVIAR O LAUDO AO CLIENTE — um ou muitos, pela mesma porta.
  *
  * POR QUE ESTA ROTA EXISTE. O laudo era emitido e ficava no painel. Nenhum

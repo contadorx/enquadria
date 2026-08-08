@@ -79,6 +79,7 @@ export function Assinatura({
 }: Props) {
   const [etapa, setEtapa] = useState<"form" | "confirmar" | "ok">("form");
   const [metodo, setMetodo] = useState<"simples" | "avancada">("simples");
+  const [notaOtp, setNotaOtp] = useState<string | null>(null);
   const [nome, setNome] = useState("");
   const [cpf, setCpf] = useState("");
   const [email, setEmail] = useState("");
@@ -134,6 +135,16 @@ export function Assinatura({
       const json = await resp.json();
       if (!resp.ok) throw new Error(json.erro ?? "falha ao iniciar a assinatura");
       setMetodo(json.metodo ?? "simples");
+      /* PARA ONDE O CÓDIGO FOI, e quando ele não foi (08/08/2026). O servidor
+         manda o código para o e-mail que o contador cadastrou na emissão, não
+         para o digitado aqui — sem esta linha, a pessoa fica olhando a caixa
+         de entrada errada. E quando o envio falha, a assinatura cai para o
+         método simples: isso muda o que o documento prova, e some se ninguém
+         escrever na tela. */
+      setNotaOtp(
+        (json.aviso as string | undefined) ??
+          (json.enviado_para ? `Código enviado para ${json.enviado_para}.` : null)
+      );
       setEtapa("confirmar");
     } catch (e) {
       setErro(e instanceof Error ? e.message : "erro inesperado");
@@ -440,6 +451,11 @@ export function Assinatura({
 
       {etapa === "confirmar" && (
         <div className="space-y-3">
+          {notaOtp && (
+            <p className="rounded-sm border border-line bg-surface2 px-3 py-2 text-[12.5px] text-slate2">
+              {notaOtp}
+            </p>
+          )}
           {metodo === "avancada" && (
             <div>
               <label className="mb-1 block text-[12.5px] font-semibold text-slate2">Código enviado ao seu e-mail</label>

@@ -435,6 +435,14 @@ export function PainelEmpresa({
       } else {
         setBloqueio(json.erro ?? "não foi possível emitir o laudo");
       }
+    } catch {
+      /* SEM ESTE CATCH O CLIQUE SUMIA (08/08/2026). Era `try/finally`: com a
+         rede caindo, a promessa rejeitava sem tratamento, o "…" voltava a
+         "Emitir laudo" e nenhuma mensagem aparecia — exatamente o sintoma "o
+         botão não funcionou" que este arquivo diz ter consertado nos irmãos. */
+      setBloqueio(
+        "não foi possível falar com o servidor — o laudo não foi emitido. Confira a conexão e tente de novo."
+      );
     } finally {
       setOcupado(null);
     }
@@ -547,6 +555,14 @@ export function PainelEmpresa({
       } else {
         setBloqueio(json.erro ?? "não foi possível gerar o termo");
       }
+    } catch {
+      /* mesmo defeito do emitirLaudo: `try/finally` sem `catch` fazia o clique
+         desaparecer em silêncio quando a rede caía. Aqui o silêncio é pior,
+         porque este botão manda e-mail — o contador precisa saber que NÃO saiu
+         antes de decidir se manda de novo. */
+      setBloqueio(
+        "não foi possível falar com o servidor — o termo não foi gerado e nenhum e-mail saiu. Confira a conexão e tente de novo."
+      );
     } finally {
       setOcupado(null);
     }
@@ -714,9 +730,14 @@ export function PainelEmpresa({
           {a && (
             <Bloco titulo="Documentos da empresa">
               <div className="flex flex-wrap gap-2">
+                {/* O botão acompanha a regra do servidor (08/08/2026): com
+                    premissa estimada a emissão é recusada lá, e deixar o botão
+                    ativo aqui só produz um erro depois do clique. A explicação
+                    fica logo abaixo, sempre — botão apagado sem motivo escrito
+                    é o defeito que a auditoria de UX persegue. */}
                 <button
                   onClick={emitirLaudo}
-                  disabled={ocupado === "laudo"}
+                  disabled={ocupado === "laudo" || (estimada && !d.laudo)}
                   className="rounded-sm bg-ink px-3.5 py-2 text-[13px] font-semibold text-white disabled:opacity-40"
                 >
                   {ocupado === "laudo" ? "…" : d.laudo ? "Reemitir laudo" : "Emitir laudo"}
@@ -734,7 +755,8 @@ export function PainelEmpresa({
               </div>
               {estimada && !d.laudo && (
                 <p className="mt-2 text-[11.5px] text-amarelo">
-                  Confirme as premissas acima antes de emitir: o laudo sai com a sua assinatura.
+                  Emitir está indisponível porque as premissas acima ainda são a estimativa do
+                  CNAE. Confira os números e salve a análise — o laudo sai com a sua assinatura.
                 </p>
               )}
 

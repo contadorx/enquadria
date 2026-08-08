@@ -537,7 +537,6 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
                     {av}
                   </p>
                 ))}
-                <p className="fronteira">{FRONTEIRA_CONTA_NEGOCIACAO}</p>
               </>
             )}
 
@@ -587,16 +586,38 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
                 <li key={i}>{r}</li>
               ))}
             </ul>
+            {/* A RESSALVA DA NEGOCIAÇÃO SAIU DE DENTRO DO BLOCO DE PRESSÃO —
+                08/08/2026. Ela vivia dentro de `{pressao && …}`, e
+                `pressaoDoLaudo` devolve null no S1 e sempre que falta uma
+                grandeza. Ou seja: os laudos em que o cliente MAIS tende a ler a
+                conclusão como definitiva saíam sem a única frase que diz que
+                nenhum número deste documento garante que o repasse será aceito.
+                Aqui ela está ao lado dos riscos, que é onde a dúvida acontece,
+                e em todo laudo completo. */}
+            <p className="fronteira">{FRONTEIRA_CONTA_NEGOCIACAO}</p>
 
-            {Rodape}
-
+            {/* O ANEXO VEM ANTES DA CONCLUSÃO — conserto de 08/08/2026.
+                O rodapé imprime a seção 11 e estava sendo inserido ANTES da
+                seção 10: o documento saía numerado 9 → 11 → 10. Num laudo
+                vendido como peça que sobrevive a uma pergunta do Fisco, a
+                numeração fora de ordem é a primeira coisa que quem confere
+                anota — e ela desqualifica o resto sem discutir o mérito. */}
             {anexoTab && (
               <>
                 <div className="sec quebra">10. Anexo — tabela do Simples utilizada</div>
+                {/* A CITAÇÃO ESTAVA ERRADA, e o próprio código já sabia disso
+                    (ver `baseDeCalculo` em lib/laudo.ts). Estes números são os
+                    Anexos XVIII a XXII da LC 214/2025, que substituíram os
+                    Anexos I a V da LC 123/2006 — e divergem deles na 6ª faixa.
+                    O laudo citava a LC 123 na seção 10 e a LC 214 na seção 2:
+                    um contador que conferisse encontraria dois números e
+                    concluiria que a conta está errada. A coluna também deixou
+                    de ser "PIS/Cofins": no regime novo ela é CBS + IBS. */}
                 <p className="txt">
-                  Anexo {anexoTab.anexo} da Lei Complementar nº 123/2006. A faixa desta empresa está
-                  destacada; a coluna de partilha indica a fatia de PIS/Cofins da carga do Simples que
-                  migra para a CBS no regime híbrido.
+                  Anexo {anexoTab.anexo} do Simples Nacional na redação da Lei Complementar nº
+                  214/2025, art. 519, que substituiu os Anexos I a V da Lei Complementar nº
+                  123/2006. A faixa desta empresa está destacada; a coluna de partilha indica a
+                  fatia da carga do Simples correspondente a CBS e IBS no regime híbrido.
                 </p>
                 <table className="quadro">
                   <thead>
@@ -605,7 +626,7 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
                       <th>RBT12 até</th>
                       <th>Alíquota nominal</th>
                       <th>Parcela a deduzir</th>
-                      <th>Partilha PIS/Cofins</th>
+                      <th>Partilha CBS + IBS</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -622,6 +643,8 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
                 </table>
               </>
             )}
+
+            {Rodape}
           </>
         )}
       </div>

@@ -9,7 +9,7 @@ import {
   OTP_MAX_TENTATIVAS,
   type MetodoAssinatura,
 } from "@/lib/esign";
-import { conteudoCanonico, sha256, CLAUSULAS_CIENCIA } from "@/lib/esign";
+import { conteudoCanonico, sha256, CLAUSULAS_CIENCIA, mascararEmail } from "@/lib/esign";
 import {
   ehTipoDecisao, validarDecisao, resolverDecisao, decisaoDoSnapshot,
 } from "@/lib/termo";
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
   const { data: termo } = await supabase
     .from("termos")
     .select(
-      "id, token, decisao, assinatura_status, analise_id, hash_documento, snapshot, recomendacao, otp_hash, otp_expira, otp_tentativas"
+      "id, token, decisao, assinatura_status, analise_id, hash_documento, snapshot, recomendacao, otp_hash, otp_expira, otp_tentativas, assinante_email"
     )
     .eq("token", corpo.token)
     .maybeSingle();
@@ -83,6 +83,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ erro: "nome e e-mail obrigatórios" }, { status: 400 });
     }
 
+    /**
+     * O CÓDIGO VAI PARA O E-MAIL DA EMISSÃO, NÃO PARA O DIGITADO — 08/08/2026.
+     *
+     * O termo é impresso dizendo "assinatura eletrônica AVANÇADA (com código
+     * por e-mail)", sob a Lei 14.063/2020, e o documento lista "a identificação
+     * do signatário" como um dos ingredientes. Só que o código era enviado para
+     * `corpo.email` — o endereço que a própria pessoa acabou de digitar no
+     * formulário — e nunca confrontado com `assinante_email`, que o contador
+     * gravou na emissão. Quem tivesse o link digitava o e-mail que quisesse,
+     * recebia o próprio código e assinava: a trilha provava apenas que o
+     * signatário controla um endereço escolhido por ele mesmo.
+     *
+     * Quando existe endereço na emissão, é ele que recebe. Divergência não é
+     * recusada em silêncio nem tratada como fraude — pode ser o sócio pedindo
+     * para a contabilidade, e recusar aqui trava a assinatura de um cliente
+     * legítimo. O código só não segue para um endereço que ninguém cadastrou.
+     */
+    const emailDaEmissao = (termo.assinante_email as string | null)?.trim() || null;
+    const destino = emailDaEmissao ?? corpo.email;
+    const desviado = !!emailDaEmissao && emailDaEmissao.toLowerCase() !== corpo.email.toLowerCase();
+
     // nome da empresa para o e-mail (best-effort)
     const { data: analise } = await supabase
       .from("analises")
@@ -95,16 +116,25 @@ export async function POST(req: Request) {
 
     const codigo = gerarOtp();
     const envio = await enviarEmail({
-      para: corpo.email,
+      para: destino,
       nome: corpo.nome,
       assunto: "Seu código para assinar o termo de ciência",
       html: htmlCodigoOtp(codigo, empresa?.razao_social),
     });
 
     if (!envio.enviado) {
-      // sem e-mail, não dá para exigir OTP — segue no método simples
+      /* Sem e-mail não dá para exigir OTP, e a assinatura segue no método
+         simples — mas isso REBAIXA o nível de prova do documento, e a tela
+         precisa dizer. Cair para "simples" em silêncio é o produto entregando
+         menos do que o termo impresso afirma, sem ninguém saber. */
       await supabase.from("termos").update({ otp_hash: null, otp_expira: null, otp_tentativas: 0 }).eq("id", termo.id);
-      return NextResponse.json({ ok: true, otp_enviado: false, metodo: "simples" as MetodoAssinatura });
+      return NextResponse.json({
+        ok: true,
+        otp_enviado: false,
+        metodo: "simples" as MetodoAssinatura,
+        aviso:
+          "Não foi possível enviar o código por e-mail. A assinatura segue sem código — e o termo vai registrar isso.",
+      });
     }
 
     const expira = new Date(Date.now() + OTP_VALIDADE_MIN * 60_000).toISOString();
@@ -113,7 +143,22 @@ export async function POST(req: Request) {
       .update({ otp_hash: hashOtp(codigo, corpo.token), otp_expira: expira, otp_tentativas: 0 })
       .eq("id", termo.id);
 
-    return NextResponse.json({ ok: true, otp_enviado: true, metodo: "avancada" as MetodoAssinatura });
+    return NextResponse.json({
+      ok: true,
+      otp_enviado: true,
+      metodo: "avancada" as MetodoAssinatura,
+      /* a tela precisa dizer PARA ONDE o código foi, senão a pessoa fica
+         esperando numa caixa de entrada que não vai receber nada — e o endereço
+         mascarado não expõe o contato de ninguém */
+      enviado_para: mascararEmail(destino),
+      desviado,
+      ...(desviado
+        ? {
+            aviso:
+              "O código foi enviado para o e-mail cadastrado pelo seu contador, não para o que você digitou.",
+          }
+        : {}),
+    });
   }
 
   /* -------------------------------------------------------- confirmar ---- */
@@ -203,6 +248,34 @@ export async function POST(req: Request) {
     });
     const carimbo = await carimbar(hashDocumento, agora);
 
+    /**
+     * A DECISÃO ENTRA NO SNAPSHOT, NÃO SÓ NAS COLUNAS — conserto de 08/08/2026.
+     *
+     * O `update` gravava `tipo_decisao` e `motivo_divergencia` nas colunas e
+     * incluía os dois no `hash_documento`. Só que as três folhas do termo (a
+     * via do contador, a do cliente e a tela de assinar) leem `decisaoDoSnapshot`
+     * — e o snapshot é montado na EMISSÃO, quando ainda não há decisão. Depois
+     * de assinado, `tipo_decisao` chegava sempre nulo em `FolhaTermo`, e com
+     * ele sumiam as três coisas que o documento existe para registrar: o rótulo
+     * "Decidir diferente da recomendação", a frase de `fraseDaDecisao` e a caixa
+     * com o MOTIVO ESCRITO PELO EMPRESÁRIO.
+     *
+     * O efeito era o pior possível: o texto estava no hash e não estava no
+     * papel. O hash cobria uma frase que nenhuma das partes conseguia imprimir,
+     * e o termo de quem divergiu voltava a ser idêntico ao de quem concordou —
+     * exatamente o documento que a reestruturação de 05/08 existia para
+     * eliminar.
+     *
+     * Gravar aqui, e não passar as colunas para a folha, é de propósito: o
+     * snapshot é a fonte única do que foi assinado, e é ele que o hash cobre.
+     * Duas fontes para o mesmo fato é como este defeito nasceu.
+     */
+    const snapshotAssinado = {
+      ...((termo.snapshot ?? {}) as Record<string, unknown>),
+      tipo_decisao: corpo.tipo_decisao,
+      motivo_divergencia: motivo,
+    };
+
     const { error: upErr } = await supabase
       .from("termos")
       .update({
@@ -212,6 +285,7 @@ export async function POST(req: Request) {
         decisao: decisaoFinal,
         tipo_decisao: corpo.tipo_decisao,
         motivo_divergencia: motivo,
+        snapshot: snapshotAssinado,
         hash_documento: hashDocumento,
         assinante_nome: corpo.nome,
         assinante_cpf: corpo.cpf ?? null,

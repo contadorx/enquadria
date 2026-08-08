@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { moeda } from "@/lib/motor";
+import { parseValorBRL } from "@/lib/csv";
 
 /**
  * Edição do que o contador precisa corrigir sem reimportar a carteira:
@@ -35,7 +36,23 @@ export function EditarEmpresa({
   const [nome, setNome] = useState(contatoNome ?? "");
   const [email, setEmail] = useState(contatoEmail ?? "");
   const [tel, setTel] = useState(contatoTelefone ?? "");
-  const [rbt, setRbt] = useState(rbt12 != null ? String(rbt12) : "");
+  /**
+   * A RBT12 TEM UM PARSER SÓ — conserto de 08/08/2026.
+   *
+   * Este campo nascia com `String(rbt12)` e voltava com `.replace(/\D/g, "")`.
+   * Uma empresa gravada com R$ 480.000,50 abria o editor mostrando
+   * "480000.5", e salvar SEM TOCAR NO CAMPO gravava 4800005 — dez vezes o
+   * valor, em silêncio. E a RBT12 é o número que decide faixa, alíquota
+   * efetiva e sublimite de um laudo que sai assinado.
+   *
+   * A outra porta do mesmo dado (o formulário de análise) sempre usou
+   * `parseValorBRL`, que entende vírgula decimal e separador de milhar. Dois
+   * parsers para o mesmo campo, um deles quebrado: agora é o mesmo dos dois
+   * lados, e o valor inicial entra formatado em pt-BR, como o contador digita.
+   */
+  const [rbt, setRbt] = useState(
+    rbt12 != null ? rbt12.toLocaleString("pt-BR", { minimumFractionDigits: 2 }) : ""
+  );
   /* o valor do arquivo pode ser qualquer grafia ("SN", "Sim"); o select mostra
      a opção equivalente quando reconhece, e "— manter como veio —" quando não */
   const [enq, setEnq] = useState(
@@ -59,7 +76,7 @@ export function EditarEmpresa({
           contato_nome: nome,
           contato_email: email,
           contato_telefone: tel,
-          rbt12: rbt.replace(/\D/g, "") || null,
+          rbt12: parseValorBRL(rbt) ?? null,
           ...(enq ? { regime: enq } : {}),
         }),
       });
@@ -164,16 +181,27 @@ export function EditarEmpresa({
           </label>
           <div className="flex items-center rounded-sm border border-line bg-surface px-2.5 focus-within:border-accent">
             <span className="font-mono text-[11px] text-muted">R$</span>
+            {/* aceita ponto e vírgula: quem digita "480.000,50" está certo, e
+                era o teclado dele que o campo apagava */}
             <input
               value={rbt}
-              onChange={(e) => setRbt(e.target.value.replace(/\D/g, ""))}
-              inputMode="numeric"
-              placeholder="480000"
+              onChange={(e) => setRbt(e.target.value.replace(/[^\d.,]/g, ""))}
+              inputMode="decimal"
+              placeholder="480.000,00"
               className="w-full bg-transparent px-1.5 py-1.5 font-mono text-[13px] outline-none"
             />
           </div>
-          {rbt && (
-            <p className="mt-0.5 font-mono text-[10.5px] text-muted">{moeda(Number(rbt))}</p>
+          {/* o eco embaixo do campo é a prova de que o sistema entendeu o que
+              foi digitado — é ele que denuncia a vírgula lida como milhar */}
+          {rbt && parseValorBRL(rbt) != null && (
+            <p className="mt-0.5 font-mono text-[10.5px] text-muted">
+              {moeda(parseValorBRL(rbt) as number)}
+            </p>
+          )}
+          {rbt && parseValorBRL(rbt) == null && (
+            <p className="mt-0.5 text-[10.5px] text-amarelo">
+              não entendi este valor — use o formato 480.000,00
+            </p>
           )}
         </div>
       </div>

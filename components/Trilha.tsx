@@ -27,15 +27,39 @@ export interface EstadoTrilha {
   assinados: number;
   /** a empresa de maior prioridade que ainda tem trabalho pendente */
   proxima: { id: string; nome: string } | null;
-  proximaAcao: "analisar" | "confirmar" | "emitir" | "termo" | "cobrar" | null;
+  /**
+   * 08/08/2026: o tipo prometia cinco valores e a fila produz oito. `contato`
+   * chegava aqui e não tinha rótulo — a frase saía sem verbo ("— próximo:
+   * ACME LTDA") e o botão caía no "Continuar" que este arquivo diz ter
+   * eliminado. Declarar a lista inteira é o que faz o compilador cobrar o
+   * rótulo da próxima ação que alguém inventar.
+   */
+  proximaAcao: AcaoDaFila | null;
 }
 
-const ROTULO: Record<string, string> = {
+export type AcaoDaFila = "analisar" | "confirmar" | "emitir" | "contato" | "termo" | "cobrar";
+
+const ROTULO: Record<AcaoDaFila, string> = {
   analisar: "Analisar",
   confirmar: "Confirmar as premissas de",
   emitir: "Emitir o laudo de",
+  contato: "Cadastrar o contato de",
   termo: "Enviar o termo de",
   cobrar: "Cobrar a assinatura de",
+};
+
+/**
+ * ONDE O CLIQUE CAI. O que falta em `contato` é nome e e-mail do responsável,
+ * e isso mora no Dossiê — o botão levava à aba de Análise, que é a tela onde o
+ * contador não tem nada a fazer. O Cockpit já acertava isso; a Trilha, não.
+ */
+const ABA_DA_ACAO: Record<AcaoDaFila, "decisao" | "dossie"> = {
+  analisar: "decisao",
+  confirmar: "decisao",
+  emitir: "decisao",
+  contato: "dossie",
+  termo: "decisao",
+  cobrar: "decisao",
 };
 
 export function Trilha({
@@ -214,20 +238,19 @@ export function Trilha({
         <b className="font-mono">{estado.assinados}</b> assinados
         <span className="text-muted">
           {" "}
-          — próximo: {ROTULO[estado.proximaAcao]} {estado.proxima.nome}
+          — próximo: {ROTULO[estado.proximaAcao] ?? "Continuar em"} {estado.proxima.nome}
         </span>
       </p>
       {/* "Continuar" não diz o que vai acontecer — e botão que não promete nada
-          não é clicado. O rótulo agora é a própria próxima ação, que a faixa já
-          calculou: "Analisar", "Emitir o laudo de", "Cobrar a assinatura de". */}
+          não é clicado. O rótulo é a própria próxima ação, que a faixa já
+          calculou: "Analisar", "Emitir o laudo de", "Cobrar a assinatura de".
+          A guarda de reserva continua, mas agora é rede e não regra: o mapa
+          cobre as seis ações que a fila produz, e o tipo obriga quem criar a
+          sétima a escrever o rótulo dela aqui. */}
       <button
-        onClick={() => aoAbrirEmpresa(estado.proxima!.id, "decisao")}
+        onClick={() => aoAbrirEmpresa(estado.proxima!.id, ABA_DA_ACAO[estado.proximaAcao!] ?? "decisao")}
         className="shrink-0 rounded-sm border border-ink px-3 py-1.5 text-[12.5px] font-semibold text-ink"
       >
-        {/* `?.` e um texto de reserva: `proximaAcao` chega do cockpit com um
-            `as` que promete cinco valores, e a fila produz mais — "contato",
-            por exemplo. Sem a guarda, uma empresa sem e-mail cadastrado no topo
-            da fila derruba o cockpit inteiro. Mesmo defeito do EXPLICA_FAIXA. */}
         {ROTULO[estado.proximaAcao]?.replace(/ de$/, "") ?? "Continuar"}
       </button>
     </div>

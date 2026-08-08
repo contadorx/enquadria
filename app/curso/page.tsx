@@ -11,7 +11,6 @@ import {
   RESSALVA,
   TOTAL_AULAS,
   totalMinutos,
-  AULAS_NO_AR,
 } from "@/lib/curso";
 
 /**
@@ -67,6 +66,17 @@ export default async function CursoPage() {
     Object.fromEntries(lidas.map((l) => [l.slug, l.video_url])),
     mapaMin
   );
+  /**
+   * QUANTAS ESTÃO NO AR SE CONTA DEPOIS DE LER O BANCO — conserto de 08/08/2026.
+   *
+   * O badge usava `AULAS_NO_AR`, constante de MÓDULO calculada sobre o
+   * `MODULOS` estático, onde toda aula tem `video: null`. Ou seja: a página
+   * acabava de mesclar os vídeos publicados (`comVideos`, logo acima) e o texto
+   * lia a constante — publicar as nove aulas no banco não mudaria uma vírgula,
+   * e o site diria "gravação em andamento" para sempre. Toda a arquitetura de
+   * precedência do banco existia e era ignorada nesta linha.
+   */
+  const noAr = modulos.flatMap((m) => m.aulas).filter((a) => !!a.video).length;
   const total = totalMinutos(mapaMin);
   const horas = Math.floor(total / 60);
   const minutos = total % 60;
@@ -112,7 +122,7 @@ export default async function CursoPage() {
             <span>
               {TOTAL_AULAS} aulas · {horas}h{String(minutos).padStart(2, "0")}
             </span>
-            <span>{AULAS_NO_AR > 0 ? `${AULAS_NO_AR} no ar` : "gravação em andamento"}</span>
+            <span>{noAr > 0 ? `${noAr} no ar` : "gravação em andamento"}</span>
             <span>{MATERIAIS.length} materiais para baixar</span>
             <span>certificado ao concluir</span>
           </div>

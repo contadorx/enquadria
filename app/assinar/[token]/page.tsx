@@ -4,6 +4,21 @@ import { formatarCnpj } from "@/lib/cnpj";
 import { CLAUSULAS_CIENCIA } from "@/lib/esign";
 import { decisaoDoSnapshot } from "@/lib/termo";
 import { Assinatura } from "@/components/Assinatura";
+import type { Metadata } from "next";
+
+/**
+ * NOINDEX NA PRÓPRIA PÁGINA — 08/08/2026.
+ *
+ * Esta rota serve documento com razão social, CNPJ, RBT12 e recomendação
+ * tributária de um cliente de terceiro. A proteção era só o `Disallow` do
+ * robots.txt (que impede rastrear, não impede indexar uma URL descoberta por
+ * link ou referer) mais o `X-Robots-Tag` do middleware — que só é injetado
+ * quando o host é o `app.`. As mesmas URLs respondem no domínio de ápice sem
+ * cabeçalho nenhum. `/coleta` e `/certificado` já declaravam; estas cinco não,
+ * e a regra escrita em app/robots.ts é LGPD antes de SEO.
+ */
+export const metadata: Metadata = { robots: { index: false, follow: false } };
+
 
 export const dynamic = "force-dynamic";
 

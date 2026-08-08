@@ -4,6 +4,21 @@ import { situacaoPlano, type Assinatura } from "@/lib/plano";
 import { ORIGEM_LOTE } from "@/lib/premissas-padrao";
 
 /**
+ * TEMPO DE FUNÇÃO — declarado em 08/08/2026.
+ *
+ * Nenhuma rota de lote declarava `maxDuration`: rodavam no default da
+ * plataforma, enquanto os crons — que ninguém espera na frente da tela — já
+ * pediam 60 s. Esta rota trabalha por item (RPC, gravação, e às vezes um
+ * e-mail que pode levar segundos), e estourar no meio não é uma tela lenta: é
+ * documento criado e e-mail já enviado, com "falha de rede" escrito para o
+ * contador. Sessenta segundos não resolvem uma carteira de 400 de uma vez —
+ * resolvem a maioria dos lotes reais, e o que passa disso agora é interrompido
+ * com aviso honesto em vez de silêncio.
+ */
+export const maxDuration = 60;
+
+
+/**
  * EMISSÃO DE LAUDOS EM LOTE.
  *
  * Depois da análise em lote, o contador tem dezenas de análises e precisaria
@@ -25,6 +40,27 @@ export async function POST(req: Request) {
     corpo = await req.json();
   } catch {
     corpo = {};
+  }
+
+  /**
+   * LISTA VAZIA NÃO É "TODAS" — conserto de 08/08/2026.
+   *
+   * `analise_ids: []` caía no ramo "todas as análises do tenant", e o Cockpit
+   * consegue mandar `[]` por dois caminhos reais: selecionar linhas que ainda
+   * não têm análise, ou selecionar tudo e depois digitar na busca (a busca não
+   * limpa a seleção). Um clique em "Emitir laudos" nesse estado agia sobre a
+   * carteira inteira — e no lote de termos isso é e-mail já enviado a cliente
+   * de verdade, sem volta.
+   *
+   * A distinção que importa: campo AUSENTE continua significando "todas" (é
+   * como a esteira do importador chama esta rota); campo PRESENTE e vazio é
+   * seleção vazia, e seleção vazia não faz nada.
+   */
+  if (Array.isArray(corpo.analise_ids) && corpo.analise_ids.length === 0) {
+    return NextResponse.json(
+      { erro: "nenhuma empresa selecionada — selecione ao menos uma para emitir em lote" },
+      { status: 400 }
+    );
   }
 
   // análises candidatas: as informadas ou todas as do tenant
