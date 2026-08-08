@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CascaPublica } from "@/components/CascaPublica";
 import legal from "@/lib/legal.json";
 
 /**
@@ -47,27 +48,11 @@ export function DocumentoLegal({ slug }: { slug: string }) {
   if (!doc) return null;
 
   return (
-    <div className="min-h-screen bg-bg">
-      <header className="border-b border-line bg-ink">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-5 py-3.5">
-          <Link href="/" className="text-[15px] font-extrabold tracking-tight text-white">
-            ENQUADRIA<span className="text-accentbright">.</span>
-          </Link>
-          <nav className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            {DOCUMENTOS.map((d) => (
-              <Link
-                key={d.slug}
-                href={`/${d.slug}`}
-                className={`text-[12.5px] ${
-                  d.slug === slug ? "font-semibold text-accentbright" : "text-slate-300 hover:text-white"
-                }`}
-              >
-                {d.titulo}
-              </Link>
-            ))}
-          </nav>
-        </div>
-      </header>
+    <CascaPublica largura="max-w-3xl">
+      {/* o cabeçalho e o rodapé próprios saíram: eram os do APP, num documento
+          que é público e costuma ser aberto por link direto — o leitor caía
+          numa página com "Entrar" e nada mais. A casca pública dá o menu do
+          site, que é de onde ele veio ou para onde ele quer ir. */}
 
       <main className="mx-auto max-w-3xl px-5 py-10 md:py-14">
         <h1 className="text-[30px] font-extrabold leading-tight tracking-tight text-ink md:text-[38px]">
@@ -114,28 +99,6 @@ export function DocumentoLegal({ slug }: { slug: string }) {
         </div>
       </main>
 
-      <footer className="bg-ink">
-        <div className="mx-auto max-w-3xl px-5 py-8">
-          <p className="text-[12px] leading-relaxed text-slate-400">
-            Os números produzidos pela plataforma são estimativa de cenário a partir de premissas
-            informadas. A decisão e a responsabilidade técnica são do contador que assina.
-          </p>
-          <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[12.5px] text-slate-300">
-            <Link href="/" className="hover:text-white">
-              Início
-            </Link>
-            <Link href="/curso" className="hover:text-white">
-              Curso
-            </Link>
-            <Link href="/verificar" className="hover:text-white">
-              Verificar documento
-            </Link>
-            <Link href="/login" className="hover:text-white">
-              Entrar
-            </Link>
-          </div>
-        </div>
-      </footer>
-    </div>
+    </CascaPublica>
   );
 }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CascaPublica } from "@/components/CascaPublica";
 import type { Metadata } from "next";
 import { CursoMateriais } from "@/components/CursoMateriais";
 import { createClient } from "@/lib/supabase-server";
@@ -69,27 +70,13 @@ export default async function CursoPage() {
   const primeira = modulos[0].aulas[0];
 
   return (
-    <div className="min-h-screen bg-bg">
-      {/* ------------------------------------------------------------ topo */}
-      <header className="border-b border-line bg-ink">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-5 py-3.5">
-          <Link href="/" className="text-[15px] font-extrabold tracking-tight text-white">
-            ENQUADRIA<span className="text-accentbright">.</span>
-          </Link>
-          <nav className="flex items-center gap-3">
-            <Link href="/verificar" className="text-[13px] text-slate-300 hover:text-white">
-              Verificar documento
-            </Link>
-            <Link
-              href="/login"
-              className="rounded-sm border border-white/20 px-3.5 py-2 text-[13px] font-semibold text-white"
-            >
-              Entrar
-            </Link>
-          </nav>
-        </div>
-      </header>
-
+    <CascaPublica largura="max-w-5xl">
+      {/* O CABEÇALHO PRÓPRIO SAIU DAQUI (08/08/2026).
+          Esta página é pública e é o ativo de tráfego frio: quem chega por
+          busca cai nela sem ter passado pela home. Com o menu do APP em cima,
+          a única saída era o "Entrar" — ou seja, o visitante que ainda não é
+          cliente não tinha para onde ir. Agora ela usa a mesma casca das
+          outras páginas públicas, com o menu do SITE. */}
       {/* ------------------------------------------------------------ hero */}
       <section className="border-b border-line bg-surface">
         <div className="mx-auto max-w-5xl px-5 py-10 md:py-14">
@@ -299,32 +286,12 @@ export default async function CursoPage() {
         </div>
       </section>
 
-      {/* ---------------------------------------------------------- rodapé */}
-      <footer className="bg-ink">
-        <div className="mx-auto max-w-5xl px-5 py-8">
-          <p className="max-w-[80ch] text-[12px] leading-relaxed text-slate-400">{RESSALVA}</p>
-          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12.5px] text-slate-300">
-            <Link href="/" className="hover:text-white">
-              Enquadria
-            </Link>
-            <Link href="/curso" className="hover:text-white">
-              Curso
-            </Link>
-            <Link href="/verificar" className="hover:text-white">
-              Verificar documento
-            </Link>
-            <Link href="/login" className="hover:text-white">
-              Entrar
-            </Link>
-            <Link href="/termos" className="hover:text-white">
-              Termos
-            </Link>
-            <Link href="/privacidade" className="hover:text-white">
-              Privacidade
-            </Link>
-          </div>
-        </div>
-      </footer>
-    </div>
+      {/* O RODAPÉ PRÓPRIO TAMBÉM SAIU: a casca pública já traz um, com os
+          mesmos links e a ressalva. Dois rodapés na mesma página é a marca
+          aparecendo duas vezes e dizendo coisas ligeiramente diferentes. A
+          RESSALVA continua — ela agora vive na casca, para valer em TODA
+          página pública e não só nesta. */}
+      <p className="mt-8 max-w-[80ch] text-[12px] leading-relaxed text-muted">{RESSALVA}</p>
+    </CascaPublica>
   );
 }

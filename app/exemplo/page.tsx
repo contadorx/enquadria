@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { CascaPublica } from "@/components/CascaPublica";
 import { LaudoFolha } from "@/components/LaudoFolha";
 import {
   analiseExemplo,
@@ -79,7 +80,8 @@ export default function ExemploPage() {
   const primeira = empresaDoLaudo();
 
   return (
-    <main className="mx-auto max-w-[860px] px-4 py-8">
+    <CascaPublica largura="max-w-[900px]">
+
       {/* ───────────────────────────────────────── o aviso vem PRIMEIRO
           Quem chega aqui é contador: se ele achar por um segundo que está
           vendo carteira de cliente de verdade numa página aberta, perdemos
@@ -218,6 +220,6 @@ export default function ExemploPage() {
           </Link>
         </div>
       </section>
-    </main>
+    </CascaPublica>
   );
 }

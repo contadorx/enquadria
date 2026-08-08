@@ -25,6 +25,9 @@ export const APP = (process.env.NEXT_PUBLIC_APP_URL || "https://app.enquadria.co
 export const PAGINAS_PUBLICAS: { rota: string; prioridade: number; frequencia: "daily" | "weekly" | "monthly" }[] = [
   { rota: "/", prioridade: 1, frequencia: "weekly" },
   { rota: "/como-funciona", prioridade: 0.8, frequencia: "monthly" },
+  /* o conteúdo que muda com a regulamentação: é o que dá motivo de voltar ao
+     site, e por isso a frequência é semanal e a prioridade alta */
+  { rota: "/reforma", prioridade: 0.9, frequencia: "weekly" },
   { rota: "/precos", prioridade: 0.8, frequencia: "monthly" },
   { rota: "/guia", prioridade: 0.7, frequencia: "monthly" },
   { rota: "/faq", prioridade: 0.6, frequencia: "monthly" },

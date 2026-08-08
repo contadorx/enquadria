@@ -1,5 +1,7 @@
 "use client";
 
+import { CascaPublica } from "@/components/CascaPublica";
+
 import { useState } from "react";
 
 /**
@@ -62,7 +64,8 @@ export default function Verificar() {
   const dataBR = (s?: string | null) => (s ? new Date(s).toLocaleString("pt-BR") : "—");
 
   return (
-    <div className="min-h-screen bg-bg px-4 py-10">
+    <CascaPublica largura="max-w-[720px]">
+
       <div className="mx-auto max-w-[560px]">
         <div className="mb-5 flex items-center gap-2">
           <svg width="26" height="26" viewBox="0 0 64 64">
@@ -233,6 +236,6 @@ export default function Verificar() {
           responsabilidade técnica do documento é do profissional que o assina.
         </p>
       </div>
-    </div>
+    </CascaPublica>
   );
 }

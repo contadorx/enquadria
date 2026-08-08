@@ -1,29 +1,51 @@
-/**
- * O CSS DO SITE, IMPORTADO NA PRÓPRIA PÁGINA.
- *
- * Ele morava num layout de route group (`app/(site)/layout.tsx`) — e o route
- * group foi desfeito porque quebrava o build na Vercel: o empacotador não
- * emitia o `page_client-reference-manifest.js` do grupo e o deploy morria
- * DEPOIS de compilar com sucesso (ENOENT no rastreamento dos arquivos).
- *
- * Importar aqui dá o mesmo resultado prático: o Next carrega este CSS só nas
- * rotas que o importam, então o painel continua sem pagar 35 KB de estilo
- * institucional. E como o import acontece depois do `globals.css` do layout
- * raiz, as regras do site continuam vencendo as do Tailwind onde as duas
- * falarem da mesma coisa.
- */
-import "./site.css";
-import { FolhaDoSite } from "@/components/FolhaDoSite";
+import Link from "next/link";
+import { CascaPublica } from "@/components/CascaPublica";
 
 /**
  * A PÁGINA QUE O CLIENTE DO SEU CLIENTE VÊ.
  *
- * Sem este arquivo, todo `notFound()` das seis páginas públicas — laudo, termo,
+ * Sem este arquivo, todo `notFound()` das páginas públicas — laudo, termo,
  * assinar, coleta, comparativo, abertura — caía na tela padrão do Next: fundo
  * branco, "404 | This page could not be found", em inglês, sem marca e sem
  * saída. Quem vê isso é o empresário que recebeu um link vencido, e a conclusão
  * dele é que o contador mandou link quebrado.
+ *
+ * O texto fala com ELE, não com o contador: a causa mais provável de alguém
+ * chegar aqui é um link de documento que expirou ou foi reemitido — e a saída é
+ * pedir outro a quem enviou, não procurar no site.
  */
 export default function NaoEncontrada() {
-  return <FolhaDoSite html={"<section class=\"page-hero\">\n  <div class=\"container\">\n    <span class=\"kicker kicker--ghost\"><span class=\"dot\"></span> Erro 404</span>\n    <h1 style=\"margin-top:14px\">Esta p\u00e1gina n\u00e3o existe.</h1>\n    <p class=\"lead\">Talvez o endere\u00e7o tenha mudado. O que provavelmente voc\u00ea procura est\u00e1 aqui embaixo.</p>\n    <div class=\"cta-row\" style=\"margin-top:24px\">\n      <a href=\"/\" class=\"btn btn-primary\">Ir para o in\u00edcio</a>\n      <a href=\"/guia/\" class=\"btn btn-ghost-light\">Guia</a>\n      <a href=\"/curso/\" class=\"btn btn-ghost-light\">Curso gratuito</a>\n      <a href=\"https://app.enquadria.com.br\" class=\"btn btn-ghost-light\">Entrar no app</a>\n    </div>\n  </div>\n</section>"} scripts={[]} />;
+  return (
+    <CascaPublica largura="max-w-[720px]">
+      <div className="rounded border border-line bg-surface p-8 text-center">
+        <div className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted">
+          Página não encontrada
+        </div>
+        <h1 className="mt-2 text-[22px] font-bold text-ink">
+          Este endereço não existe mais.
+        </h1>
+        <p className="mx-auto mt-2 max-w-[52ch] text-[13.5px] leading-relaxed text-slate2">
+          Se você chegou aqui por um link de <b>laudo</b>, <b>termo</b> ou <b>formulário</b>{" "}
+          enviado pela sua contabilidade, ele provavelmente expirou ou foi substituído por uma
+          versão nova. <b>Peça o link atualizado a quem enviou</b> — ele leva um minuto para
+          gerar outro.
+        </p>
+
+        <div className="mt-5 flex flex-wrap justify-center gap-2">
+          <Link
+            href="/"
+            className="rounded-sm bg-ink px-4 py-2.5 text-[13px] font-semibold text-white"
+          >
+            Ir para a página inicial
+          </Link>
+          <Link
+            href="/verificar"
+            className="rounded-sm border border-line px-4 py-2.5 text-[13px] font-semibold text-slate2"
+          >
+            Verificar um documento
+          </Link>
+        </div>
+      </div>
+    </CascaPublica>
+  );
 }
