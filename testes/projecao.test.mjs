@@ -19,6 +19,7 @@
 import { decidir, dDASefetivo, PARAMETROS_2027 } from "./motor.js";
 import {
   projetarRBT12, decidirComProjecao, SUBLIMITE, TETO_SIMPLES, MESES_ATE_FIM_DO_EFEITO,
+  rbt12AnteriorPorCrescimento, crescimentoPorRBT12Anterior,
 } from "./projecao.js";
 
 let f = 0;
@@ -180,6 +181,46 @@ ok(projetarRBT12({ rbt12: 1_000_000, rbt12_anterior: 0, crescimento: 0.2, anexo:
   }
   ok(mudou === 0, `sem a projeção, a árvore de sempre continua igual (${n} casos)`, mudou);
 }
+/* ═════════ 7 · a ponte crescimento ⇄ RBT12 anterior ══════════════════════
+ * O formulário passou a perguntar o CRESCIMENTO (08/08/2026) porque a RBT12 de
+ * doze meses atrás obrigava o contador a abrir outro relatório no meio do
+ * trabalho — e campo caro fica em branco, o que custava a projeção inteira.
+ *
+ * A troca só é legítima se a ponte for EXATA: o motor continua medindo o
+ * crescimento a partir do valor anterior, e é isso que sustenta a palavra
+ * "medido" no laudo. Se estas contas divergirem, o laudo passa a afirmar um
+ * crescimento diferente do que o contador respondeu. */
+{
+  const rbt12 = 1_000_000;
+
+  ok(perto(rbt12AnteriorPorCrescimento(rbt12, 0.25), 800_000, 1e-6),
+     "crescer 25% partindo de 800 mil chega em 1 milhão — a volta dá 800 mil");
+
+  ok(perto(rbt12AnteriorPorCrescimento(rbt12, 0), 1_000_000, 1e-6),
+     "crescimento zero devolve o mesmo valor");
+
+  ok(perto(rbt12AnteriorPorCrescimento(rbt12, -0.2), 1_250_000, 1e-6),
+     "queda de 20% significa que o ano anterior foi MAIOR");
+
+  for (const g of [-0.35, -0.1, 0, 0.07, 0.25, 0.9]) {
+    const ant = rbt12AnteriorPorCrescimento(rbt12, g);
+    ok(perto(crescimentoPorRBT12Anterior(rbt12, ant), g, 1e-9),
+       `ida e volta preservam ${(g * 100).toFixed(0)}%`);
+    const p = projetarRBT12({ rbt12, rbt12_anterior: ant, anexo: 1 });
+    ok(p && perto(p.crescimento, g, 1e-9) && p.origem === "medido",
+       `o motor mede ${(g * 100).toFixed(0)}% de volta, e como MEDIDO`);
+  }
+
+  ok(rbt12AnteriorPorCrescimento(rbt12, -1) === null,
+     "queda de 100% não tem valor anterior — devolve null em vez de dividir por zero");
+  ok(rbt12AnteriorPorCrescimento(null, 0.25) === null,
+     "sem RBT12 não há o que reconstruir");
+  ok(rbt12AnteriorPorCrescimento(rbt12, null) === null,
+     "sem crescimento respondido, nada é inventado");
+  ok(crescimentoPorRBT12Anterior(rbt12, 0) === null,
+     "valor anterior zero não vira crescimento infinito");
+}
+
 ok(TETO_SIMPLES === 4_800_000 && SUBLIMITE === 3_600_000, "os dois limites legais estão escritos, não embutidos");
 
 console.log(f === 0 ? "\nOK" : `\n${f} FALHA(S)`);

@@ -93,6 +93,15 @@ export interface AnaliseGravada {
     dinheiro?: Dinheiro;
     sensibilidade?: LinhaSensibilidade[];
     custo_apuracao_anual?: number | null;
+    /**
+     * RBT12 dos doze meses anteriores — o que sustenta a projeção até jun/2027.
+     *
+     * O formulário pergunta o CRESCIMENTO e reconstrói este valor; o campo
+     * gravado continua sendo o de sempre, para que nenhuma análise antiga
+     * precise ser relida de outro jeito. Estava sendo gravado desde sempre e
+     * faltava no tipo — por isso reabrir a análise não conseguia recuperá-lo.
+     */
+    rbt12_anterior?: number | null;
     detalhes?: { qual?: DetalheQual; cred?: DetalheCred } | null;
     origens?: Record<string, string> | null;
     fator_r?: AlertaFatorR | null;

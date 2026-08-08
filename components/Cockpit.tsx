@@ -191,6 +191,33 @@ export function Cockpit({
    */
   const mostrarTrilha = !trilha.temEscritorio || !empurrao;
 
+  /**
+   * A PRÓXIMA EMPRESA DA ESTEIRA — o que faltava para isto virar trabalho em
+   * série em vez de trinta decisões seguidas.
+   *
+   * Sem isto, o ciclo de cada empresa era: agir · agir · agir · voltar à fila ·
+   * VARRER A LISTA COM O OLHO até achar a próxima. A varredura não aparece em
+   * contagem de clique nenhuma e é a parte cara: depois da nona empresa,
+   * ninguém lembra qual era a décima.
+   *
+   * Sai da lista FILTRADA de propósito, e não da carteira inteira. Quem está
+   * com um filtro ligado escolheu um recorte — mandar a pessoa para fora dele
+   * seria desfazer uma decisão que ela tomou.
+   */
+  const proximaDaEsteira = useMemo(() => {
+    if (!gaveta) return null;
+    const alvo = filtradas.find(
+      (l) => l.id !== gaveta.id && l.acao !== "pronto" && l.acao !== "fora"
+    );
+    return alvo
+      ? {
+          id: alvo.id,
+          nome: alvo.razao_social,
+          aba: (alvo.acao === "contato" ? "dossie" : "decisao") as "decisao" | "dossie",
+        }
+      : null;
+  }, [gaveta, filtradas]);
+
   function agirEmpurrao() {
     if (!empurrao) return;
     if (empurrao.tipo === "emitir_primeiro" && empurrao.alvo?.analise_id) {
@@ -981,6 +1008,8 @@ export function Cockpit({
                 modo="gaveta"
                 abaInicial={gaveta.aba}
                 aoMudar={() => router.refresh()}
+                proxima={proximaDaEsteira}
+                aoIrParaProxima={(id, aba) => setGaveta({ id, aba })}
               />
             </div>
           </div>

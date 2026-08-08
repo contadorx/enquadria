@@ -6,6 +6,49 @@ import {
   type Recomendacao, type TipoDecisao,
 } from "@/lib/termo";
 
+/**
+ * O DETALHE QUE FICA A UM CLIQUE — e não some.
+ *
+ * Esta tela é lida por um EMPRESÁRIO, não por um contador. Ela abria com a
+ * recomendação, os fundamentos, os pontos a observar e oito cláusulas — várias
+ * delas longas, uma começando com "ATENÇÃO" — tudo antes do primeiro campo.
+ * Quem chega para dar ciência de uma decisão que já foi conversada com a
+ * contabilidade encontra uma parede de texto fiscal, e parede assusta: o
+ * documento que existe para PROTEGER passa a parecer uma armadilha, e o cliente
+ * fecha a aba em vez de assinar.
+ *
+ * A resposta NÃO é apagar. Cada linha ali está no hash do que ele assina, e o
+ * termo continua saindo com tudo. A resposta é ORDEM: à vista fica o que ele
+ * precisa para decidir; o fundamento fica a um clique, aberto por quem quiser,
+ * com o rótulo dizendo o que tem dentro e quantos itens são.
+ *
+ * O limite que eu não passo: nada do que ele DECLARA some da tela sem aviso, e
+ * o número de itens vai no rótulo — "esconder" um item é diferente de dizer
+ * "há oito, clique para ler".
+ */
+function Recolhivel({
+  titulo,
+  quantos,
+  children,
+}: {
+  titulo: string;
+  quantos?: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <details className="mt-3 rounded-sm border border-line bg-surface px-3 py-2.5">
+      <summary className="cursor-pointer list-none text-[12.5px] font-semibold text-accentdeep">
+        {titulo}
+        {quantos != null && <span className="font-mono font-normal text-muted"> · {quantos}</span>}
+        <span className="float-right font-normal text-muted" aria-hidden>
+          ler
+        </span>
+      </summary>
+      <div className="mt-2 text-[12.5px] text-slate2">{children}</div>
+    </details>
+  );
+}
+
 interface Props {
   token: string;
   empresa: string;
@@ -177,6 +220,12 @@ export function Assinatura({
         <div className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-accentdeep">Termo de ciência e decisão · IBS/CBS</div>
         <div className="mt-1 text-[15px] font-bold text-ink">{empresa}</div>
         <div className="font-mono text-[11.5px] text-muted">{cnpj}</div>
+        {/* A PRIMEIRA LINHA DIZ O QUE É E QUANTO CUSTA. Quem abre um link de
+            assinatura sem saber o tamanho da tarefa assume o pior. */}
+        <p className="mt-2 text-[12.5px] text-slate2">
+          A sua contabilidade analisou o regime da empresa. Aqui você registra a decisão — leva
+          dois minutos.
+        </p>
         {/* A RECOMENDAÇÃO VEM ANTES DA DECISÃO, e em corpo menor. O documento é
             o termo da decisão da EMPRESA; se a recomendação virar o destaque, o
             papel passa a parecer que quem decidiu foi o contador. */}
@@ -194,31 +243,28 @@ export function Assinatura({
               </b>{" "}
               — {recomendacao.titulo}.
             </p>
-            {!!recomendacao.baseado_em.length && (
-              <ul className="mt-1.5 list-disc pl-4">
-                {recomendacao.baseado_em.map((b, i) => (
-                  <li key={i} className="mb-0.5">{b}</li>
-                ))}
-              </ul>
-            )}
           </div>
         )}
 
+        {!!recomendacao?.baseado_em.length && (
+          <Recolhivel titulo="Em que essa conclusão se baseia" quantos={recomendacao.baseado_em.length}>
+            <ul className="list-disc pl-4">
+              {recomendacao.baseado_em.map((b, i) => (
+                <li key={i} className="mb-0.5">{b}</li>
+              ))}
+            </ul>
+          </Recolhivel>
+        )}
+
         {!!pontos.length && (
-          <div className="mt-3 rounded-sm border border-line bg-surface px-3 py-2.5 text-[12.5px] text-slate2">
-            <div className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-accentdeep">
-              Pontos a observar
-            </div>
-            <p className="mt-1">
-              A recomendação vale enquanto os pontos abaixo se mantiverem. Se algum deles mudar, a
-              conta muda.
-            </p>
+          <Recolhivel titulo="Pontos a observar" quantos={pontos.length}>
+            <p>A recomendação vale enquanto eles se mantiverem. Se algum mudar, a conta muda.</p>
             <ul className="mt-1.5 list-disc pl-4">
               {pontos.map((p, i) => (
                 <li key={i} className="mb-0.5">{p}</li>
               ))}
             </ul>
-          </div>
+          </Recolhivel>
         )}
 
         {/**
@@ -235,8 +281,7 @@ export function Assinatura({
             A decisão da empresa
           </div>
           <p className="mt-1 text-[12.5px] text-slate2">
-            Esta parte é sua. A recomendação acima é técnica; a decisão é da empresa, e é ela que
-            este documento registra.
+            A recomendação é técnica; a decisão é da empresa — e é ela que este documento registra.
           </p>
           <div className="mt-2.5 flex flex-col gap-2">
             {(Object.keys(ROTULO_TIPO) as TipoDecisao[]).map((t) => (
@@ -312,11 +357,28 @@ export function Assinatura({
           )}
         </div>
 
-        <ul className="mt-3 list-disc pl-5 text-[12.5px] text-slate2">
-          {clausulas.map((c, i) => (
-            <li key={i} className="mb-1">{c}</li>
-          ))}
-        </ul>
+        {/**
+          * AS CLÁUSULAS — recolhidas, contadas e anunciadas pelo que são.
+          *
+          * Eram oito parágrafos densos abertos na tela, um deles começando com
+          * "ATENÇÃO", entre a decisão e o campo de nome. É a parte que assusta —
+          * e é também a parte que o cliente declara ter lido, então recolher sem
+          * dizer nada seria trocar susto por engano.
+          *
+          * O rótulo resolve o dilema: diz QUANTAS são e o que tratam. Quem quer
+          * ler, lê; quem não abre, sabe que existem e quantas. Nenhuma palavra
+          * saiu do documento, do hash ou do PDF.
+          */}
+        <Recolhivel
+          titulo="O que você declara ciência ao assinar — prazos, e o que não tem volta"
+          quantos={clausulas.length}
+        >
+          <ul className="list-disc pl-4">
+            {clausulas.map((c, i) => (
+              <li key={i} className="mb-1">{c}</li>
+            ))}
+          </ul>
+        </Recolhivel>
 
         {/* Assinar ciência de uma decisão sem poder abrir a conta que a
             sustenta é assinatura no escuro. O laudo fica AQUI, dentro do

@@ -24,7 +24,7 @@ import {
   type DetalheCred,
   type Segmento,
 } from "@/lib/motor";
-import { projetarRBT12, decidirComProjecao } from "@/lib/projecao";
+import { projetarRBT12, decidirComProjecao, rbt12AnteriorPorCrescimento } from "@/lib/projecao";
 import { anexoPorCnae } from "@/lib/triagem";
 import { leituraDoDinheiro } from "@/lib/roteiro";
 import { parseValorBRL } from "@/lib/csv";
@@ -147,6 +147,7 @@ export function FormAnalise({
   respostasIniciais,
   detalhesIniciais,
   custoInicial,
+  crescimentoInicial,
   segmentosIniciais,
   estimada,
   chavesDaColeta,
@@ -159,6 +160,14 @@ export function FormAnalise({
   respostasIniciais: Respostas | null;
   detalhesIniciais?: { qual?: DetalheQual; cred?: DetalheCred } | null;
   custoInicial?: number | null;
+  /**
+   * Crescimento anual em fração (0,12 = 12%), reconstruído da análise gravada.
+   *
+   * Reabrir uma análise perdia a projeção: o campo nascia vazio e o próximo
+   * "salvar" gravava sem ela. O laudo emitido depois de uma correção qualquer
+   * ficava sem a seção que o anterior tinha — e ninguém entendia por quê.
+   */
+  crescimentoInicial?: number | null;
   /** segregação congelada numa análise anterior, para reabrir como estava */
   segmentosIniciais?: Segmento[] | null;
   /** premissas vieram do lote por CNAE — o contador precisa confirmar antes do papel */
@@ -188,10 +197,25 @@ export function FormAnalise({
     detalhesIniciais?.cred ?? { insumos: inicial.cred, servicos: 0, outros: 0 }
   );
   const [rbt12, setRbt12] = useState(rbt12Inicial != null ? String(rbt12Inicial) : "");
-  /* C6 — a RBT12 dos DOZE MESES ANTERIORES. Sai do mesmo relatório de onde
-     saiu a RBT12: é medição, não expectativa, e por isso é o campo pedido em
-     vez de um "% de crescimento esperado". */
-  const [rbt12Ant, setRbt12Ant] = useState("");
+  /**
+   * C6 — O CRESCIMENTO DA RECEITA, perguntado direto (08/08/2026).
+   *
+   * Antes o campo pedia a RBT12 dos doze meses ANTERIORES, em reais. O motivo
+   * era bom — é medição, não expectativa — mas o preço era alto: para responder,
+   * o contador tinha de abrir outro relatório e achar um segundo valor de seis
+   * dígitos, no meio de um formulário que ele já estava querendo terminar. Campo
+   * caro de responder é campo que fica em branco, e em branco o laudo perde a
+   * projeção inteira.
+   *
+   * A pergunta agora é a que ele responde de cabeça: quanto a receita cresceu no
+   * último ano. Continua sendo MEDIÇÃO — é o ano que passou, não o que vem —, e
+   * o valor anterior é reconstruído aqui mesmo: `rbt12 / (1 + g)`. A conta é
+   * exata e reversível, então o motor, o laudo e a análise gravada continuam
+   * recebendo exatamente o que sempre receberam.
+   */
+  const [crescimento, setCrescimento] = useState(
+    crescimentoInicial != null ? String(Math.round(crescimentoInicial * 1000) / 10).replace(".", ",") : ""
+  );
   const [custo, setCusto] = useState(custoInicial != null ? String(custoInicial) : "");
   const [anexoSel, setAnexoSel] = useState<number>(anexo ?? anexoPorCnae(cnae) ?? 1);
   const [anexoConfirmado, setAnexoConfirmado] = useState(false);
@@ -259,7 +283,25 @@ export function FormAnalise({
   const saida = SAIDAS[res.saida];
   const dois = cenarios(respostas, base);
   const dinheiro = emReais(res, rbt12Num, custoNum);
-  const rbt12AntNum = parseValorBRL(rbt12Ant) ?? null;
+  /**
+   * DO CRESCIMENTO DE VOLTA PARA O VALOR ANTERIOR.
+   *
+   * `rbt12_anterior = rbt12 / (1 + g)`. Guardar o valor reconstruído em vez do
+   * percentual é o que mantém intacto tudo o que veio antes: o motor continua
+   * medindo o crescimento do jeito dele, o laudo continua tratando como MEDIDO
+   * (é o ano que passou, não uma expectativa sobre o que vem) e a análise
+   * gravada não muda de formato — nenhuma migration, nenhum laudo antigo relido
+   * de outro jeito.
+   *
+   * Queda de 100% ou mais seria receita zero ou negativa: aí não há projeção.
+   */
+  const crescNum = (() => {
+    const t = crescimento.replace(/[^\d,.-]/g, "").replace(",", ".");
+    if (!t || t === "-" || t === "." || t === "-.") return null;
+    const n = Number(t);
+    return Number.isFinite(n) ? n / 100 : null;
+  })();
+  const rbt12AntNum = rbt12AnteriorPorCrescimento(rbt12Num, crescNum);
   const projecao =
     rbt12Num != null && rbt12AntNum != null
       ? projetarRBT12({ rbt12: rbt12Num, rbt12_anterior: rbt12AntNum, anexo: ddas.anexo })
@@ -398,39 +440,56 @@ export function FormAnalise({
           )}
 
           {/**
-            * C6 — A RBT12 DOS DOZE MESES ANTERIORES.
+            * C6 — O CRESCIMENTO DA RECEITA.
             *
             * A opção se exerce em setembro de 2026 e vale de janeiro a junho de
             * 2027. Com a RBT12 de hoje só, o laudo afirma um número para um
             * período em que ele pode já não valer: empresa que cresce muda de
             * faixa dentro do efeito, e a parcela que sai do DAS muda com ela.
             *
-            * Pedimos a RBT12 ANTERIOR e não um "% esperado" de propósito: o
-            * primeiro é medição e sai do mesmo relatório; o segundo é opinião
-            * sobre o futuro, e opinião não sustenta laudo.
+            * A pergunta é o CRESCIMENTO DO ANO QUE PASSOU, não uma expectativa
+            * sobre o que vem — continua sendo medição, e é a medição que o
+            * contador tem na cabeça. O valor anterior em reais é reconstruído
+            * daqui (ver `rbt12AntNum`), então nada mudou do motor para baixo.
             *
-            * Opcional. Sem ela nada é projetado, e o laudo não ganha a seção —
+            * Opcional. Sem ele nada é projetado, e o laudo não ganha a seção —
             * melhor do que ganhar uma seção construída sobre um chute.
             */}
           <div className="mt-3">
             <div className="text-[12.5px] font-semibold">
-              Receita dos 12 meses ANTERIORES a esses{" "}
+              Quanto a receita cresceu no último ano{" "}
               <span className="font-normal text-muted">· opcional</span>
             </div>
             <p className="mb-2 mt-0.5 max-w-[70ch] text-[12px] text-muted">
-              Com ela o laudo projeta até junho/2027. Sem ela, só a foto de hoje.
+              Com ele o laudo projeta até junho/2027. Sem ele, só a foto de hoje.
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center rounded-sm border border-line px-2.5 focus-within:border-accent">
-                <span className="font-mono text-[12px] text-muted">R$</span>
                 <input
-                  value={rbt12Ant}
-                  onChange={(e) => setRbt12Ant(e.target.value)}
+                  value={crescimento}
+                  onChange={(e) => setCrescimento(e.target.value)}
                   inputMode="decimal"
-                  placeholder="ex.: 384.000"
-                  className="w-36 bg-transparent px-2 py-1.5 font-mono text-[13px] outline-none"
+                  placeholder="ex.: 12"
+                  className="w-20 bg-transparent px-2 py-1.5 font-mono text-[13px] outline-none"
                 />
+                <span className="font-mono text-[12px] text-muted">%</span>
               </div>
+              {/* caiu é resposta legítima e ninguém digita "-" sem ser
+                  convidado: o atalho existe para não perder a informação de
+                  quem encolheu */}
+              {!crescimento && (
+                <div className="flex gap-1">
+                  {[-10, 0, 10, 25].map((v) => (
+                    <button
+                      key={v}
+                      onClick={() => setCrescimento(String(v))}
+                      className="rounded-sm border border-line px-2 py-1 font-mono text-[11px] text-slate2"
+                    >
+                      {v > 0 ? `+${v}%` : `${v}%`}
+                    </button>
+                  ))}
+                </div>
+              )}
               {projecao && (
                 <span className="rounded-sm bg-accentwash px-2 py-1 font-mono text-[11px] text-accentdeep">
                   {(projecao.crescimento * 100).toFixed(1).replace(".", ",")}% a.a. →{" "}

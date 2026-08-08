@@ -17,6 +17,7 @@ import { RoteiroEmpresa } from "@/components/RoteiroEmpresa";
 import { ArquivarEmpresa } from "@/components/ArquivarEmpresa";
 import type { Derivadas } from "@/lib/coleta";
 import type { DetalheQual } from "@/lib/motor";
+import { crescimentoPorRBT12Anterior } from "@/lib/projecao";
 
 /**
  * O DOSSIÊ DA EMPRESA — um componente, dois lugares.
@@ -115,12 +116,22 @@ export function PainelEmpresa({
   modo = "pagina",
   abaInicial = "decisao",
   aoMudar,
+  proxima,
+  aoIrParaProxima,
 }: {
   empresaId: string;
   modo?: "pagina" | "gaveta";
   abaInicial?: Aba;
   /** avisa o cockpit que algo mudou, para ele recarregar a fila */
   aoMudar?: () => void;
+  /**
+   * A PRÓXIMA EMPRESA COM TRABALHO — quem calcula é a fila, que é quem sabe a
+   * ordem de prioridade e o filtro que está ligado. Aqui só se oferece o
+   * caminho. Ausente na página inteira (/painel/empresa/[id]), onde não há
+   * esteira: quem entrou por link direto veio ver UMA empresa.
+   */
+  proxima?: { id: string; nome: string; aba: "decisao" | "dossie" } | null;
+  aoIrParaProxima?: (id: string, aba: "decisao" | "dossie") => void;
 }) {
   const router = useRouter();
   const [d, setD] = useState<Dossie | null>(null);
@@ -657,6 +668,13 @@ export function PainelEmpresa({
             detalhesIniciais={daColeta?.detalhes ?? a?.parametros?.detalhes ?? null}
             segmentosIniciais={a?.parametros?.segmentos ?? null}
             custoInicial={a?.parametros?.custo_apuracao_anual ?? null}
+            /* o formulário pergunta o CRESCIMENTO; a análise guarda a RBT12
+               anterior. A volta é a mesma conta ao contrário, para reabrir
+               mostrando o que foi respondido em vez de um campo vazio. */
+            crescimentoInicial={crescimentoPorRBT12Anterior(
+              e.rbt12 != null ? Number(e.rbt12) : null,
+              a?.parametros?.rbt12_anterior ?? null
+            )}
             estimada={estimada}
             aoSalvar={() => {
               setDaColeta(null);
@@ -737,6 +755,24 @@ export function PainelEmpresa({
                     >
                       Abrir e baixar em PDF
                     </a>
+                    {/**
+                      * A ESTEIRA CONTINUA AQUI — e este é o único lugar em que
+                      * ela pode continuar.
+                      *
+                      * O momento em que o laudo sai é o momento em que a empresa
+                      * acabou. Antes, o caminho era "voltar à fila" e procurar a
+                      * próxima com o olho, trinta vezes numa carteira de trinta.
+                      * O botão troca a procura por um clique — e a próxima é a
+                      * que a fila já elegeu, não a que sobrou mais perto.
+                      */}
+                    {proxima && aoIrParaProxima && (
+                      <button
+                        onClick={() => aoIrParaProxima(proxima.id, proxima.aba)}
+                        className="rounded-sm border border-ink px-3 py-1.5 text-[12px] font-semibold text-ink"
+                      >
+                        Próxima: {proxima.nome} →
+                      </button>
+                    )}
                     <button
                       onClick={() => setEmitido(null)}
                       className="rounded-sm border border-line px-3 py-1.5 text-[12px] font-semibold text-slate2"

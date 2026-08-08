@@ -97,6 +97,43 @@ export interface Projecao {
 }
 
 /**
+ * DO CRESCIMENTO PARA A RBT12 ANTERIOR — e a volta.
+ *
+ * O formulário pergunta ao contador quanto a receita CRESCEU, porque é o que
+ * ele responde de cabeça; o motor mede o crescimento a partir da RBT12 de doze
+ * meses atrás, porque é o que sustenta a palavra "medido" no laudo. Estas duas
+ * funções são a ponte, e ela é exata: `ant = rbt12 / (1+g)` e
+ * `g = rbt12/ant − 1` desfazem uma à outra.
+ *
+ * Vivem aqui, e não no componente, por um motivo prático: aqui elas têm teste.
+ * Uma conta que decide se o laudo ganha ou não a seção de projeção não pode
+ * morar num arquivo que a suíte não alcança.
+ *
+ * `null` quando não dá para reconstruir: sem RBT12, sem crescimento, ou queda
+ * de 100% ou mais — que seria receita anterior infinita.
+ */
+export function rbt12AnteriorPorCrescimento(
+  rbt12: number | null | undefined,
+  crescimento: number | null | undefined
+): number | null {
+  if (rbt12 == null || !(rbt12 > 0)) return null;
+  if (crescimento == null || !isFinite(Number(crescimento))) return null;
+  const g = Number(crescimento);
+  if (g <= -1) return null;
+  return rbt12 / (1 + g);
+}
+
+/** a volta: usada para reabrir a análise mostrando o que foi respondido */
+export function crescimentoPorRBT12Anterior(
+  rbt12: number | null | undefined,
+  anterior: number | null | undefined
+): number | null {
+  if (rbt12 == null || !(rbt12 > 0)) return null;
+  if (anterior == null || !(Number(anterior) > 0)) return null;
+  return rbt12 / Number(anterior) - 1;
+}
+
+/**
  * A projeção em si. Devolve `null` quando não há base para projetar — e essa é
  * a resposta certa, não 0% de crescimento.
  */
