@@ -42,6 +42,24 @@ export interface Potencial {
   pct_eliminado: number;
 }
 
+/**
+ * DE ONDE VEM O NÚMERO — declarado em 08/08/2026.
+ *
+ * `HONORARIO_PADRAO` e `HONORARIO_CURTO_PADRAO` apareciam na tela e na proposta
+ * sem origem nenhuma. O contador via "R$ 600" como valor de partida e não tinha
+ * como saber se aquilo era pesquisa de mercado, média da nossa base ou chute de
+ * quem escreveu o código — e o número entra na conta que ele mostra ao cliente
+ * dele. Cifra sem procedência num produto que vende prova corrói a confiança
+ * nos números que TÊM origem, que são a maioria.
+ *
+ * A resposta honesta é esta: é ponto de partida editável, não medição. Dizê-lo
+ * na tela custa uma linha e vale mais do que um número que finge autoridade.
+ */
+export const ORIGEM_HONORARIO =
+  "Valor de partida, editável: é a sua premissa de honorário, não uma medição nossa nem uma " +
+  "tabela de mercado. Ajuste para o que você cobra — o mapa recalcula, e o número que aparece " +
+  "no muro do plano e na proposta passa a ser o seu.";
+
 export const HONORARIO_PADRAO = 600;
 export const HONORARIO_CURTO_PADRAO = 150;
 

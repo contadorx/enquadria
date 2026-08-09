@@ -5,6 +5,8 @@ import { CLAUSULAS_CIENCIA } from "@/lib/esign";
 import { decisaoDoSnapshot } from "@/lib/termo";
 import { Assinatura } from "@/components/Assinatura";
 import type { Metadata } from "next";
+import { situacaoDoLink } from "@/lib/token-validade";
+import { LinkEncerrado } from "@/components/LinkEncerrado";
 
 /**
  * NOINDEX NA PRÓPRIA PÁGINA — 08/08/2026.
@@ -38,11 +40,18 @@ export default async function AssinarPage({ params }: { params: { token: string 
   const { data: termo } = await supabase
     .from("termos")
     .select(
-      "assinatura_status, decisao, assinante_nome, assinado_em, metodo, hash_documento, analise_id, snapshot"
+      "assinatura_status, decisao, assinante_nome, assinado_em, metodo, hash_documento, analise_id, snapshot, token_expira_em, revogado_em"
     )
     .eq("token", params.token)
     .maybeSingle();
   if (!termo) notFound();
+
+  /* O LINK TEM PRAZO — 08/08/2026, migration 0068. O termo PENDENTE vale 90
+     dias (é convite, e convite parado três meses não vai ser aceito); assinado,
+     um gatilho no banco estende para dois anos, porque aí ele virou prova e o
+     cliente volta a ele quando alguém perguntar. */
+  const situacao = situacaoDoLink(termo);
+  if (situacao !== "valido") return <LinkEncerrado motivo={situacao} tipo="termo de ciência" />;
 
   const { data: analise } = await supabase
     .from("analises")

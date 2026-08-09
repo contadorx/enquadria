@@ -165,5 +165,57 @@ const sit = (o = {}) => ({
   }
 }
 
+/* ═══════════ 8 · o prazo é o da FASE, não o de setembro para sempre ═══
+ *
+ * A resposta da chave "prazo" era um texto só, cravado em "30 de setembro de
+ * 2026". Em março de 2027 o assistente ainda mandaria correr atrás de uma data
+ * vencida há seis meses, ao lado de um cockpit que já mostrava outra fase.
+ *
+ * A pureza fica onde estava: `respostaLocal` recebe o instante por parâmetro
+ * (padrão do relógio), então dá para testar março de 2027 sem esperar por ele.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+{
+  const s = sit({ empresas: 25, temEscritorio: true, analises: 5, laudos: 3 });
+  const em = (iso) => respostaLocal("qual é o prazo mesmo?", s, Date.parse(iso)).texto;
+
+  const antes = em("2026-08-08T12:00:00Z");
+  const aberta = em("2026-09-15T12:00:00Z");
+  const aliquota = em("2026-10-15T12:00:00Z");
+  const cancelamento = em("2026-11-15T12:00:00Z");
+  const efeito = em("2027-01-15T12:00:00Z");
+  const proxima = em("2027-06-15T12:00:00Z");
+
+  ok(/30 de setembro de 2026/.test(antes) && /omiss[ãa]o/.test(antes),
+     "antes da janela, o prazo continua sendo 30/09 e o custo de não decidir aparece");
+  ok(aberta === antes, "com a janela aberta, a resposta é a mesma — é o mesmo prazo");
+
+  ok(/31 de outubro de 2026/.test(aliquota) && /30 de novembro de 2026/.test(aliquota),
+     "em outubro, o prazo que corre é o da alíquota de referência e o do cancelamento", aliquota);
+  ok(/fechou/.test(aliquota), "…e ela começa dizendo que a janela fechou, em vez de pedir uma decisão vencida");
+
+  ok(/30 de novembro de 2026/.test(cancelamento) && !/31 de outubro/.test(cancelamento),
+     "em novembro sobra o cancelamento — o prazo da alíquota já passou", cancelamento);
+
+  ok(/janeiro a junho de 2027/.test(efeito) && /mar[çc]o de 2027/.test(efeito),
+     "com o regime rodando, a resposta aponta a próxima janela prevista", efeito);
+  ok(/depende de publicação|ainda depende/.test(efeito),
+     "…e diz que a data é previsão, não norma publicada");
+
+  ok(/depende de publicação/.test(proxima) && !/30 de setembro de 2026/.test(proxima),
+     "passada a data prevista, o assistente não repete o prazo de setembro", proxima);
+
+  /* a chave não muda com a fase: quem chama continua tratando como resposta de uso */
+  for (const iso of ["2026-08-08", "2026-10-15", "2027-06-15"]) {
+    ok(respostaLocal("qual é o prazo mesmo?", s, Date.parse(iso + "T12:00:00Z")).chave === "prazo",
+       `a chave continua "prazo" em ${iso}`);
+  }
+
+  /* nenhuma fase pode prometer resultado nem tratar a alíquota como já fixada */
+  for (const t of [antes, aberta, aliquota, cancelamento, efeito, proxima]) {
+    ok(!/economia|economizar|garantid|blindagem/i.test(t),
+       "nenhuma versão da resposta promete resultado", t.slice(0, 80));
+  }
+}
+
 console.log(f ? `\n${f} FALHA(S)` : "\ntudo ok");
 process.exit(f ? 1 : 0);

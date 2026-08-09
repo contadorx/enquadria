@@ -33,6 +33,8 @@
  * aqui" virar uma afirmação sobre a LC 214.
  */
 
+import { faseDaJanela, MARCOS, type Fase } from "./janela";
+
 export interface Situacao {
   temEscritorio: boolean;
   empresas: number;
@@ -263,6 +265,31 @@ export function dicaDaTela(rota: string, s: Situacao): Dica | null {
     };
   }
 
+  /**
+   * A EMPRESA ABERTA POR LINK DIRETO — conserto de 08/08/2026.
+   *
+   * `/painel/empresa/[id]` é o destino de link de e-mail, do digest e de
+   * favorito, e é a ÚNICA tela de trabalho sem orientador nenhum: não monta a
+   * Trilha, não monta o Empurrão (os dois vivem dentro do Cockpit) e não tinha
+   * regra aqui. Quem chega por fora vê a ficha de uma empresa e nada dizendo
+   * onde ela está na esteira nem o que falta.
+   *
+   * Pela regra da casa — uma tela, um orientador —, esta é exatamente a tela em
+   * que a bolha DEVE falar, porque não há segunda voz para competir com ela. A
+   * dica não repete a ação da linha: aponta o caminho de volta para a fila, que
+   * é o que a pessoa não tem ali.
+   */
+  if (r.startsWith("/painel/empresa")) {
+    return {
+      chave: "empresa-sem-fila",
+      titulo: "Você está vendo uma empresa só",
+      texto:
+        "Esta tela abre pelo link direto e mostra a ficha de um cliente. A ordem do trabalho — quem vem primeiro, o que falta em cada um — está no cockpit, e lá a empresa abre em gaveta, sem você perder o lugar na fila.",
+      ctaRotulo: "Ir para o cockpit",
+      ctaRota: "/painel",
+    };
+  }
+
   /* Curso: quem chega pelo curso costuma não saber que a ferramenta é
      separada — foi exatamente o caso do WhatsApp. */
   if (r.startsWith("/painel/curso") && s.empresas === 0) {
@@ -299,8 +326,24 @@ interface Gatilho {
   chave: string;
   /** todas as palavras de pelo menos UM dos grupos precisam aparecer */
   grupos: string[][];
-  responder: (s: Situacao) => string;
+  /**
+   * A FASE ENTRA COMO ARGUMENTO, e isso é o que mantém o arquivo puro.
+   *
+   * Nenhuma resposta chama `Date` por dentro: quem sabe a hora é `respostaLocal`,
+   * e ela recebe o instante por parâmetro (com o padrão do relógio). É a mesma
+   * regra de `faseDaJanela` e de `emHorarioDeEnvio` — testar março de 2027 não
+   * pode depender de esperar março de 2027 chegar.
+   */
+  responder: (s: Situacao, fase: Fase) => string;
 }
+
+/** o mês da próxima janela em português, derivado do MARCOS — nunca redigitado */
+const mesDaProxima = () =>
+  new Date(MARCOS.proxima_prevista + "T12:00:00Z").toLocaleDateString("pt-BR", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
 
 const passoEmTexto = (p: Passo) =>
   `${p.titulo}\n\n${p.porque}\n\n${p.comoFazer.map((l, i) => `${i + 1}. ${l}`).join("\n")}`;
@@ -377,9 +420,59 @@ const GATILHOS: Gatilho[] = [
   {
     chave: "prazo",
     grupos: [["prazo"], ["30 de setembro"], ["data limite"], ["ate quando posso"]],
-    responder: () =>
-      "O prazo para optar por apurar IBS e CBS pelo regime regular é 30 de setembro de 2026, com efeito de janeiro a junho de 2027.\n\n" +
-      "Quem não decidir fica no DAS por omissão — a escolha não feita também é uma escolha. Por isso o cockpit ordena a fila por prioridade: dá para começar por quem tem mais em jogo.",
+    /**
+     * "QUAL É O PRAZO?" RESPONDIA SEMPRE SETEMBRO — conserto de 08/08/2026.
+     *
+     * O texto era um só, cravado em "30 de setembro de 2026": em março de 2027
+     * o assistente ainda mandaria o contador correr atrás de uma data que
+     * passou há seis meses, ao lado de um cockpit que já mostrava outra fase.
+     * Resposta fixa sobre calendário envelhece sozinha, e quem percebe uma vez
+     * para de perguntar aqui.
+     *
+     * As seis fases já existiam em lib/janela.ts e nenhuma resposta as
+     * consultava. O prazo que importa é o da fase em que a pessoa está — e
+     * depois de setembro ele deixa de ser a opção e passa a ser o cancelamento,
+     * até virar a janela seguinte.
+     */
+    responder: (_s, fase) => {
+      const fila =
+        "Por isso o cockpit ordena a fila por prioridade: dá para começar por quem tem mais em jogo.";
+
+      switch (fase) {
+        case "antes":
+        case "aberta":
+          return (
+            "O prazo para optar por apurar IBS e CBS pelo regime regular é 30 de setembro de 2026, com efeito de janeiro a junho de 2027.\n\n" +
+            "Quem não decidir fica no DAS por omissão — a escolha não feita também é uma escolha. " +
+            fila
+          );
+        case "aliquota":
+          return (
+            "A janela de opção fechou em 30 de setembro de 2026. Os prazos que ainda correm são outros:\n\n" +
+            "1. A alíquota de referência de IBS e CBS é fixada por Resolução do Senado até 31 de outubro de 2026. Os laudos de setembro saíram com estimativa; com o número publicado, cada um pode ser refeito.\n" +
+            "2. Quem optou pode cancelar a opção até 30 de novembro de 2026.\n\n" +
+            "Quem não decidiu segue no DAS pelo primeiro semestre de 2027."
+          );
+        case "cancelamento":
+          return (
+            "A janela de opção fechou em 30 de setembro de 2026. O prazo que ainda corre é o do cancelamento: quem optou tem até 30 de novembro de 2026 para desfazer a opção.\n\n" +
+            "Depois dessa data a escolha vale pelo semestre inteiro — de janeiro a junho de 2027 — e a próxima decisão só na janela seguinte."
+          );
+        case "efeito":
+          return (
+            "A janela de setembro de 2026 fechou e o regime escolhido vale de janeiro a junho de 2027. Não há prazo de opção em curso agora.\n\n" +
+            `A opção é semestral, então a mesma carteira volta à mesa: a próxima janela é prevista para ${mesDaProxima()}, e a data ainda depende de publicação. ` +
+            fila
+          );
+        default:
+          return (
+            "A janela de setembro de 2026 e o prazo de cancelamento já passaram — aquele semestre está decidido.\n\n" +
+            "A opção é semestral, então existe uma janela nova; a data oficial depende de publicação e aparece aqui e na aba Reforma quando sair.\n\n" +
+            "O que dá para adiantar não depende dela: rever a carteira triada, comparar o que a apuração do semestre mostrou com o cenário que foi estimado e deixar a fila pronta. " +
+            fila
+          );
+      }
+    },
   },
   {
     chave: "curso",
@@ -411,14 +504,20 @@ const GATILHOS: Gatilho[] = [
  * é. `null` não é falha: é "isto não é comigo", e quem chama segue para os
  * artigos e para a IA.
  */
-export function respostaLocal(pergunta: string, s: Situacao): { chave: string; texto: string } | null {
+export function respostaLocal(
+  pergunta: string,
+  s: Situacao,
+  agora = Date.now()
+): { chave: string; texto: string } | null {
   const q = norm(pergunta);
   if (q.length < 3) return null;
+
+  const fase = faseDaJanela(agora).fase;
 
   for (const g of GATILHOS) {
     for (const grupo of g.grupos) {
       if (grupo.every((palavra) => q.includes(norm(palavra)))) {
-        return { chave: g.chave, texto: g.responder(s) };
+        return { chave: g.chave, texto: g.responder(s, fase) };
       }
     }
   }

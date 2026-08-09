@@ -112,11 +112,12 @@ export function validar(r: Rascunho): Problema[] {
    * mostra tudo para todos. Deixar o filtro preenchido faz a pessoa acreditar
    * que restringiu alguma coisa, e ninguém descobre que não restringiu.
    */
+  const k = r.criterio ?? {};
+  const temFiltro =
+    !!k.anexos?.length || !!k.faixas?.length || !!k.saidas?.length ||
+    !!k.divisoes_cnae?.length || !!k.somente_com_analise;
+
   if (!r.no_cockpit) {
-    const k = r.criterio ?? {};
-    const temFiltro =
-      !!k.anexos?.length || !!k.faixas?.length || !!k.saidas?.length ||
-      !!k.divisoes_cnae?.length || !!k.somente_com_analise;
     if (temFiltro) {
       p.push({
         campo: "criterio",
@@ -124,6 +125,29 @@ export function validar(r: Rascunho): Problema[] {
         bloqueia: false,
       });
     }
+  } else if (!temFiltro) {
+    /**
+     * ALERTA SEM CRITÉRIO ALCANÇAVA A BASE INTEIRA — conserto de 08/08/2026.
+     *
+     * `afeta()` trata critério vazio como "não restringe" e devolve `true` para
+     * qualquer empresa; era a leitura certa para a aba Reforma, que é feed. No
+     * cockpit ela vira outra coisa: um item publicado sem nenhuma dimensão
+     * preenchida gera um apontamento para CADA empresa de CADA escritório, e a
+     * fila de trabalho de todo mundo passa a ter o mesmo aviso no topo.
+     *
+     * A frase de `descreverCriterio` já dizia "Alcança TODAS as empresas de
+     * todos os escritórios" e a validação só repetia o aviso, sem `bloqueia`.
+     * Descrever o estrago não impede o estrago: quem está publicando às pressas
+     * lê a linha, entende como confirmação e salva assim mesmo.
+     *
+     * Quem interrompe a fila precisa saber de QUEM é a fila. Item que vale para
+     * todo mundo continua podendo sair — como notícia, na aba Reforma.
+     */
+    p.push({
+      campo: "criterio",
+      texto: "Alerta sem critério interrompe a fila de todas as empresas de todos os escritórios. Restrinja por anexo, faixa, saída ou CNAE — ou publique como notícia, na aba Reforma.",
+      bloqueia: true,
+    });
   }
 
   if (r.severidade === "alta" && !r.vigencia_em) {

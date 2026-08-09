@@ -22,7 +22,7 @@
  * houver algo importante a dizer.
  */
 
-import { faseDaJanela } from "./janela";
+import { faseDaJanela, MARCOS } from "./janela";
 
 const DIA = 86_400_000;
 
@@ -185,7 +185,22 @@ export function htmlRegua(corpo: string): string {
 // ---------------------------------------------------------------------------
 // PLANEJAMENTO — puro
 // ---------------------------------------------------------------------------
-const MARCOS_PROXIMA = "2027-03";
+/**
+ * A DATA DA PRÓXIMA JANELA ESTAVA ESCRITA DUAS VEZES — conserto de 08/08/2026.
+ *
+ * Esta linha trazia o mês da janela seguinte digitado à mão, uma cópia do
+ * `MARCOS.proxima_prevista` de lib/janela.ts. As duas nunca são consultadas
+ * juntas: a de lá decide QUANDO a fase vira, a daqui entra na chave de
+ * deduplicação do e-mail. Quando a data real for publicada — ela ainda é
+ * previsão, `proxima_confirmada: false` —, mexer numa e esquecer a outra não dá
+ * erro nenhum: a fase muda no dia certo e a chave continua carimbando o mês
+ * antigo, então quem já recebeu o aviso da janela anterior não recebe o da nova.
+ * Silêncio por divergência de constante é o defeito que ninguém procura.
+ *
+ * Derivar o mês da mesma fonte que decide a fase deixa uma verdade só: mudou
+ * lá, mudou aqui.
+ */
+const MARCOS_PROXIMA = MARCOS.proxima_prevista.slice(0, 7);
 
 /**
  * Separa o que VAI SAIR do que está travado.
@@ -439,6 +454,35 @@ export function planejar(ctx: Contexto): Envio[] {
           e,
           `proxima_janela:${e.id}:${MARCOS_PROXIMA}`,
           "regime em vigor, próxima janela à frente",
+          { dias: f.dias ?? 0 }
+        );
+      }
+
+      /**
+       * O SILÊNCIO COMEÇAVA NO DIA SEGUINTE À DATA PREVISTA — 08/08/2026.
+       *
+       * As réguas de janela cobriam `aliquota`, `cancelamento` e `efeito`. A
+       * fase `proxima` — que é para onde o calendário vai e onde ele FICA, já
+       * que não há fase depois dela — não tinha nenhuma. A partir de 02/03/2027
+       * a categoria janela emudecia de vez, e o que continuava saindo era
+       * cutucada de inatividade e cobrança: exatamente a mistura que ensina o
+       * contador a arquivar o remetente.
+       *
+       * O gancho aqui não é prazo, porque prazo é o que falta: a data da nova
+       * janela é previsão até ser publicada. É a carteira do semestre anterior,
+       * que agora tem histórico de apuração para comparar com o cenário que foi
+       * estimado — trabalho que existe antes de qualquer data sair.
+       *
+       * A chave carrega o mês da janela prevista pelo mesmo motivo da régua
+       * acima: quando a data for confirmada e mudar, é outra janela e vale um
+       * toque novo; enquanto for a mesma, sai uma vez só.
+       */
+      if (f.fase === "proxima" && e.empresas > 0) {
+        monta(
+          "nova_janela",
+          e,
+          `nova_janela:${e.id}:${MARCOS_PROXIMA}`,
+          "nova janela à vista, carteira do semestre anterior na mão",
           { dias: f.dias ?? 0 }
         );
       }

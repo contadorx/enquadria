@@ -1,9 +1,11 @@
 import { createClient } from "@/lib/supabase-server";
 import { Cockpit, type Aviso } from "@/components/Cockpit";
 import { contarEsteira, montarFila, type AnaliseCru, type ColetaCru, type EmpresaCru, type Linha } from "@/lib/cockpit";
-import { estadoDaJanela, faseDaJanela } from "@/lib/janela";
+import { estadoDaJanela, faseDaJanela, chamadaDaCarteira } from "@/lib/janela";
 import { decidir, PARAMETROS_2027, type Respostas } from "@/lib/motor";
 import { atingidas, ordenar, type EmpresaRadar, type ItemRadar } from "@/lib/radar";
+import { abertosPorEmpresa, novosDesde } from "@/lib/apontamentos";
+import { derivaDe } from "@/lib/deriva";
 
 /**
  * O COCKPIT — a única tela de trabalho do contador.
@@ -100,10 +102,41 @@ export default async function Painel() {
     .select("id, empresa_id, saida, re, prioridade, parametros, respostas, calculado_em")
     .limit(2000);
 
-  const { data: laudos } = await supabase.from("laudos").select("id, analise_id, numero");
+  /**
+   * LAUDOS E TERMOS SEM TETO ERAM UM TETO ESCONDIDO — conserto de 08/08/2026.
+   *
+   * Estas duas consultas não pediam `.limit()`, e consulta sem limite não é
+   * consulta sem corte: vale o teto padrão do PostgREST (mil linhas). Passando
+   * disso, `laudoPorAnalise` e `termoPorAnalise` perdiam as linhas excedentes —
+   * e a fila voltava a dizer "Emitir laudo" para empresas que JÁ TÊM documento,
+   * em silêncio. O clique reemitia.
+   *
+   * É a pior forma do defeito: não dá erro, não aparece em log, e só acontece
+   * com o escritório grande, que é justamente o que não se pode perder. Peço
+   * explicitamente o mesmo teto das outras consultas desta página e comparo com
+   * o que voltou — se bater no teto, a tela avisa em vez de mentir.
+   */
+  const TETO_FILA = 2000;
+  const { data: laudos } = await supabase
+    .from("laudos")
+    .select("id, analise_id, numero")
+    .limit(TETO_FILA);
   const { data: termos } = await supabase
     .from("termos")
-    .select("id, analise_id, token, assinatura_status, assinado_em");
+    .select("id, analise_id, token, assinatura_status, assinado_em")
+    .limit(TETO_FILA);
+
+  /* emitir laudo é fato do passado e não desacontece: esta contagem ignora
+     arquivamento de propósito — ver `jaEmitiuLaudo` no Cockpit */
+  const { count: laudosDeSempre } = await supabase
+    .from("laudos")
+    .select("id", { count: "exact", head: true });
+
+  const bateuNoTeto =
+    (empresas?.length ?? 0) >= TETO_FILA ||
+    (analises?.length ?? 0) >= TETO_FILA ||
+    (laudos?.length ?? 0) >= TETO_FILA ||
+    (termos?.length ?? 0) >= TETO_FILA;
 
   /* quem já respondeu o formulário — a informação que só existia dentro de
      cada empresa e que o contador precisa VER na fila */
@@ -112,12 +145,54 @@ export default async function Painel() {
     .select("empresa_id, status, respondido_em, aplicada_em")
     .limit(2000);
 
+  /**
+   * OS APONTAMENTOS DA REFORMA, NA FILA — 08/08/2026.
+   *
+   * O monitor roda todo dia às 5h, cruza cada norma nova com a carteira e grava
+   * um apontamento por empresa atingida. Isso é a única coisa do produto que
+   * continua produzindo trabalho cobrável depois que a janela fecha — e não
+   * tinha superfície nenhuma: `abertosPorEmpresa()` e `novosDesde()` existiam
+   * em lib/apontamentos.ts, com comentários dizendo para que serviam, e eram
+   * chamadas só pelos testes. O contador só descobria os apontamentos se
+   * navegasse até uma sub-aba dentro de "Aprender", sem badge, sem selo, sem
+   * nada que o levasse até lá.
+   *
+   * O `try` é o mesmo padrão do layout: as migrations 0063/0064 ainda não
+   * estão aplicadas em produção, e o cockpit não pode cair por causa de uma
+   * tabela que ainda não existe.
+   */
+  let apontamentosAbertos: Record<string, number> = {};
+  let empresasComNovidade: string[] = [];
+  try {
+    const { data: aps } = await supabase
+      .from("apontamentos")
+      .select("empresa_id, status, criado_em")
+      .limit(2000);
+    const lista = (aps ?? []) as { empresa_id: string; status: string; criado_em: string }[];
+    apontamentosAbertos = abertosPorEmpresa(
+      lista as unknown as Parameters<typeof abertosPorEmpresa>[0]
+    );
+    /* `novosDesde(…, null)` devolve os abertos; o filtro por `novo` é o que
+       separa "ainda não olhei" de "já tratei". Sem data de última visita
+       gravada, anunciar por data chamaria de novidade o que já foi visto. */
+    empresasComNovidade = Array.from(
+      new Set(
+        novosDesde(lista as unknown as Parameters<typeof novosDesde>[0], null)
+          .filter((a) => a.status === "novo")
+          .map((a) => (a as unknown as { empresa_id: string }).empresa_id)
+      )
+    );
+  } catch {
+    /* migration não aplicada: a fila segue sem o selo */
+  }
+
   const linhas = montarFila(
     (empresas ?? []) as EmpresaCru[],
     (analises ?? []) as AnaliseCru[],
     laudos ?? [],
     termos ?? [],
-    (coletas ?? []) as ColetaCru[]
+    (coletas ?? []) as ColetaCru[],
+    apontamentosAbertos
   );
   const esteira = contarEsteira(linhas);
   const janela = estadoDaJanela();
@@ -192,11 +267,133 @@ export default async function Painel() {
         } de recomendação com os parâmetros vigentes`,
         detalhe:
           "As análises foram gravadas com os parâmetros da época. Recalculando com os valores atuais do exercício, a saída do motor seria outra.",
+        /**
+         * 08/08/2026: este texto mandava "reabra cada empresa, confira as
+         * premissas e salve de novo". Numa carteira de duzentas isso não
+         * acontece — e era exatamente o trabalho que o produto vende por
+         * e-mail quando a alíquota de referência sair. O botão de revisão em
+         * lote agora existe; o texto passa a explicar o que ele faz, e por que
+         * ele NÃO reescreve o que já foi entregue.
+         */
         o_que_fazer:
-          "Reabra cada empresa, confira as premissas e salve de novo. O laudo já emitido não muda sozinho — o documento entregue é imutável por desenho.",
+          "Use “Revisar a carteira” aqui ao lado: ela recalcula todas as empresas com os parâmetros vigentes, sobre as mesmas respostas, criando uma rodada nova. A rodada anterior fica inteira, e o laudo já emitido não muda — documento entregue é imutável por desenho.",
         empresas: mudaram,
+        acao_revisao: true,
       });
     }
+  }
+
+  /**
+   * O QUE A REFORMA TROUXE PARA A CARTEIRA — 08/08/2026.
+   *
+   * O monitor cruza cada norma nova com a carteira todo dia às 5h e grava um
+   * apontamento por empresa atingida. Isso é a única coisa do produto que
+   * continua produzindo trabalho cobrável depois que a janela fecha — e não
+   * chegava ao contador: a tela vive numa sub-aba dentro de "Aprender", sem
+   * nada que levasse até lá.
+   *
+   * Entra como aviso, e não como bloco novo, de propósito: o cockpit já tem
+   * uma lista de "o que existe para fazer", com o botão que traz as empresas
+   * para a fila. Inventar uma segunda superfície de novidade seria ensinar o
+   * contador a ignorar as duas.
+   */
+  if (empresasComNovidade.length > 0) {
+    avisos.push({
+      id: "apontamentos-novos",
+      tipo: "revisao",
+      titulo: `${empresasComNovidade.length} ${
+        empresasComNovidade.length === 1 ? "cliente seu tem" : "clientes seus têm"
+      } ponto da Reforma ainda não tratado`,
+      detalhe:
+        "O monitor cruza cada norma nova com a sua carteira e aponta, empresa por empresa, quem é atingido.",
+      o_que_fazer:
+        "Traga estas empresas para a fila e trate uma a uma na aba Apontamentos: cada ponto vira “tratado”, “não se aplica” ou “virou serviço”.",
+      empresas: empresasComNovidade,
+    });
+  }
+
+  /**
+   * A DERIVA DO MOTOR CHEGA A QUEM ASSINA — conserto de 08/08/2026.
+   *
+   * `lib/deriva.ts` roda o motor de hoje sobre os PARÂMETROS CONGELADOS de cada
+   * análise e marca `critica` quando a saída muda e já existe laudo emitido ou
+   * termo assinado. É a peça mais bem pensada do produto — e vivia só em
+   * `/painel/negocio`, que `layout.tsx` barra para quem não é superadmin.
+   *
+   * Ou seja: quem tem o CRC, assinou o documento e vai ligar para o cliente não
+   * tinha nenhuma superfície dizendo "duas das suas análises com termo assinado
+   * mudariam de recomendação hoje". Quem tinha era o dono da plataforma, que
+   * não pode ligar para o cliente de ninguém.
+   *
+   * O aviso é diferente do de parâmetros logo acima: aquele mede mudança de
+   * ALÍQUOTA (o número do exercício), este mede mudança de REGRA (o motor). Os
+   * dois podem existir ao mesmo tempo e pedem conversas diferentes — por isso
+   * não foram fundidos.
+   */
+  const comLaudo = new Set((laudos ?? []).map((l) => l.analise_id as string));
+  const comTermoAssinado = new Set(
+    (termos ?? [])
+      .filter((t) => t.assinatura_status === "assinado" || !!t.assinado_em)
+      .map((t) => t.analise_id as string)
+  );
+  const nomePorEmpresa = new Map((empresas ?? []).map((e) => [e.id as string, e.razao_social as string]));
+
+  const derivadas = (analises ?? [])
+    .map((a) =>
+      derivaDe({
+        id: a.id as string,
+        tenant_id: null,
+        tenant_nome: null,
+        empresa_id: a.empresa_id as string,
+        empresa_nome: nomePorEmpresa.get(a.empresa_id as string) ?? null,
+        calculado_em: (a.calculado_em as string) ?? null,
+        saida: (a.saida as string) ?? null,
+        rq: null,
+        ch: null,
+        cl: null,
+        re: (a.re as number) ?? null,
+        fc: null,
+        respostas: (a.respostas as Record<string, number>) ?? null,
+        parametros: (a.parametros as Record<string, unknown>) ?? null,
+        tem_laudo: comLaudo.has(a.id as string),
+        laudo_numero: null,
+        laudo_emitido_em: null,
+        termo_assinado: comTermoAssinado.has(a.id as string),
+      })
+    )
+    .filter((l) => l.critica);
+
+  if (derivadas.length > 0) {
+    const empresasDerivadas = (analises ?? [])
+      .filter((a) => derivadas.some((d) => d.id === a.id))
+      .map((a) => a.empresa_id as string);
+    avisos.push({
+      id: "deriva-do-motor",
+      tipo: "revisao",
+      titulo: `${derivadas.length} ${
+        derivadas.length === 1 ? "documento já emitido mudaria" : "documentos já emitidos mudariam"
+      } de recomendação com a regra de hoje`,
+      detalhe:
+        "O método de cálculo foi revisado depois que estes documentos saíram. Rodando a regra atual sobre as MESMAS premissas congeladas, a recomendação seria outra.",
+      o_que_fazer:
+        "O documento entregue não muda sozinho, e nem deve. Abra cada empresa, confira e decida se vale emitir uma segunda via — e ligue para o cliente antes que ele descubra pela verificação.",
+      empresas: Array.from(new Set(empresasDerivadas)),
+    });
+  }
+
+  /* o aviso que impede a fila de mentir calada quando a carteira passa do teto
+     desta tela — sem ele, "Emitir laudo" reaparece em empresa que já tem um */
+  if (bateuNoTeto) {
+    avisos.push({
+      id: "teto-da-fila",
+      tipo: "revisao",
+      titulo: "A carteira passou do que esta tela carrega de uma vez",
+      detalhe:
+        "O cockpit lê até 2.000 registros de cada tipo. Acima disso, alguma linha pode aparecer sem o laudo ou o termo que já existe — e a ação sugerida sai errada.",
+      o_que_fazer:
+        "Use a busca e os filtros para trabalhar por recorte, e arquive as empresas que saíram da carteira. Se isso virar rotina, me avise: a fila precisa paginar no servidor.",
+      empresas: [],
+    });
   }
 
   // laudo emitido e ninguém para assinar: trabalho parado por falta de cadastro
@@ -218,9 +415,7 @@ export default async function Painel() {
       <div className="mb-3">
         <h1 className="text-[19px] font-bold tracking-tight">Cockpit da carteira</h1>
         <p className="mt-0.5 text-[13px] text-muted">
-          {esteira.decidem > 0
-            ? `${esteira.decidem} de ${esteira.importadas} clientes precisam decidir até 30 de setembro.`
-            : `${esteira.importadas} clientes na carteira.`}
+          {chamadaDaCarteira(fase.fase, esteira.decidem, esteira.importadas)}
         </p>
       </div>
 
@@ -233,6 +428,10 @@ export default async function Painel() {
         avisos={avisos}
         totalCarteira={linhas.length}
         temEscritorio={temEscritorio}
+        /* contado na tabela e não na fila: a fila exclui empresa arquivada, e
+           era isso que fazia o assistente de primeiros passos renascer para
+           quem já tinha emitido laudo (08/08/2026) */
+        jaEmitiuLaudo={(laudosDeSempre ?? 0) > 0}
       />
     </div>
   );

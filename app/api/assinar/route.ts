@@ -17,6 +17,7 @@ import { carimbar } from "@/lib/carimbo";
 import { enviarEmail, htmlCodigoOtp } from "@/lib/email";
 import { htmlTermoAssinadoCliente, htmlTermoAssinadoContador } from "@/lib/emails-cliente";
 import { donoDoTenant } from "@/lib/dono";
+import { situacaoDoLink } from "@/lib/token-validade";
 
 /**
  * Página pública de assinatura — sem sessão, opera pelo service role (como o
@@ -65,12 +66,34 @@ export async function POST(req: Request) {
   const { data: termo } = await supabase
     .from("termos")
     .select(
-      "id, token, decisao, assinatura_status, analise_id, hash_documento, snapshot, recomendacao, otp_hash, otp_expira, otp_tentativas, assinante_email"
+      "id, token, decisao, assinatura_status, analise_id, hash_documento, snapshot, recomendacao, otp_hash, otp_expira, otp_tentativas, assinante_email, token_expira_em, revogado_em"
     )
     .eq("token", corpo.token)
     .maybeSingle();
 
   if (!termo) return NextResponse.json({ erro: "termo não encontrado" }, { status: 404 });
+
+  /**
+   * LINK VENCIDO NÃO ASSINA — 08/08/2026, migration 0068.
+   *
+   * A página já para antes disto, mas a página não é a trava: quem tem o
+   * endereço pode chamar a rota direto. E aqui o que está em jogo não é ver um
+   * documento — é PRODUZIR uma assinatura, com hash, carimbo do tempo e efeito
+   * jurídico. A verificação tem de estar do lado que grava.
+   */
+  const situacao = situacaoDoLink(termo);
+  if (situacao !== "valido") {
+    return NextResponse.json(
+      {
+        erro:
+          situacao === "revogado"
+            ? "este link foi encerrado pelo escritório — peça um novo ao seu contador"
+            : "este link de assinatura venceu — peça um novo ao seu contador",
+        link_encerrado: situacao,
+      },
+      { status: 410 }
+    );
+  }
   if (termo.assinatura_status === "assinado") {
     return NextResponse.json({ erro: "este termo já foi assinado" }, { status: 409 });
   }

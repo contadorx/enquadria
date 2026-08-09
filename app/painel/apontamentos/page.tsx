@@ -1,6 +1,7 @@
 import { ABAS_APRENDER } from "@/lib/nav";
 import { Abas } from "@/components/Abas";
 import { PainelApontamentos } from "@/components/PainelApontamentos";
+import { RendimentoDaCarteira } from "@/components/RendimentoDaCarteira";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,13 @@ export default function ApontamentosPage() {
           agrupadas: leia uma vez, decida em bloco, e abra só quem foge da regra.
         </p>
       </div>
+
+      {/* O RESULTADO ANTES DA FILA (08/08/2026). Uma lista de pendências no
+          topo transforma a tela em cobrança; o número do que já rendeu a
+          transforma em balanço. E é ele que responde a pergunta de março de
+          2027 — "o que eu mostro ao cliente para cobrar de novo?" —, que é a
+          pergunta que decide a renovação da assinatura. */}
+      <RendimentoDaCarteira />
 
       <PainelApontamentos />
     </div>

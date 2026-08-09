@@ -205,6 +205,18 @@ export const PARAMETROS_2027: Parametros = {
  */
 export const ALIQUOTA_ALTERNATIVA = 0.094;
 
+/**
+ * As datas da alíquota, num lugar só. Estavam literais dentro de
+ * `carimboAliquota` e repetidas em texto de tela; a de fixação passou a ser
+ * lida também pela tela que publica o valor, e duas cópias de uma data é como
+ * elas começam a divergir.
+ */
+export const MARCOS_ALIQUOTA = {
+  fixacao_ate: "31/10/2026",
+  /** a janela de opção fecha ANTES de o número existir — é a tese do produto */
+  janela_fecha: "30/09/2026",
+} as const;
+
 /** de onde vem a alíquota usada — vai impressa no corpo do laudo */
 export interface CarimboAliquota {
   aliquota: number;
@@ -217,20 +229,42 @@ export interface CarimboAliquota {
   consultado_em: string;
 }
 
-export function carimboAliquota(aliquota: number, consultadoEm: string): CarimboAliquota {
+/**
+ * A ORIGEM DO NÚMERO, quando ela existir — acrescentado em 08/08/2026.
+ *
+ * `fixada` e `fonte` eram literais aqui dentro: `false` e o texto da estimativa
+ * de trabalho, cravados. Enquanto a Resolução do Senado não sai isso está
+ * certo. No dia em que sair, porém, o laudo continuaria imprimindo "a alíquota
+ * de referência é fixada por Resolução do Senado, com prazo até 31/10/2026"
+ * embaixo de um número que JÁ É a Resolução — e o contador que assina estaria
+ * declarando como estimativa aquilo que virou norma.
+ *
+ * Agora os dois campos podem vir de `parametros_exercicio`, que é onde o dono
+ * da plataforma publica o valor real. Sem argumento, o comportamento é o de
+ * hoje: nada muda em laudo nenhum por conta desta mudança.
+ */
+export function carimboAliquota(
+  aliquota: number,
+  consultadoEm: string,
+  origem?: { fixada?: boolean | null; fonte?: string | null }
+): CarimboAliquota {
+  const fixada = !!origem?.fixada;
   return {
     aliquota,
     alternativa: ALIQUOTA_ALTERNATIVA,
-    fixada: false,
+    fixada,
     fixacao_ate: "31/10/2026",
     fonte:
+      origem?.fonte?.trim() ||
       "Estimativa de trabalho para 2027: CBS na alíquota de referência reduzida em 0,1 ponto " +
-      "percentual, somada ao IBS de 0,1% (0,05% estadual e 0,05% municipal), na forma da " +
-      "EC 132/2023 e da LC 214/2025. A alíquota de referência é fixada por Resolução do Senado " +
-      "Federal, com prazo até 31/10/2026 — depois do fechamento da janela de opção.",
-    nota_alternativa:
-      "O cenário de 9,4% não decorre de norma publicada: é sensibilidade declarada, para medir o " +
-      "efeito de a alíquota de referência ser fixada acima da estimativa de trabalho.",
+        "percentual, somada ao IBS de 0,1% (0,05% estadual e 0,05% municipal), na forma da " +
+        "EC 132/2023 e da LC 214/2025. A alíquota de referência é fixada por Resolução do Senado " +
+        "Federal, com prazo até 31/10/2026 — depois do fechamento da janela de opção.",
+    nota_alternativa: fixada
+      ? "O cenário alternativo de 9,4% é mantido como medida de sensibilidade: ele mostra o efeito " +
+        "de a carga efetiva ficar acima da alíquota de referência já fixada."
+      : "O cenário de 9,4% não decorre de norma publicada: é sensibilidade declarada, para medir o " +
+        "efeito de a alíquota de referência ser fixada acima da estimativa de trabalho.",
     consultado_em: consultadoEm,
   };
 }
@@ -435,6 +469,23 @@ export interface DDAS {
   acimaDoTeto?: boolean;
   /** exercício cuja tabela de partilha foi usada */
   exercicio?: number;
+  /**
+   * A LINHA DA TABELA, CONGELADA — acrescentado em 08/08/2026.
+   *
+   * A memória de cálculo do laudo ia buscar `ANEXOS_SIMPLES[anexo][faixa-1]` na
+   * hora de RENDERIZAR, para imprimir a alíquota nominal e a parcela a deduzir
+   * na coluna "Substituição". Só que a tabela é constante VIVA — ela mudou em
+   * 05/08/2026 na 6ª faixa. Um laudo emitido antes disso, reaberto depois,
+   * imprimia a nominal de HOJE dentro de uma conta cuja `aliquota` foi
+   * congelada ONTEM: a substituição deixava de fechar com o resultado, no único
+   * lugar do documento que existe para poder ser refeito no papel.
+   *
+   * Congelar as duas células aqui é o que faz a memória ler só o que foi
+   * gravado. Opcionais porque análises anteriores a esta data não as têm — o
+   * laudo cai na tabela viva nesses casos, que é o comportamento de antes.
+   */
+  nominal?: number;
+  deduzir?: number;
   /**
    * o teto de 5% do ISS MORDERIA aqui, mas a nota de rodapé do exercício não
    * está parametrizada (2029 em diante). O `das` devolvido é o SEM teto — menor,
@@ -649,6 +700,10 @@ export function dDASefetivo(
       exercicio,
       ...(indefinido ? { teto_iss_indefinido: true } : {}),
       aliquota: efetiva,
+      /* as duas células da tabela que a memória de cálculo imprime, congeladas
+         com o resto — ver a nota em `DDAS.nominal` */
+      nominal: faixa.nominal,
+      deduzir: faixa.deduzir,
       /* o sharePC devolvido é o EFETIVAMENTE usado: quem imprime o laudo não
          pode receber um número e ver outro na conta */
       sharePC: teto ? teto.teto_iss.sharePC_aplicado : faixa.sharePC,
@@ -1223,11 +1278,35 @@ export function pressaoComercial(
   };
 }
 
-export const SAIDAS: Record<Saida, { titulo: string; descricao: string; cor: string }> = {
+/**
+ * AS DUAS LEITURAS DA MESMA SAÍDA — `descricao_cliente` entrou em 08/08/2026.
+ *
+ * `descricao` foi escrita para o CONTADOR, e estava sendo impressa na via do
+ * CLIENTE. No S3 isso ficava explícito: o empresário lia "O motor não decide.
+ * Apresente os dois cenários em reunião e registre a escolha com termo
+ * assinado" — uma instrução dirigida ao profissional dele, dentro do documento
+ * que ele próprio recebeu, citando um "motor" que ninguém apresentou. É o tipo
+ * de frase que faz o leitor perceber que está lendo a tela de outra pessoa.
+ *
+ * As telas internas continuam com `descricao`; o laudo passa a imprimir
+ * `descricao_cliente`, que diz o MESMO FATO na segunda pessoa e sem vocabulário
+ * de ferramenta. Nenhum número muda, e nenhuma saída muda de significado.
+ *
+ * Sim, isto altera o texto de laudos antigos ao serem reabertos — é a deriva
+ * conhecida e documentada em lib/deriva.ts (o snapshot congela a análise, não o
+ * texto). Aqui a troca é a favor do leitor: a versão anterior falava com a
+ * pessoa errada.
+ */
+export const SAIDAS: Record<
+  Saida,
+  { titulo: string; descricao: string; descricao_cliente: string; cor: string }
+> = {
   S1: {
     titulo: "Não optar",
     descricao:
       "Perfil sem contrapartida comercial que justifique o custo. O híbrido aumentaria a carga sem retorno.",
+    descricao_cliente:
+      "Pelo perfil de vendas da empresa, apurar por fora do documento único aumentaria a carga sem retorno equivalente. A recomendação é permanecer como está nesta janela.",
     cor: "vermelho",
   },
   S2: {
@@ -1239,24 +1318,32 @@ export const SAIDAS: Record<Saida, { titulo: string; descricao: string; cor: str
     titulo: "Não optar nesta janela — preparar a próxima",
     descricao:
       "A conta fecha, a negociação não. Plano de renegociação nos próximos meses e decisão na janela seguinte.",
+    descricao_cliente:
+      "A conta fecha, mas depende de um reajuste de preço que não se negocia no prazo desta janela. A recomendação é permanecer agora, preparar a conversa com os clientes e decidir na janela seguinte.",
     cor: "amarelo",
   },
   S3: {
     titulo: "Zona de fronteira — decisão do empresário",
     descricao:
       "O motor não decide. Apresente os dois cenários em reunião e registre a escolha com termo assinado.",
+    descricao_cliente:
+      "O resultado fica na fronteira: os dois caminhos são defensáveis, e a diferença entre eles é menor do que a margem de erro das premissas. A escolha é da empresa, e este laudo apresenta os dois cenários para que ela seja feita com o número na mão.",
     cor: "neutro",
   },
   S4: {
     titulo: "Optar, condicionado a repasse",
     descricao:
       "Optar é vantajoso para os dois lados desde que o preço seja renegociado antes do fim da janela.",
+    descricao_cliente:
+      "Optar é vantajoso para a empresa e para os clientes dela, desde que o preço seja renegociado antes do fim da janela. Sem esse reajuste, a conta não se sustenta.",
     cor: "verde",
   },
   S5: {
     titulo: "Optar por vantagem direta",
     descricao:
       "No regime regular a empresa paga menos, pelos créditos das próprias compras — sem depender de renegociar preço com ninguém. Confirme se o custo de apurar por fora cabe no ganho.",
+    descricao_cliente:
+      "No regime regular a empresa paga menos, pelos créditos das próprias compras, sem depender de renegociar preço com ninguém. Resta confirmar se o custo de apurar por fora cabe no ganho — a seção de riscos trata disso.",
     cor: "verde",
   },
 };

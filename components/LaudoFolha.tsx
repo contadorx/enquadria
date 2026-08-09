@@ -5,10 +5,11 @@ import { leituraDoDinheiro } from "@/lib/roteiro";
 import { CSS_IMPRESSAO } from "@/lib/impressao";
 import { assinaturaTecnica, mostrarNomeEscrito, type Escritorio } from "@/lib/escritorio";
 import { pct, moeda } from "@/lib/motor";
-import { ROTULO_FAIXA, type Faixa } from "@/lib/triagem";
+import { type Faixa } from "@/lib/triagem";
 import {
   premissasComOrigem,
   memoriaDeCalculo,
+  baseDeCalculo,
   quadroComparativo,
   condicoesDeValidade,
   riscosELimites,
@@ -21,6 +22,7 @@ import {
   ehLaudoCurto,
   BASE_LEGAL,
   NOTA_PARAMETROS,
+  RESSALVA_DA_RECOMENDACAO,
   type AnaliseGravada,
 } from "@/lib/laudo";
 
@@ -74,6 +76,7 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
 
   const premissas = premissasComOrigem(a);
   const memoria = memoriaDeCalculo(a);
+  const base = baseDeCalculo(a);
   const pressao = pressaoDoLaudo(a);
   const absorcao = absorcaoDoLaudo(a);
   const quadro = quadroComparativo(a);
@@ -127,8 +130,16 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
               {empresa?.regime ?? "Simples Nacional"}
               {p.anexo || empresa?.anexo ? `, Anexo ${p.anexo ?? empresa?.anexo}` : ""}
               {p.ddas?.faixa ? `, faixa ${p.ddas.faixa}` : ""}
-              {" · triagem: "}
-              {ROTULO_FAIXA[faixa]}
+              {/* O RÓTULO COMERCIAL SAIU DAQUI — 08/08/2026.
+                  Imprimia "· triagem: Urgente / Avaliar / Baixo risco", que são
+                  as etiquetas da FILA DE VENDA do contador (`lib/potencial.ts`,
+                  com `cobravel: true`), não classificação técnica de nada. O
+                  empresário lia "Urgente" na identificação da própria empresa,
+                  num documento que não explica o que a palavra significa ali.
+                  Pior: `faixa` cai em "A" por padrão quando a empresa não tem
+                  triagem gravada, então empresa sem faixa nenhuma saía impressa
+                  como "Urgente". A faixa continua governando o formato do laudo
+                  (curto ou completo) — o que saiu foi o rótulo no papel. */}
             </td>
           </tr>
           <tr>
@@ -254,6 +265,15 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
             <div className="sec">4. Resultado</div>
             <div className="box" style={{ borderColor: cor }}>
               <b style={{ color: cor }}>{rec.titulo}.</b> {p.motivo ?? rec.descricao}
+              {/* A RESSALVA ENCOSTADA NA CONCLUSÃO — 08/08/2026.
+                  A caixa da recomendação é a primeira coisa que o empresário lê,
+                  tem borda colorida e um verbo no imperativo; o aviso de que
+                  isto é estimativa de cenário ficava na última seção, quatro
+                  telas abaixo. E o laudo CURTO — que vai para o maior volume da
+                  carteira — não tinha nem a nota de parâmetros nem a ressalva da
+                  negociação, porque as duas moram em blocos que ele não imprime.
+                  Disclaimer longe da dúvida é disclaimer que não foi lido. */}
+              <div className="ressalva">{RESSALVA_DA_RECOMENDACAO}</div>
             </div>
             <p className="txt">
               A opção por apurar IBS e CBS fora do DAS pressupõe cliente pessoa jurídica que aproveite
@@ -318,6 +338,23 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
                 ))}
               </tbody>
             </table>
+
+            {/* A BASE DE CÁLCULO DO dDAS ENTRA NO LAUDO — 08/08/2026.
+                `baseDeCalculo()` existe em lib/laudo.ts desde sempre, com um
+                comentário dizendo em quantas linhas ela evita "a única conversa
+                que ninguém quer ter": quando o teto de 5% do ISS morde, o
+                `sharePC` impresso no passo 2 é MAIOR que o da tabela do anexo
+                reproduzida na seção 10 do mesmo documento. Um contador que
+                confira os dois encontra números diferentes e conclui que o
+                laudo errou. A função nunca foi importada aqui — só pela tela
+                interna do contador, que é quem menos precisa dela. */}
+            {base.length > 0 && (
+              <ul className="basecalc">
+                {base.map((linha, i) => (
+                  <li key={i}>{linha}</li>
+                ))}
+              </ul>
+            )}
 
             {/* de onde vêm os cortes do método — ver NOTA_PARAMETROS em lib/laudo */}
             <p className="notaparam">{NOTA_PARAMETROS}</p>
@@ -463,6 +500,7 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
             <div className="sec">7. Resultado e recomendação</div>
             <div className="box" style={{ borderColor: cor }}>
               <b style={{ color: cor }}>{rec.titulo}.</b> {rec.descricao}
+              <div className="ressalva">{RESSALVA_DA_RECOMENDACAO}</div>
               {p.motivo && <div className="motivo">{p.motivo}</div>}
               {p.banda_sublimite && (
                 <div className="motivo">
@@ -687,6 +725,9 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
         /* ressalva ao lado de um número, não no rodapé: âmbar, porque vermelho
            no laudo é reservado a prioridade e a "não optar" */
         .aviso { border-left: 3px solid #D97706; background: #FFFBEB; color: #78350F; padding: 7px 10px; font-size: 11.5px; margin: 6px 0 0; line-height: 1.5; }
+        .ressalva { margin-top: 7px; padding-top: 6px; border-top: 1px solid #EEF2F7; font-size: 10.5px; line-height: 1.55; color: #64748B; }
+        .basecalc { margin: 8px 0 0 18px; font-size: 11.5px; color: #475569; line-height: 1.6; }
+        .basecalc li { margin-bottom: 3px; }
         .notaparam { font-size: 10.5px; color: #64748B; line-height: 1.5; margin: 7px 0 0; }
         /* a fronteira entre a conta e a negociação: sóbria, sem cor de alarme —
            não é risco, é divisão de responsabilidade */

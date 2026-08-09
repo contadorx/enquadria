@@ -24,6 +24,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [escritorio, setEscritorio] = useState("");
+  const [crc, setCrc] = useState("");
   const [erro, setErro] = useState<{ texto: string; culpaDoServidor: boolean } | null>(null);
   const [ocupado, setOcupado] = useState(false);
   // cadastro feito mas ainda sem sessão: a tela PRECISA dizer isso
@@ -119,7 +120,15 @@ export default function Login() {
             email,
             password: senha,
             options: {
-              data: { escritorio },
+              /* O CRC ENTRA NO CADASTRO — 08/08/2026.
+                 A trilha considera o passo "escritório preenchido" feito só
+                 quando há NOME e CRC (ver `temEscritorio`), e o cadastro nunca
+                 perguntava o CRC. Resultado: o passo 1 nascia pendente para
+                 todo mundo, inclusive para quem tinha acabado de digitar o
+                 nome do escritório — e a pessoa era mandada para Configurações
+                 digitar o mesmo nome de novo. Dois campos aqui apagam a volta
+                 inteira. */
+              data: { escritorio, crc },
               /* SEM ISTO o link de confirmação devolvia o ?code= para a RAIZ
                  do app, onde ninguém o trocava por sessão — a pessoa
                  confirmava o e-mail e caía deslogada, sem explicação. O
@@ -369,16 +378,35 @@ export default function Login() {
           )}
 
           {modo === "criar" && (
-            <label className="mb-3 block">
-              <span className="mb-1 block text-[12.5px] font-semibold">Nome do escritório</span>
-              <input
-                value={escritorio}
-                onChange={(e) => setEscritorio(e.target.value)}
-                autoComplete="organization"
-                className="w-full rounded-sm border border-line px-3 py-2 text-sm outline-none focus:border-accent"
-                placeholder="Marcatto Contabilidade"
-              />
-            </label>
+            <>
+              <label className="mb-3 block">
+                <span className="mb-1 block text-[12.5px] font-semibold">Nome do escritório</span>
+                <input
+                  value={escritorio}
+                  onChange={(e) => setEscritorio(e.target.value)}
+                  autoComplete="organization"
+                  className="w-full rounded-sm border border-line px-3 py-2 text-sm outline-none focus:border-accent"
+                  placeholder="Marcatto Contabilidade"
+                />
+              </label>
+              <label className="mb-3 block">
+                <span className="mb-1 block text-[12.5px] font-semibold">
+                  CRC <span className="font-normal text-muted">— pode preencher depois</span>
+                </span>
+                <input
+                  value={crc}
+                  onChange={(e) => setCrc(e.target.value)}
+                  className="w-full rounded-sm border border-line px-3 py-2 text-sm outline-none focus:border-accent"
+                  placeholder="CRC-SP 1SP234567/O-8"
+                />
+                {/* o CRC não é burocracia de cadastro: é o que vai na capa do
+                    laudo e do termo, ao lado do nome de quem assina. Dizer isso
+                    aqui é o que faz a pessoa preencher agora em vez de pular */}
+                <span className="mt-1 block text-[11.5px] text-muted">
+                  Vai impresso nos laudos e termos que você emitir.
+                </span>
+              </label>
+            </>
           )}
 
           <label className="mb-3 block">

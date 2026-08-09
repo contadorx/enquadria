@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import { SITE, PAGINAS_PUBLICAS } from "@/lib/site";
 import { TODAS_AULAS } from "@/lib/curso";
 import { materiasPublicas } from "@/lib/radar-publico";
-import { enderecoDaMateria, enderecoPagina, paginar, POR_PAGINA } from "@/lib/reforma-publica";
+import { enderecoDaMateria } from "@/lib/reforma-publica";
 
 /**
  * O SITEMAP.
@@ -39,6 +39,32 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }));
 
   /**
+   * AS PÁGINAS `?p=2`, `?p=3`… DO ÍNDICE NÃO ENTRAM AQUI — 08/08/2026.
+   *
+   * O DEFEITO: este arquivo publicava `/reforma?p=2`, `?p=3`… enquanto a
+   * própria resposta dessas URLs trazia `canonical: "/reforma"` cravado, e o
+   * JSON-LD delas declarava a URL paginada. Três documentos sobre a mesma
+   * página dizendo três coisas: o sitemap pedia para indexar um endereço, o
+   * canonical dizia que aquele endereço não existe como página própria, e o
+   * dado estruturado descrevia justamente o endereço que o canonical negava.
+   * Quando as declarações se contradizem, quem escolhe é o buscador — e o que
+   * ele escolhe não é decisão nossa.
+   *
+   * A CORREÇÃO tem duas metades. A outra está em `app/reforma/page.tsx`: o
+   * canonical passou a ser o da própria página pedida, então a resposta não se
+   * desmente mais. Aqui, a escolha foi PARAR DE PEDIR indexação para elas: da
+   * página 2 em diante, o que há de próprio são ~250 a 550 caracteres de
+   * título e resumo contra 1038 de cabeçalho, rodapé e faixa de CTA repetidos.
+   * Sitemap é o pedido de indexação mais explícito que existe, e gastá-lo em
+   * página que é quase toda chassi ensina o buscador a esperar pouco do
+   * domínio.
+   *
+   * O que NÃO se perde: as paginadas continuam alcançáveis e seguíveis pelos
+   * links da paginação, e cada matéria tem entrada própria neste sitemap logo
+   * abaixo — a descoberta do conteúdo nunca dependeu da página 2.
+   */
+
+  /**
    * O RADAR — e o banco pode não responder.
    *
    * O sitemap é lido por robô, sem ninguém olhando. Se a consulta falhar, o
@@ -47,7 +73,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
    * lá. Por isso o catch devolve lista vazia em vez de estourar.
    */
   let materias: MetadataRoute.Sitemap = [];
-  let indices: MetadataRoute.Sitemap = [];
   try {
     const todas = await materiasPublicas();
 
@@ -59,20 +84,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "monthly" as const,
       priority: 0.7,
     }));
-
-    /* as páginas 2, 3… do índice. A 1 já está em PAGINAS_PUBLICAS; repeti-la
-       aqui seria a mesma URL duas vezes no mesmo arquivo. */
-    const paginado = paginar(todas, 1, POR_PAGINA);
-    indices = Array.from({ length: Math.max(0, paginado.paginas - 1) }, (_, i) => ({
-      url: `${SITE}${enderecoPagina(i + 2)}`,
-      lastModified: agora,
-      changeFrequency: "weekly" as const,
-      priority: 0.4,
-    }));
   } catch {
     materias = [];
-    indices = [];
   }
 
-  return [...paginas, ...aulas, ...materias, ...indices];
+  return [...paginas, ...aulas, ...materias];
 }

@@ -21,10 +21,24 @@
    Reaproveita a chave de liberação do curso? NÃO. Quem já baixou a planilha
    não deve receber o guia liberado sem deixar o e-mail: são dois materiais e
    dois momentos, e a segunda captura é o sinal de que o interesse continuou.
+
+   A TAG NÃO MORA MAIS AQUI (08/08/2026).
+
+   Ela morava — e junto com ela morava o endereço do CRM e o hash que
+   identifica o formulário, escritos neste arquivo, que é público. Bastava
+   abrir o código-fonte da página para ter a chave de escrever na lista: injetar
+   contato, encher a base de endereços de terceiros que nunca pediram nada, e
+   sem deixar registro nenhum do lado de cá. Além disso o disparo era `no-cors`,
+   então o navegador não sabia dizer se tinha chegado — a captura parecia ter
+   funcionado mesmo quando não funcionava.
+
+   Agora este arquivo só fala com a nossa própria rota, e é ela que decide a
+   tag a partir da `origem` e repassa ao CRM pelo servidor. A separação entre
+   as duas cadências continua existindo; ela só deixou de ser declarada por
+   quem visita a página.
    ========================================================================== */
 (function () {
   var ENDPOINT = "https://app.enquadria.com.br/api/curso/lead";
-  var WEBHOOK = "https://contadorx.com.br/?fluentcrm=1&route=contact&hash=96322e91-7ccc-4c25-8e81-c5de08102a5f";
 
   var K_LIBERADO = "enquadria_guia_liberado";
 
@@ -46,30 +60,15 @@
     if (ok) ok.hidden = false;
   }
 
+  /* UM DESTINO SÓ, e é o nosso: a rota grava em `curso_leads` e repassa ao CRM
+     pelo servidor. A `origem` é o que diz ao servidor qual cadência é esta —
+     não mande tag daqui, porque daqui qualquer pessoa manda o que quiser. */
   function enviarLead(email) {
-    var pedidos = [];
-
-    /* o banco do app — origem separada, para o painel saber de onde veio */
-    pedidos.push(
-      fetch(ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email, origem: "site-guia", material: "guia-janela-setembro" }),
-      }).catch(function () { /* silêncio: o download não depende disto */ })
-    );
-
-    /* o CRM — form-encoded e no-cors, igual ao curso: em modo no-cors o
-       navegador só deixa passar este content-type */
-    var form = new URLSearchParams();
-    form.append("email", email);
-    form.append("source", "site-guia-enquadria");
-    form.append("tags", "Enquadria-Guia");
-    pedidos.push(
-      fetch(WEBHOOK, { method: "POST", mode: "no-cors", body: form })
-        .catch(function () { /* idem */ })
-    );
-
-    return Promise.all(pedidos);
+    return fetch(ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email, origem: "site-guia", material: "guia-janela-setembro" }),
+    }).catch(function () { /* silêncio: o download não depende disto */ });
   }
 
   document.querySelectorAll("[data-gate]").forEach(function (gate) {
@@ -94,11 +93,22 @@
       var botao = form.querySelector("button");
       if (botao) { botao.disabled = true; botao.textContent = "Liberando…"; }
 
-      /* libera SEMPRE, dê no que der na captura */
-      enviarLead(email).then(function () {
-        gravar(K_LIBERADO, true);
-        liberar(gate);
-      });
+      /**
+       * LIBERAR DEIXOU DE ESPERAR A CAPTURA (08/08/2026).
+       *
+       * Antes o `.then` era inofensivo: os dois disparos saíam do navegador em
+       * paralelo e voltavam rápido. Com o CRM movido para o servidor, esta
+       * chamada passou a carregar o salto até o CRM dentro dela — no pior caso
+       * o timeout inteiro da rota. Esperar por isso é o gate ficando em
+       * "Liberando…" por segundos, e o visitante concluindo que quebrou.
+       *
+       * O `fetch` segue voando; a página não navega, então ele termina. O que
+       * mudou é que a liberação não depende mais de ele terminar — que é o que
+       * esta página promete desde o primeiro dia.
+       */
+      enviarLead(email);
+      gravar(K_LIBERADO, true);
+      liberar(gate);
     });
   });
 })();

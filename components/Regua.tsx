@@ -23,17 +23,44 @@ export function Regua({
   hoje?: Date;
 }) {
   const agora = hoje.getTime();
-  const decisaoTerminou = agora > new Date(fecha + "T23:59:59Z").getTime();
+  const fimDe = (iso: string) => new Date(iso + "T23:59:59Z").getTime();
 
-  // depois de 30/09 a régua muda de trecho: o prazo que importa é outro
-  const posJanela =
-    decisaoTerminou && agora <= new Date(MARCOS.cancelavel_ate + "T23:59:59Z").getTime();
+  /**
+   * TRÊS TRECHOS, NÃO DOIS — conserto de 08/08/2026.
+   *
+   * A régua tinha só a decisão (1º→30/09) e o pós-janela (30/09→30/11). A
+   * partir de 1º/12/2026 o segundo trecho expirava e ela CAÍA DE VOLTA no
+   * primeiro: barra 100% cheia rotulada "1 SET … 30 SET", no lugar mais
+   * visível da tela, ao lado de um selo dizendo "próxima janela em 2027".
+   * Ou seja: consertaram o rótulo em lib/janela.ts e a régua ficou para trás,
+   * reproduzindo exatamente o defeito que o arquivo diz ter eliminado — o
+   * produto parecendo encerrado para quem acabou de assinar.
+   *
+   * O terceiro trecho vai do fim do cancelamento à próxima janela prevista. É
+   * previsão, não norma — e o selo, que vem de `faseDaJanela`, já carrega o
+   * "(prevista)" que diz isso.
+   */
+  const trecho = (() => {
+    if (agora <= fimDe(fecha)) {
+      return { ini: abre, fim: fecha, marcas: ["1 SET", "10", "20", "30 SET"] };
+    }
+    if (agora <= fimDe(MARCOS.cancelavel_ate)) {
+      return { ini: fecha, fim: MARCOS.cancelavel_ate, marcas: ["30 SET", "31 OUT", "30 NOV"] };
+    }
+    return {
+      ini: MARCOS.cancelavel_ate,
+      fim: MARCOS.proxima_prevista,
+      marcas: ["30 NOV", "regime em vigor", "próxima janela"],
+    };
+  })();
 
-  const ini = new Date(posJanela ? fecha : abre).getTime();
-  const fim = new Date(posJanela ? MARCOS.cancelavel_ate : fecha).getTime();
-  const pos = Math.min(Math.max((agora - ini) / (fim - ini), 0), 1) * 100;
+  const ini = new Date(trecho.ini).getTime();
+  const fim = new Date(trecho.fim).getTime();
+  /* trecho degenerado (datas iguais ou invertidas) zeraria a barra em vez de
+     enchê-la — e barra vazia num prazo vencido lê como "não começou" */
+  const pos = fim > ini ? Math.min(Math.max((agora - ini) / (fim - ini), 0), 1) * 100 : 100;
 
-  const marcas = posJanela ? ["30 SET", "31 OUT", "30 NOV"] : ["1 SET", "10", "20", "30 SET"];
+  const marcas = trecho.marcas;
 
   // sem a fase (chamadas antigas), cai no comportamento de antes
   const rotulo =

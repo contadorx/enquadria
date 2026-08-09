@@ -152,6 +152,7 @@ export function FormAnalise({
   estimada,
   chavesDaColeta,
   aoSalvar,
+  calculadoEmInicial = null,
 }: {
   empresaId: string;
   anexo: number | null;
@@ -182,6 +183,13 @@ export function FormAnalise({
    */
   chavesDaColeta?: string[];
   aoSalvar?: (analiseId: string) => void;
+  /**
+   * `calculado_em` da análise que esta tela LEU ao abrir. Vai junto no
+   * salvamento para o servidor detectar que um colega gravou no meio — ver o
+   * conflito em `app/api/analise/route.ts`. Sem ele, o comportamento é o de
+   * antes: grava por cima.
+   */
+  calculadoEmInicial?: string | null;
 }) {
   const inicial = respostasIniciais ?? RESPOSTAS_PADRAO;
   /* nunca houve análise: nem respostas salvas, nem premissas estimadas do lote */
@@ -244,6 +252,9 @@ export function FormAnalise({
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  /** um colega gravou entre a abertura desta tela e o clique em salvar */
+  const [conflito, setConflito] = useState<string | null>(null);
+  const [base_visto, setBaseVisto] = useState<string | null>(calculadoEmInicial);
 
   function tocar(chave: string) {
     setTocadas((s) => new Set(s).add(chave));
@@ -310,9 +321,10 @@ export function FormAnalise({
   const sens = sensibilidade(respostas, base, dinheiro);
   const alerta = alertaFatorR(anexoSel, r.folha);
 
-  async function salvar() {
+  async function salvar(forcar = false) {
     setSalvando(true);
     setErro(null);
+    if (forcar) setConflito(null);
     try {
       const origens = Object.fromEntries(
         ["b2b", "qual", "cred", "folha", "preco", "conc", "exig"].map((k) => [k, origemDe(k)])
@@ -331,18 +343,30 @@ export function FormAnalise({
           anexo: fechado ? ddas.anexo : anexoSel,
           anexo_confirmado: anexoConfirmado,
           segmentos: fechado ? segmentos : null,
+          /* o que esta tela viu ao abrir; o servidor compara e recusa uma vez
+             se um colega gravou no meio (08/08/2026) */
+          base_calculado_em: base_visto,
+          sobrescrever: forcar,
         }),
       });
       const json = await resp.json();
       if (resp.ok && json.analise_id) {
         setSalvo(true);
+        setConflito(null);
+        /* a próxima gravação compara contra o que ACABOU de ser gravado —
+           sem isto, salvar duas vezes seguidas acusaria conflito consigo mesmo */
+        if (typeof json.calculado_em === "string") setBaseVisto(json.calculado_em);
         setTimeout(() => setSalvo(false), 2500);
         aoSalvar?.(json.analise_id as string);
+      } else if (json.conflito) {
+        /* não é erro de formulário: é decisão. O texto do servidor traz nome e
+           hora, e o botão de gravar por cima aparece ao lado */
+        setConflito(json.erro as string);
       } else {
         setErro(json.erro ?? "não foi possível salvar a análise");
       }
     } catch {
-      setErro("falha de rede ao salvar a análise");
+      setErro("falha de rede ao salvar a análise — nada foi gravado.");
     } finally {
       setSalvando(false);
     }
@@ -998,11 +1022,39 @@ export function FormAnalise({
 
       {erro && <p className="rounded-sm bg-vermelhowash px-3 py-2 text-[12.5px] text-vermelho">{erro}</p>}
 
+      {/* ux-ok: a decisão aparece no mesmo lugar do botão que a provocou.
+          Conflito não é erro de preenchimento — é trabalho de outra pessoa em
+          risco, e por isso tem cor de aviso e dois caminhos, não uma mensagem
+          vermelha e um beco. */}
+      {conflito && (
+        <div className="rounded-sm border border-amarelo bg-amarelowash px-3 py-2.5">
+          <p className="text-[12.5px] leading-relaxed text-amarelo">{conflito}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              onClick={() => window.location.reload()}
+              className="rounded-sm border border-line bg-surface px-3 py-1.5 text-[12px] font-semibold text-slate2"
+            >
+              Recarregar e ver o que mudou
+            </button>
+            <button
+              onClick={() => void salvar(true)}
+              disabled={salvando}
+              className="rounded-sm border border-amarelo px-3 py-1.5 text-[12px] font-semibold text-amarelo disabled:opacity-40"
+            >
+              {salvando ? "…" : "Gravar a minha versão por cima"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* texto-ok: a explicação do bloqueio fica no aviso da segregação, a três
           linhas do checkbox que o causa — pô-la aqui, no rodapé do formulário,
           seria repetir longe de onde a pessoa mexeu. */}
       <button
-        onClick={salvar}
+        /* o argumento vira o MouseEvent se passado direto — e um evento é
+           `truthy`, o que faria todo salvamento normal gravar por cima do
+           colega sem perguntar. A seta existe por isso. */
+        onClick={() => void salvar()}
         disabled={salvando || (segregar && !fechado)}
         title={
           segregar && !fechado

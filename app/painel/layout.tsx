@@ -67,6 +67,15 @@ export default async function PainelLayout({ children }: { children: React.React
    */
   let reformaNaoLidas = 0;
   /**
+   * Apontamentos em aberto na carteira — a bolinha que faltava.
+   *
+   * O monitor roda todo dia e grava o que cada norma nova exige de cada
+   * empresa. Sem um número no menu, o contador só chega lá por acidente: a
+   * tela vive numa sub-aba dentro de "Aprender". É o único motivo recorrente
+   * de abrir o produto depois que a janela fecha, e ele não tinha aviso.
+   */
+  let apontamentosAbertos = 0;
+  /**
    * A SITUAÇÃO DO ESCRITÓRIO — cinco contagens baratas (head: true, sem trazer
    * linha) que o assistente usa para saber qual é o próximo passo de quem está
    * na tela. Sem isso ele só sabe responder quando perguntado, e quem está
@@ -102,6 +111,14 @@ export default async function PainelLayout({ children }: { children: React.React
       leituras
     );
 
+    /* contagem barata, sem trazer linha. `in` cobre os dois estados abertos —
+       a mesma regra de `estaAberto()` em lib/apontamentos.ts */
+    const abertos = await supabase
+      .from("apontamentos")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["novo", "tratado"]);
+    apontamentosAbertos = abertos.count ?? 0;
+
     const [empresas, analises, termos, assinados, escritorioCfg] = await Promise.all([
       supabase.from("empresas").select("id", { count: "exact", head: true }).is("arquivada_em", null),
       supabase.from("analises").select("id", { count: "exact", head: true }),
@@ -128,6 +145,11 @@ export default async function PainelLayout({ children }: { children: React.React
   // calculado aqui, no servidor: o NavMobile é componente de cliente e usar
   // Date lá dentro faria servidor e navegador renderizarem valores diferentes
   const { dias: diasRestantes, posPct: posDaJanela } = estadoDaJanela();
+  /* a fase é calculada uma vez e serve as duas barras: a régua do desktop já a
+     usava, o celular recebia só `estadoDaJanela()` — que conhece a janela de
+     setembro e nada mais — e por isso imprimia "fim" de 01/10/2026 em diante,
+     para sempre. Metade dos acessos é celular. */
+  const faseAtual = faseDaJanela();
 
   return (
     <div className="min-h-screen">
@@ -140,7 +162,7 @@ export default async function PainelLayout({ children }: { children: React.React
             ENQUADRIA<span className="text-accentbright">.</span>
           </div>
           <div className="min-w-0 flex-1">
-            <Regua abre={JANELA.abre} fecha={JANELA.fecha} fase={faseDaJanela()} />
+            <Regua abre={JANELA.abre} fecha={JANELA.fecha} fase={faseAtual} />
           </div>
         </div>
       </header>
@@ -150,6 +172,7 @@ export default async function PainelLayout({ children }: { children: React.React
         email={user?.email}
         dias={diasRestantes}
         posPct={posDaJanela}
+        selo={faseAtual.selo}
         ehSuperadmin={ehSuperadmin}
       />
 
@@ -167,7 +190,22 @@ export default async function PainelLayout({ children }: { children: React.React
                   className="flex items-center justify-between gap-2 px-[18px] py-2 text-[13.5px] text-slate2 hover:bg-accentwash hover:text-accentdeep"
                 >
                   <span>{i.label}</span>
-                  {i.marcador === "reforma" && reformaNaoLidas > 0 && (
+                  {/* TRABALHO VENCE NOTÍCIA (08/08/2026). O marcador contava só
+                      novidade não lida. Apontamento aberto é outra coisa: é a
+                      norma já cruzada com a carteira, empresa por empresa —
+                      trabalho cobrável esperando. Quando existe, é ele que
+                      aparece, em âmbar; a contagem de leitura fica de reserva.
+                      Duas bolinhas lado a lado só ensinariam a ignorar as
+                      duas. */}
+                  {i.marcador === "reforma" && apontamentosAbertos > 0 && (
+                    <span
+                      title={`${apontamentosAbertos} ponto(s) da Reforma em aberto na sua carteira`}
+                      className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-amarelo px-1 font-mono text-[10px] font-bold text-white"
+                    >
+                      {apontamentosAbertos}
+                    </span>
+                  )}
+                  {i.marcador === "reforma" && apontamentosAbertos === 0 && reformaNaoLidas > 0 && (
                     <span
                       title={`${reformaNaoLidas} novidade(s) na Reforma`}
                       className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1 font-mono text-[10px] font-bold text-white"

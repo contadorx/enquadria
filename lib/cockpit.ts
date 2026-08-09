@@ -11,6 +11,9 @@
 
 import type { Faixa } from "./triagem";
 import { ORIGEM_LOTE } from "./premissas-padrao";
+/* o honorário do laudo curto vem do mesmo lugar que o mapa de risco usa: dois
+   valores de partida para a mesma conta é como as duas telas divergem */
+import { HONORARIO_CURTO_PADRAO } from "./potencial";
 import type { Saida } from "./motor";
 
 /** Onde a empresa está na esteira. Cada etapa contém a anterior. */
@@ -114,6 +117,18 @@ export interface Linha {
   rbt12: number | null;
   etapa: Etapa;
   acao: Acao;
+  /**
+   * Apontamentos da Reforma em aberto para esta empresa — o selo da linha.
+   *
+   * Entrou em 08/08/2026. `abertosPorEmpresa()` existia em lib/apontamentos.ts,
+   * com o comentário "para o selo da linha da fila", e era chamada só pelos
+   * testes. O monitor cruzava norma com carteira todo dia às 5h, gravava o
+   * resultado, e o contador não tinha como saber que aquilo existia sem
+   * navegar até uma sub-aba dentro de "Aprender" — trabalho cobrável produzido
+   * por um cron que ninguém via. Opcional para não quebrar chamadas antigas
+   * (e para o painel seguir de pé se a migration 0063 ainda não rodou).
+   */
+  apontamentos?: number;
 }
 
 const num = (x: number | string | null | undefined): number | null =>
@@ -209,6 +224,11 @@ export function etapaDe(l: Omit<Linha, "acao" | "etapa">): Etapa {
   if (l.assinado) return "assinado";
   if (l.laudo_id) return "laudo";
   if (l.analise_id) return "analisada";
+  /* 08/08/2026: faixa C ou D sem análise caía em "importada" — o mesmo degrau
+     de quem acabou de entrar no sistema. Elas TÊM trabalho (laudo curto e
+     termo), e ficavam fora de qualquer etapa do funil: invisíveis na única
+     tela que o contador olha todo dia. */
+  if (FAIXAS_CURTAS.includes(l.faixa)) return "decide";
   if (FAIXAS_TRABALHO.includes(l.faixa)) return "decide";
   return "importada";
 }
@@ -218,7 +238,10 @@ export function montarFila(
   analises: AnaliseCru[],
   laudos: LaudoCru[],
   termos: TermoCru[],
-  coletas: ColetaCru[] = []
+  coletas: ColetaCru[] = [],
+  /* apontamentos ABERTOS por empresa, de `abertosPorEmpresa()`. Opcional: a
+     fila continua montando sem eles se a migration 0063 não tiver rodado */
+  apontamentosAbertos: Record<string, number> = {}
 ): Linha[] {
   // uma análise por empresa na visão da fila: a mais recente manda
   const porEmpresa = new Map<string, AnaliseCru>();
@@ -273,6 +296,7 @@ export function montarFila(
       tem_contato: !!e.contato_email && !!e.contato_nome,
       coleta: estadoDaColeta(coletaPorEmpresa.get(e.id) ?? null),
       rbt12: num(e.rbt12),
+      apontamentos: apontamentosAbertos[e.id] ?? 0,
     };
 
     return { ...parcial, etapa: etapaDe(parcial), acao: proximaAcao(parcial) };
@@ -321,6 +345,24 @@ export interface Esteira {
    * ainda estão de pé.
    */
   decidem_pendentes: number;
+  /**
+   * A METADE DA CARTEIRA QUE A ESTEIRA IGNORAVA — 08/08/2026.
+   *
+   * As faixas C e D não têm decisão a tomar: elas recebem um laudo CURTO, que
+   * documenta a permanência. Isso é trabalho cobrável, é o maior volume de
+   * qualquer carteira real (entre 45% e 62% dela, conforme o mix de CNAE) e é o
+   * único entregável em que o produto faz quase tudo sozinho — não depende de
+   * conversa com o empresário sobre venda para PJ, crédito ou poder de preço.
+   *
+   * O mapa de risco prometia `(C + D) × honorário curto` na PRIMEIRA tela, e a
+   * partir do segundo dia essas empresas sumiam: a esteira contava só A e B, o
+   * "na mesa" era só a faixa A, e `etapaDe` devolvia "importada" para C/D sem
+   * análise — ou seja, elas não estavam em degrau nenhum do funil. A receita
+   * era prometida uma vez e depois ficava invisível para o trabalho diário.
+   */
+  permanencia: number;
+  /** dessas, as que ainda não viraram papel */
+  permanencia_pendentes: number;
   analisadas: number;
   laudos: number;
   assinados: number;
@@ -329,45 +371,94 @@ export interface Esteira {
 /** A linha de produção: cada número contém o seguinte. É um funil, não um menu. */
 export function contarEsteira(linhas: Linha[]): Esteira {
   const decidem = linhas.filter((l) => FAIXAS_TRABALHO.includes(l.faixa));
+  const permanencia = linhas.filter((l) => FAIXAS_CURTAS.includes(l.faixa));
   return {
     importadas: linhas.length,
     decidem: decidem.length,
     decidem_pendentes: decidem.filter((l) => !l.laudo_id).length,
+    permanencia: permanencia.length,
+    permanencia_pendentes: permanencia.filter((l) => !l.laudo_id).length,
     analisadas: linhas.filter((l) => l.analise_id).length,
     laudos: linhas.filter((l) => l.laudo_id).length,
     assinados: linhas.filter((l) => l.assinado).length,
   };
 }
 
+/**
+ * O que a fila sabe filtrar: as etapas do funil MAIS os recortes que só existem
+ * para responder a um aviso. Separado de `keyof Esteira` porque etapa é degrau
+ * contado na linha de produção, e recorte não é.
+ */
+export type FiltroDeFila = keyof Esteira | "aguardando_assinatura";
+
 export const ETAPAS: { chave: keyof Esteira; rotulo: string; ajuda: string }[] = [
   { chave: "importadas", rotulo: "importadas", ajuda: "toda a carteira que entrou no sistema" },
-  { chave: "decidem", rotulo: "precisam decidir", ajuda: "faixas A e B — o universo do trabalho desta janela, incluindo o que já virou laudo" },
+  { chave: "decidem", rotulo: "precisam decidir", ajuda: "faixas A e B — quem tem decisão real a tomar nesta janela, incluindo o que já virou laudo" },
+  /* a coluna que faltava: o maior volume da carteira, e o entregável que cabe
+     nas horas que a janela tem (ver a nota de `permanencia` em `Esteira`) */
+  { chave: "permanencia", rotulo: "permanência a documentar", ajuda: "faixas C e D — sem decisão a tomar, mas com laudo curto e termo a emitir" },
   { chave: "analisadas", rotulo: "analisadas", ajuda: "com análise gravada, estimada ou confirmada" },
-  { chave: "laudos", rotulo: "laudo emitido", ajuda: "documento numerado com a sua marca" },
+  { chave: "laudos", rotulo: "laudo emitido", ajuda: "documento numerado com a sua marca, curto ou completo" },
   { chave: "assinados", rotulo: "termo assinado", ajuda: "prova de ciência do cliente, com verificação pública" },
 ];
 
 /**
- * O QUE AINDA ESTÁ NA MESA — faixa A sem laudo × honorário de referência.
+ * O QUE AINDA ESTÁ NA MESA — o serviço que falta emitir × honorário de partida.
  *
- * Deliberadamente conservador: só a faixa A, só o que ainda não virou papel. O
- * honorário é premissa do contador, não promessa do sistema.
+ * ATÉ 08/08/2026 ERA SÓ A FAIXA A. A intenção era ser conservador, e o efeito
+ * foi outro: o mapa de risco da primeira tela promete `(A+B) × honorário` MAIS
+ * `(C+D) × honorário curto`, e a partir do segundo dia o cockpit mostrava um
+ * número que ignorava a faixa B inteira e a metade da carteira que gera laudo
+ * curto. O contador via a receita uma vez, no dia da importação, e nunca mais.
+ * Prometer numa tela e esconder na seguinte é pior do que não prometer.
+ *
+ * Continua conservador onde importa: só conta o que AINDA NÃO virou papel, e os
+ * dois honorários são premissa do contador, não promessa do sistema.
  */
-export function naMesa(linhas: Linha[], honorario: number): { empresas: number; valor: number } {
-  const empresas = linhas.filter((l) => l.faixa === "A" && !l.laudo_id).length;
-  return { empresas, valor: empresas * honorario };
+export function naMesa(
+  linhas: Linha[],
+  honorario: number,
+  honorarioCurto = HONORARIO_CURTO_PADRAO
+): { empresas: number; valor: number; completos: number; curtos: number } {
+  const completos = linhas.filter((l) => FAIXAS_TRABALHO.includes(l.faixa) && !l.laudo_id).length;
+  const curtos = linhas.filter((l) => FAIXAS_CURTAS.includes(l.faixa) && !l.laudo_id).length;
+  return {
+    empresas: completos + curtos,
+    valor: completos * honorario + curtos * honorarioCurto,
+    completos,
+    curtos,
+  };
 }
 
 /** Filtro por etapa da linha de produção — o clique no número filtra a fila. */
-export function filtrarPorEtapa(linhas: Linha[], etapa: keyof Esteira | null): Linha[] {
+export function filtrarPorEtapa(linhas: Linha[], etapa: FiltroDeFila | null): Linha[] {
   if (!etapa || etapa === "importadas") return linhas;
   if (etapa === "decidem") return linhas.filter((l) => FAIXAS_TRABALHO.includes(l.faixa));
   // o recorte do que ainda está de pé — usado pelo atalho "ver só as pendentes"
   if (etapa === "decidem_pendentes")
     return linhas.filter((l) => FAIXAS_TRABALHO.includes(l.faixa) && !l.laudo_id);
+  if (etapa === "permanencia") return linhas.filter((l) => FAIXAS_CURTAS.includes(l.faixa));
+  if (etapa === "permanencia_pendentes")
+    return linhas.filter((l) => FAIXAS_CURTAS.includes(l.faixa) && !l.laudo_id);
   if (etapa === "analisadas") return linhas.filter((l) => l.analise_id);
   if (etapa === "laudos") return linhas.filter((l) => l.laudo_id);
   if (etapa === "assinados") return linhas.filter((l) => l.assinado);
+  /**
+   * "VER QUEM FALTA" MOSTRAVA OUTRA COISA — conserto de 08/08/2026.
+   *
+   * O empurrão "N termos aguardam assinatura" conta `termo_id && !assinado` na
+   * carteira INTEIRA, e o clique abria a etapa `laudos` — que é "faixa A/B com
+   * laudo". Os dois conjuntos não são o mesmo: a etapa inclui os já assinados
+   * (que não faltam) e exclui as faixas C e D com termo pendente (que faltam e
+   * foram contadas no aviso). O número dizia uma coisa e a lista mostrava outra,
+   * e quem confere uma vez para de confiar nas duas.
+   *
+   * Este recorte não é etapa da esteira — é filtro de fila. Por isso o tipo do
+   * parâmetro cresceu em vez de `Esteira` ganhar um campo: contar isto como
+   * etapa somaria uma coluna ao funil que não é degrau de nada.
+   */
+  if (etapa === "aguardando_assinatura")
+    return linhas.filter((l) => l.termo_id && !l.assinado);
   return linhas;
 }
 
@@ -397,6 +488,27 @@ export function buscar(linhas: Linha[], termo: string): Linha[] {
   });
 }
 
+/**
+ * O CÓDIGO DA SAÍDA, EM UMA FRASE — 08/08/2026.
+ *
+ * A fila imprime `S1`..`S5` cru, em fonte mono, e o significado só aparecia
+ * dentro do formulário de análise — a tela seguinte. Quem abre o cockpit pela
+ * primeira vez lê um código que não significa nada. Aqui está o texto do
+ * `title`, curto porque tooltip longo não é lido: a versão completa continua
+ * em `SAIDAS`, no laudo e no formulário.
+ *
+ * Não importa `SAIDAS` de propósito: aquele texto é a redação do DOCUMENTO, e
+ * documento e tooltip têm tamanhos e leitores diferentes. Duas frases com o
+ * mesmo dono e propósitos distintos não são duplicação.
+ */
+export const EXPLICA_SAIDA: Record<string, string> = {
+  S1: "S1 — não optar: o perfil de vendas não dá contrapartida que justifique o custo.",
+  S2: "S2 — não optar nesta janela: a conta fecha, mas depende de um reajuste que não se negocia a tempo.",
+  S3: "S3 — zona de fronteira: os dois caminhos se defendem, e a escolha é do empresário.",
+  S4: "S4 — optar, desde que o preço seja renegociado antes do fim da janela.",
+  S5: "S5 — optar por vantagem direta: a empresa paga menos pelos créditos das próprias compras.",
+};
+
 export const ROTULO_ACAO: Record<Acao, string> = {
   analisar: "Analisar",
   confirmar: "Confirmar premissas",
@@ -408,16 +520,37 @@ export const ROTULO_ACAO: Record<Acao, string> = {
   fora: "Fora da janela",
 };
 
-/** o que a ação faz quando o contador clica: no lugar, ou abrindo a gaveta */
-export const ACAO_ABRE_GAVETA: Record<Acao, boolean> = {
-  analisar: true,
-  confirmar: true,
-  emitir: false,
-  contato: true,
-  termo: false,
-  cobrar: false,
-  pronto: true,
-  fora: true,
+/**
+ * O QUE O CLIQUE FAZ, E ONDE ELE CAI — reescrito em 08/08/2026.
+ *
+ * Isto era um `Record<Acao, boolean>` chamado `ACAO_ABRE_GAVETA`, sem UM
+ * importador em todo o projeto, e que declarava o oposto do que a tela faz:
+ * dizia que `pronto` e `fora` "abrem a gaveta" quando o Cockpit desabilita o
+ * botão nos dois casos. Duas fontes de verdade sobre o mesmo gesto, uma delas
+ * sem consumidor — e a sem consumidor é sempre a que fica errada, porque nada
+ * a corrige.
+ *
+ * Agora ela diz as três coisas que a tela precisa saber e é ela que a tela lê:
+ * se a ação executa no lugar, se abre a gaveta, e em QUAL aba. A aba importa:
+ * `contato` pede nome e e-mail do responsável, que moram no Dossiê — mandar
+ * para a aba de Análise foi um defeito real da Trilha.
+ */
+export type DestinoDaAcao =
+  | { tipo: "executa" }
+  | { tipo: "gaveta"; aba: "decisao" | "dossie" }
+  | { tipo: "nenhum" };
+
+export const DESTINO_DA_ACAO: Record<Acao, DestinoDaAcao> = {
+  analisar: { tipo: "gaveta", aba: "decisao" },
+  confirmar: { tipo: "gaveta", aba: "decisao" },
+  emitir: { tipo: "executa" },
+  contato: { tipo: "gaveta", aba: "dossie" },
+  termo: { tipo: "executa" },
+  cobrar: { tipo: "executa" },
+  /* sem trabalho pendente: o botão fica apagado, e o nome da empresa continua
+     abrindo a ficha — quem quer ver o histórico clica no nome */
+  pronto: { tipo: "nenhum" },
+  fora: { tipo: "nenhum" },
 };
 
 /**

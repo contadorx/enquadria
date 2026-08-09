@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { moeda } from "@/lib/motor";
-import { parseValorBRL } from "@/lib/csv";
+import { mascaraMoeda, valorDaMascara, moedaParaMascara } from "@/lib/mascaras";
 
 /**
  * Edição do que o contador precisa corrigir sem reimportar a carteira:
@@ -50,9 +49,7 @@ export function EditarEmpresa({
    * parsers para o mesmo campo, um deles quebrado: agora é o mesmo dos dois
    * lados, e o valor inicial entra formatado em pt-BR, como o contador digita.
    */
-  const [rbt, setRbt] = useState(
-    rbt12 != null ? rbt12.toLocaleString("pt-BR", { minimumFractionDigits: 2 }) : ""
-  );
+  const [rbt, setRbt] = useState(moedaParaMascara(rbt12));
   /* o valor do arquivo pode ser qualquer grafia ("SN", "Sim"); o select mostra
      a opção equivalente quando reconhece, e "— manter como veio —" quando não */
   const [enq, setEnq] = useState(
@@ -76,7 +73,7 @@ export function EditarEmpresa({
           contato_nome: nome,
           contato_email: email,
           contato_telefone: tel,
-          rbt12: parseValorBRL(rbt) ?? null,
+          rbt12: valorDaMascara(rbt),
           ...(enq ? { regime: enq } : {}),
         }),
       });
@@ -181,26 +178,27 @@ export function EditarEmpresa({
           </label>
           <div className="flex items-center rounded-sm border border-line bg-surface px-2.5 focus-within:border-accent">
             <span className="font-mono text-[11px] text-muted">R$</span>
-            {/* aceita ponto e vírgula: quem digita "480.000,50" está certo, e
-                era o teclado dele que o campo apagava */}
+            {/* a máscara formata ENQUANTO se digita: sem ela, quem escreve
+                "480000" só descobre se gravou quatrocentos e oitenta mil ou
+                quatro mil e oitocentos depois de tirar o olho do teclado — e
+                este é o número que decide faixa, alíquota efetiva e sublimite
+                de um laudo assinado (08/08/2026) */}
             <input
               value={rbt}
-              onChange={(e) => setRbt(e.target.value.replace(/[^\d.,]/g, ""))}
-              inputMode="decimal"
+              onChange={(e) => setRbt(mascaraMoeda(e.target.value))}
+              inputMode="numeric"
               placeholder="480.000,00"
               className="w-full bg-transparent px-1.5 py-1.5 font-mono text-[13px] outline-none"
             />
           </div>
           {/* o eco embaixo do campo é a prova de que o sistema entendeu o que
               foi digitado — é ele que denuncia a vírgula lida como milhar */}
-          {rbt && parseValorBRL(rbt) != null && (
-            <p className="mt-0.5 font-mono text-[10.5px] text-muted">
-              {moeda(parseValorBRL(rbt) as number)}
-            </p>
-          )}
-          {rbt && parseValorBRL(rbt) == null && (
+          {/* o eco embaixo do campo some com a máscara: o próprio campo já
+              mostra o valor formatado, e repetir o mesmo número duas vezes
+              ensina a não ler nenhum dos dois */}
+          {rbt && valorDaMascara(rbt) != null && valorDaMascara(rbt)! < 1000 && (
             <p className="mt-0.5 text-[10.5px] text-amarelo">
-              não entendi este valor — use o formato 480.000,00
+              valor abaixo de mil reais — confira se a planilha está em milhares
             </p>
           )}
         </div>

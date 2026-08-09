@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { FormColeta } from "@/components/FormColeta";
+import { situacaoDoLink } from "@/lib/token-validade";
+import { LinkEncerrado } from "@/components/LinkEncerrado";
 
 /**
  * A PÁGINA QUE A EMPRESA ABRE — pública, sem login, só com o token.
@@ -37,11 +39,24 @@ export default async function ColetaPage({ params }: { params: { token: string }
   const token = decodeURIComponent(params.token).toUpperCase().trim();
   const { data: coleta } = await admin
     .from("coletas")
-    .select("empresa_id, status, respondido_em")
+    .select("empresa_id, status, respondido_em, token_expira_em, revogado_em")
     .eq("token", token)
     .maybeSingle();
 
   if (!coleta) notFound();
+
+
+  /* o formulário de coleta também tem prazo (120 dias, migration 0068): ele
+
+     pede dado de faturamento e margem de um cliente de terceiro, e link de
+
+     formulário esquecido aberto é a mesma exposição do documento */
+
+  const situacaoDoFormulario = situacaoDoLink(coleta);
+
+  if (situacaoDoFormulario !== "valido")
+
+    return <LinkEncerrado motivo={situacaoDoFormulario} tipo="formulário" />;
 
   const { data: empresa } = await admin
     .from("empresas")

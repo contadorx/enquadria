@@ -6,6 +6,7 @@ import { enviarEmail } from "@/lib/email";
 import { htmlLaudoCliente } from "@/lib/emails-cliente";
 import { ehOptar } from "@/lib/motor";
 import { ehLaudoCurto } from "@/lib/laudo";
+import { erroDeBanco } from "@/lib/erro-banco";
 
 /**
  * TEMPO DE FUNÇÃO — declarado em 08/08/2026.
@@ -105,7 +106,7 @@ export async function POST(req: Request) {
     ? q.in("id", corpo.laudo_ids)
     : q.in("analise_id", corpo.analise_ids ?? []);
   const { data: laudos, error: errL } = await q.limit(1000);
-  if (errL) return NextResponse.json({ erro: errL.message }, { status: 500 });
+  if (errL) return NextResponse.json({ erro: erroDeBanco(errL, "laudo/enviar") }, { status: 500 });
 
   const pedidos = corpo.laudo_ids?.length ?? corpo.analise_ids?.length ?? 0;
   if (!laudos?.length) {

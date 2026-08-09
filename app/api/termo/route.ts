@@ -8,6 +8,7 @@ import { enviarEmail, htmlConviteAssinatura } from "@/lib/email";
 import { blocoDoTermo } from "@/lib/termo";
 import { garantirAnaliseCoerente } from "@/lib/recalculo-server";
 import type { AnaliseGravada } from "@/lib/laudo";
+import { erroDeBanco } from "@/lib/erro-banco";
 
 /**
  * TEMPO DE FUNÇÃO — declarado em 08/08/2026.
@@ -60,18 +61,28 @@ export async function POST(req: Request) {
     decisao?: "optar" | "permanecer";
     tipo_decisao?: string;
     motivo_divergencia?: string;
-    nome: string;
-    email: string;
+    nome?: string;
+    email?: string;
     empresa?: string;
     /** default true — só o teste e a reemissão silenciosa passam false */
     enviar_email?: boolean;
+    /**
+     * A fila do cockpit não conhece o e-mail do contato: a `Linha` carrega só
+     * `tem_contato`, porque contato não é dado de decisão. Com esta marca, o
+     * signatário vem do cadastro da empresa — o mesmo lugar onde o Dossiê o
+     * grava. Ver a nota de `signatario` abaixo.
+     */
+    usar_contato?: boolean;
   };
   try {
     corpo = await req.json();
   } catch {
     return NextResponse.json({ erro: "corpo inválido" }, { status: 400 });
   }
-  if (!corpo.analise_id || !corpo.nome || !corpo.email) {
+  if (!corpo.analise_id) {
+    return NextResponse.json({ erro: "analise_id obrigatório" }, { status: 400 });
+  }
+  if (!corpo.usar_contato && (!corpo.nome || !corpo.email)) {
     return NextResponse.json({ erro: "analise_id, nome e email obrigatórios" }, { status: 400 });
   }
 
@@ -98,8 +109,40 @@ export async function POST(req: Request) {
     .maybeSingle();
   if (!analise) return NextResponse.json({ erro: "análise não encontrada" }, { status: 404 });
   const { data: empresa } = analise
-    ? await supabase.from("empresas").select("razao_social, cnpj").eq("id", analise.empresa_id).maybeSingle()
+    ? await supabase
+        .from("empresas")
+        .select("razao_social, cnpj, contato_nome, contato_email")
+        .eq("id", analise.empresa_id)
+        .maybeSingle()
     : { data: null };
+
+  /**
+   * QUEM ASSINA, quando quem pede é a fila — 08/08/2026.
+   *
+   * A ação "Enviar termo" da linha do cockpit passou a chamar esta rota (antes
+   * chamava a de lote com um id só, e por isso o termo saía sem conferência de
+   * coerência e sem registro em `envios_cliente`). A fila, porém, não carrega
+   * o e-mail do contato: `Linha` tem `tem_contato`, e só. O signatário vem
+   * então do cadastro da empresa, que é o mesmo campo que o Dossiê grava e o
+   * mesmo que a rota devolve corrigido mais abaixo.
+   *
+   * Sem contato não há termo: mandar convite para endereço vazio produziria um
+   * documento sem quem assine e um envio que falha em silêncio.
+   */
+  const signatario = {
+    nome: (corpo.usar_contato ? empresa?.contato_nome : corpo.nome) ?? corpo.nome ?? "",
+    email: (corpo.usar_contato ? empresa?.contato_email : corpo.email) ?? corpo.email ?? "",
+  };
+  if (!signatario.nome || !signatario.email) {
+    return NextResponse.json(
+      {
+        erro:
+          "esta empresa ainda não tem nome e e-mail do responsável — cadastre no Dossiê antes de gerar o termo",
+        sem_contato: true,
+      },
+      { status: 409 }
+    );
+  }
 
   const { data: perfilT } = await supabase
     .from("profiles")
@@ -158,12 +201,12 @@ export async function POST(req: Request) {
   const { data: termoId, error } = await supabase.rpc("registrar_termo", {
     p_analise: corpo.analise_id,
     p_decisao: "sem_decisao",
-    p_nome: corpo.nome,
-    p_email: corpo.email,
+    p_nome: signatario.nome,
+    p_email: signatario.email,
     p_assinatura_url: null,
     p_assinatura_ref: null,
   });
-  if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ erro: erroDeBanco(error, "termo") }, { status: 500 });
 
   // prepara a assinatura própria: token público, hash congelado, status pendente
   const { error: upErr } = await supabase
@@ -173,7 +216,7 @@ export async function POST(req: Request) {
       /* hash_documento fica NULO até a assinatura: é lá que a decisão entra no
          conteúdo, e um hash que não cobre a decisão não prova o termo */
       assinatura_status: "pendente",
-      assinante_email: corpo.email,
+      assinante_email: signatario.email,
       /* tipo_decisao NULO = ainda não decidido. A coluna existe desde a 0052 e
          é preenchida por quem assina, não por quem emite. */
       tipo_decisao: null,
@@ -218,8 +261,13 @@ export async function POST(req: Request) {
     : { data: null };
 
   const patch: { contato_nome?: string; contato_email?: string } = {};
-  if (corpo.nome && corpo.nome !== contatoAtual?.contato_nome) patch.contato_nome = corpo.nome;
-  if (corpo.email && corpo.email !== contatoAtual?.contato_email) patch.contato_email = corpo.email;
+  /* só volta o que o contador DIGITOU: quando o signatário veio do próprio
+     cadastro (`usar_contato`), regravá-lo seria escrever por cima do mesmo
+     valor e sujar o histórico de alteração da empresa sem nenhum ganho */
+  if (!corpo.usar_contato) {
+    if (corpo.nome && corpo.nome !== contatoAtual?.contato_nome) patch.contato_nome = corpo.nome;
+    if (corpo.email && corpo.email !== contatoAtual?.contato_email) patch.contato_email = corpo.email;
+  }
   if (analise && Object.keys(patch).length) {
     await supabase.from("empresas").update(patch).eq("id", analise.empresa_id);
   }
@@ -232,8 +280,8 @@ export async function POST(req: Request) {
 
   if (corpo.enviar_email !== false) {
     const envio = await enviarEmail({
-      para: corpo.email,
-      nome: corpo.nome,
+      para: signatario.email,
+      nome: signatario.nome,
       assunto: `${empresa?.razao_social ?? corpo.empresa ?? "Sua empresa"} — decisão de IBS/CBS até 30 de setembro`,
       html: htmlConviteAssinatura({
         empresa: empresa?.razao_social ?? corpo.empresa ?? "sua empresa",
@@ -261,8 +309,8 @@ export async function POST(req: Request) {
         empresa_id: analise.empresa_id,
         tipo: "termo",
         documento_id: termoId,
-        para: corpo.email,
-        nome: corpo.nome,
+        para: signatario.email,
+        nome: signatario.nome,
         assunto: "convite de assinatura do termo",
         status: enviado ? "enviado" : "erro",
         erro: enviado ? null : (motivoEnvio ?? "").slice(0, 300),

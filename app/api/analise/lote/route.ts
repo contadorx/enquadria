@@ -15,6 +15,7 @@ import {
 } from "@/lib/motor";
 import { anexoPorCnae } from "@/lib/triagem";
 import { premissasPadrao, ORIGEM_LOTE } from "@/lib/premissas-padrao";
+import { erroDeBanco } from "@/lib/erro-banco";
 
 /**
  * TEMPO DE FUNÇÃO — declarado em 08/08/2026.
@@ -86,7 +87,7 @@ export async function POST(req: Request) {
     : query.in("faixa", ["A", "B"]);
 
   const { data: empresas, error: errEmp } = await query.limit(1000);
-  if (errEmp) return NextResponse.json({ erro: errEmp.message }, { status: 500 });
+  if (errEmp) return NextResponse.json({ erro: erroDeBanco(errEmp, "analise/lote") }, { status: 500 });
   if (!empresas?.length) {
     return NextResponse.json({ ok: true, gravadas: 0, puladas: 0, resultados: [] });
   }
@@ -108,7 +109,7 @@ export async function POST(req: Request) {
 
   const { data: param } = await supabase
     .from("parametros_exercicio")
-    .select("aliquota_cbs, aliquota_ibs, corte_s1, fronteira_min, fronteira_max")
+    .select("aliquota_cbs, aliquota_ibs, corte_s1, fronteira_min, fronteira_max, fixada, fonte")
     .eq("exercicio", 2027)
     .maybeSingle();
 
@@ -177,7 +178,7 @@ export async function POST(req: Request) {
       // por que esta saída, congelado com o resto: a seção 7 do laudo imprime isto
       motivo: r.motivo,
       banda_sublimite: !!r.banda_sublimite,
-      carimbo: carimboAliquota(aliquota, agora),
+      carimbo: carimboAliquota(aliquota, agora, { fixada: param?.fixada, fonte: param?.fonte }),
       cenarios: cenarios(respostas, base),
       dinheiro,
       sensibilidade: sensibilidade(respostas, base, dinheiro),
@@ -226,7 +227,7 @@ export async function POST(req: Request) {
     .from("analises")
     .upsert(registros, { onConflict: "empresa_id,janela_id" });
 
-  if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ erro: erroDeBanco(error, "analise/lote") }, { status: 500 });
 
   return NextResponse.json({
     ok: true,

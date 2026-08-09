@@ -121,7 +121,13 @@ export default async function MateriaDaReforma({
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       <article>
-        <section className="casca-hero">
+        {/* O PALCO DA MATÉRIA É CLARO (08/08/2026). Ele usava o mesmo hero
+            escuro do índice e das páginas de venda: título e resumo em branco
+            sobre azul-marinho, e o resto da mesma matéria — "o que fazer", "a
+            norma" — em cinza claro logo abaixo. A página quebrava ao meio no
+            meio da leitura. Aqui o título e o resumo passam a ser texto da
+            página, com o mesmo fundo e a mesma tipografia do que vem depois. */}
+        <section className="casca-hero casca-hero--claro">
           <div className="casca-container">
             <p className="casca-migalhas">
               <Link href="/reforma">Radar da Reforma</Link> ·{" "}
@@ -133,7 +139,7 @@ export default async function MateriaDaReforma({
           </div>
         </section>
 
-        <section className="casca-secao">
+        <section className="casca-secao casca-secao--continua">
           <div className="casca-container">
             {materia.o_que_fazer && (
               <div className="casca-destaque">

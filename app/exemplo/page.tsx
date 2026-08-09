@@ -44,7 +44,21 @@ export const metadata: Metadata = {
   title: "Exemplo: o mapa da carteira e o laudo | Enquadria",
   description:
     "Um exemplo real, gerado pelo mesmo motor do produto: a triagem de uma carteira de 12 empresas e o laudo completo de uma delas. Empresas fictícias.",
-  alternates: { canonical: "https://enquadria.com.br/exemplo" },
+  /**
+   * O CANONICAL É CAMINHO, NÃO ENDEREÇO COMPLETO — 08/08/2026.
+   *
+   * O DEFEITO: aqui estava `"https://enquadria.com.br/exemplo"` cravado, a
+   * única página do site que escrevia o domínio à mão. Em preview da Vercel, o
+   * `/exemplo` do preview anunciava como endereço de verdade o `/exemplo` de
+   * produção — e é justamente esta página que a cadência fria linka, ou seja, a
+   * que mais chance tem de ser rastreada a partir de um endereço temporário.
+   * Também escapava do `SITE` de `lib/site.ts`: no dia em que o domínio mudar,
+   * treze páginas acompanham e esta fica para trás, sem quebrar nada visível.
+   *
+   * A CORREÇÃO: caminho relativo, como nas demais. O `metadataBase` do layout
+   * raiz o resolve contra o `SITE`, que vem de env.
+   */
+  alternates: { canonical: "/exemplo" },
 };
 
 /* o conteúdo é determinístico, mas o carimbo da alíquota imprime a data da

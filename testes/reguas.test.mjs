@@ -376,5 +376,52 @@ ok(emHorarioDeEnvio(utc(3, 11), 8, 18), "com início às 8h, 11h UTC passa a val
      "sem o campo, cai no caminho antigo (por isso o map precisa copiar)");
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+ * A FASE `proxima` NÃO TINHA RÉGUA — e é a fase em que o calendário FICA.
+ *
+ * As réguas de janela cobriam `aliquota`, `cancelamento` (pos_janela_revisao) e
+ * `efeito` (proxima_janela). Depois da data prevista para a janela seguinte não
+ * saía mais nada da categoria: sobravam cutucada de inatividade e cobrança —
+ * a mistura que ensina o contador a arquivar o remetente sem abrir.
+ *
+ * `planejar()` lê o relógio para saber a fase, então aqui se verifica o
+ * CONTRATO, como no bloco do pós-janela acima: as três nunca saem juntas, e
+ * nenhuma delas vai para quem não tem carteira.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+{
+  const R = [REGRA("pos_janela_revisao"), REGRA("proxima_janela"), REGRA("nova_janela")];
+  const ctx = (over = {}) => ({
+    escritorios: [{ ...ESCRITORIO, ...over }],
+    regras: R,
+    jaEnviados: new Set(),
+    limiteGratis: 2,
+    config: { ativas: true, limite_por_execucao: 200, janela_dias: 30,
+              aviso_pre_vencimento_dias: 3, dias_renovacao: 10,
+              janela: { abre: "2026-09-01", fecha: "2026-09-30" } },
+  });
+  const k = (over) => planejar(ctx(over)).map((e) => e.regra);
+
+  ok(!k({ empresas: 0, faixa_a: 0, analises: 0 }).includes("nova_janela"),
+     "sem carteira importada, a nova janela não é anunciada");
+
+  const todas = k({});
+  ok(todas.filter((c) => ["pos_janela_revisao", "proxima_janela", "nova_janela"].includes(c)).length <= 1,
+     "as três réguas de janela são de fases diferentes: no máximo uma por dia", todas);
+
+  /* a dedupe carrega o mês da janela prevista: se a data mudar, é outra janela
+     e vale um toque novo — por isso a chave não pode ser só o tenant */
+  const envios = planejar(ctx({})).filter((e) => e.regra === "nova_janela");
+  for (const e of envios) {
+    ok(/^nova_janela:t1:\d{4}-\d{2}$/.test(e.chave_unica),
+       "a chave da nova janela carrega o mês previsto", e.chave_unica);
+  }
+
+  /* régua desligada no banco não dispara, mesmo estando na fase */
+  const desligada = ctx({});
+  desligada.regras = R.map((r) => (r.chave === "nova_janela" ? { ...r, ativa: false } : r));
+  ok(!planejar(desligada).map((e) => e.regra).includes("nova_janela"),
+     "nova janela desativada no painel não sai");
+}
+
 console.log(f === 0 ? "TODOS OS TESTES PASSARAM" : `${f} FALHAS`);
 process.exit(f ? 1 : 0);

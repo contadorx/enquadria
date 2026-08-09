@@ -172,6 +172,11 @@ export const ABAS_NEGOCIO: ItemNav[] = [
   /* onde se publica a norma. Entrou em 05/08/2026: a tabela existia desde
      sempre e não tinha porta — 4 itens, todos de 24/04, 104 dias parados. */
   { href: "/painel/negocio/radar", label: "Radar" },
+  /* onde se publica a ALÍQUOTA. Entrou em 08/08/2026 pelo mesmo motivo do
+     radar: `parametros_exercicio` era lida em quatro lugares do produto e não
+     tinha porta nenhuma — o número só mudava por SQL em produção. E é dele que
+     depende a revisão de outubro, que o produto vende por e-mail. */
+  { href: "/painel/negocio/parametros", label: "Alíquota" },
   /* onde se publica aula: o link do vídeo saiu do código na 0038 */
   { href: "/painel/negocio/curso", label: "Curso" },
 ];

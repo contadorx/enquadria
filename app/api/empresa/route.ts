@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { emailValido } from "@/lib/csv";
 import { triar } from "@/lib/triagem";
+import { erroDeBanco } from "@/lib/erro-banco";
 
 /**
  * Edição pontual da empresa: contato (para o termo em lote), RBT12 (que troca
@@ -113,7 +114,7 @@ export async function PATCH(req: Request) {
 
   // a RLS por tenant garante que ninguém edite empresa de outro workspace
   const { error } = await supabase.from("empresas").update(patch).eq("id", corpo.empresa_id);
-  if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ erro: erroDeBanco(error, "empresa") }, { status: 500 });
 
   return NextResponse.json({ ok: true, atualizado: patch, retriada });
 }

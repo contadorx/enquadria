@@ -4,10 +4,37 @@ import { createAdminClient } from "@/lib/supabase-admin";
 import { TOTAL_AULAS, TOTAL_MINUTOS, CURSO, totalMinutos } from "@/lib/curso";
 
 /**
+ * ESTA ROTA FICOU SEM CHAMADOR EM 08/08/2026 — e continua no ar de propósito.
+ *
+ * Quem a chamava era `public/assets/curso.js`, o JavaScript da versão estática
+ * do /curso. Esse arquivo foi apagado: a página virou React (app/curso/
+ * page.tsx), nenhum `scripts=[...]` o carregava mais, e ele seguia sendo
+ * servido ao público com o endereço e o hash do CRM escritos dentro. Junto com
+ * ele foi embora o único botão que pedia certificado.
+ *
+ * NÃO APAGUE A ROTA. Ela é a metade difícil do problema, e essa metade já está
+ * resolvida: código idempotente por e-mail, carga horária medida em vez de
+ * estimada, corrida entre duas abas tratada, e a página pública de conferência
+ * (app/certificado/[codigo]/page.tsx) existe e lê exatamente o que aqui se
+ * grava. Refazer isso custa mais do que fazer o que falta.
+ *
+ * O QUE FALTA PARA O CERTIFICADO VOLTAR A EXISTIR:
+ *
+ *   1. Um botão em app/curso/page.tsx que apareça com as nove aulas marcadas e
+ *      poste nome, e-mail e CRC aqui.
+ *   2. Decidir onde vive o progresso agora. No arquivo apagado era
+ *      localStorage, com o preço escrito na tela: valia só naquele navegador.
+ *      A página em React não herdou esse controle.
+ *   3. O documento em si. NÃO EXISTE geração de PDF em lugar nenhum deste
+ *      projeto — nem biblioteca no package.json, nem rota que produza o
+ *      arquivo. Todo "PDF" daqui (laudo, termo, relatório, anuário) é
+ *      impressão do navegador, via lib/impressao.ts e BotaoImprimir. O
+ *      certificado terá de seguir o mesmo caminho: uma página imprimível a
+ *      partir do código, e não um arquivo gerado no servidor.
+ *
  * EMISSÃO DO CERTIFICADO DO CURSO.
  *
- * Chamada pela página estática do curso quando o participante conclui as nove
- * aulas. Devolve um código público — o mesmo princípio do laudo: documento que
+ * Devolve um código público — o mesmo princípio do laudo: documento que
  * ninguém pode conferir não vale como documento.
  *
  * IDEMPOTENTE POR E-MAIL: pedir de novo devolve o MESMO código, em vez de dar

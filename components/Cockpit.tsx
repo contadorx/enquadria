@@ -7,7 +7,7 @@ import { mascararCnpj } from "@/lib/cnpj";
 import type { FaseAtual } from "@/lib/janela";
 import { moeda, pct } from "@/lib/motor";
 import { ROTULO_FAIXA, type Faixa } from "@/lib/triagem";
-import { EXPLICA_FAIXA, HONORARIO_PADRAO } from "@/lib/potencial";
+import { EXPLICA_FAIXA, HONORARIO_PADRAO, ORIGEM_HONORARIO } from "@/lib/potencial";
 import {
   ACOES_LOTE,
   ETAPAS,
@@ -15,6 +15,8 @@ import {
   FAIXAS_FORA,
   FAIXAS_TRABALHO,
   ROTULO_ACAO,
+  DESTINO_DA_ACAO,
+  EXPLICA_SAIDA,
   buscar,
   filtrarPorEtapa,
   naMesa,
@@ -22,6 +24,7 @@ import {
   proximoEmpurrao,
   type Acao,
   type Esteira,
+  type FiltroDeFila,
   type Linha,
 } from "@/lib/cockpit";
 import { MuroPlano } from "@/components/MuroPlano";
@@ -51,6 +54,8 @@ export interface Aviso {
   /** ids das empresas que este aviso joga na fila — aviso sem trabalho não entra */
   empresas: string[];
   nao_lido?: boolean;
+  /** o aviso de parâmetros ganha o botão que faz o trabalho em lote */
+  acao_revisao?: boolean;
 }
 
 type Grupo = "trabalho" | "curtas" | "fora" | "todas";
@@ -87,6 +92,7 @@ export function Cockpit({
   avisos,
   totalCarteira,
   temEscritorio,
+  jaEmitiuLaudo = false,
 }: {
   linhas: Linha[];
   esteira: Esteira;
@@ -96,9 +102,11 @@ export function Cockpit({
   avisos: Aviso[];
   totalCarteira: number;
   temEscritorio: boolean;
+  /** este escritório já emitiu laudo alguma vez, contado na tabela `laudos` */
+  jaEmitiuLaudo?: boolean;
 }) {
   const router = useRouter();
-  const [etapa, setEtapa] = useState<keyof Esteira | null>(null);
+  const [etapa, setEtapa] = useState<FiltroDeFila | null>(null);
   /**
    * ABRE EM "TODAS" — decisão de 07/08/2026, e o caso que a provocou importa:
    * a primeira empresa importada numa conta era de Lucro Presumido (faixa
@@ -176,6 +184,9 @@ export function Cockpit({
        ("contato" é o sexto). O tipo agora é o da própria fila — quem inventar
        uma ação nova não consegue compilar sem dar rótulo e destino a ela. */
     proximaAcao: proxima ? (proxima.acao as AcaoDaFila) : null,
+    /* contado na tabela, não na fila: arquivar a carteira não desfaz um laudo
+       emitido, e era isso que fazia o onboarding recomeçar (08/08/2026) */
+    jaEmitiuAlgumaVez: jaEmitiuLaudo,
   };
 
   const visiveis = filtradas.slice(0, mostrar);
@@ -247,9 +258,22 @@ export function Cockpit({
         return `${r.criados} termos gerados${r.enviados ? ` e ${r.enviados} enviados por e-mail` : ""}.`;
       });
     }
-    // cobrar_assinatura: não há ação em massa segura — leva para quem falta
-    setEtapa("laudos");
-    setGrupo("trabalho");
+    /**
+     * "VER QUEM FALTA" LEVA A QUEM FALTA — conserto de 08/08/2026.
+     *
+     * Não há ação em massa segura para cobrar assinatura (o link é individual e
+     * o cliente é de terceiro), então o botão leva à lista. Só que ele levava
+     * para a etapa `laudos` + grupo de trabalho: "faixa A/B COM laudo", que
+     * inclui os já assinados e exclui as faixas C e D com termo pendente — e o
+     * aviso contou C e D. O número e a lista eram conjuntos diferentes, e quem
+     * confere uma vez para de acreditar nos dois.
+     *
+     * `aguardando_assinatura` é exatamente o filtro que o aviso conta, e o
+     * grupo volta a ser toda a carteira porque o termo pendente não conhece
+     * faixa.
+     */
+    setEtapa("aguardando_assinatura");
+    setGrupo("todas");
     setBusca("");
   }
 
@@ -357,15 +381,43 @@ export function Cockpit({
       );
     }
     if (l.acao === "termo") {
+      /**
+       * UM TERMO SAI PELA ROTA DE UM TERMO — conserto de 08/08/2026.
+       *
+       * Isto chamava `/api/termo/lote` com um id só. O comentário de
+       * `app/api/termo/route.ts` já registrava o contorno como coisa do
+       * passado ("o Cockpit chegou a contornar isso chamando a rota de lote
+       * com um id só") — e a chamada continuava aqui. A diferença não é
+       * estética: a rota de lote NÃO chama `garantirAnaliseCoerente`, então o
+       * termo congelava a recomendação de um motor possivelmente aposentado; e
+       * NÃO grava em `envios_cliente`, então todo termo enviado pela fila
+       * nunca aparecia no bloco "Enviado ao cliente" da empresa. O contador
+       * não tinha como saber se o convite tinha saído.
+       *
+       * O contato vem da linha porque a fila só oferece esta ação quando ele
+       * existe (ver `proximaAcao`).
+       */
+      if (!l.tem_contato) {
+        setRecado(
+          `${l.razao_social} ainda não tem nome e e-mail do responsável — cadastre no Dossiê antes de enviar o termo.`
+        );
+        setGaveta({ id: l.id, aba: "dossie" });
+        return;
+      }
       return chamar(
-        "/api/termo/lote",
-        { analise_ids: [l.analise_id], enviar_email: true },
+        "/api/termo",
+        { analise_id: l.analise_id, nome: l.razao_social, empresa: l.razao_social, usar_contato: true },
         `linha-${l.id}`,
         (j) => {
-          const r = j as { criados: number; enviados: number };
-          return r.criados === 0
-            ? `Nenhum termo gerado para ${l.razao_social} — confira laudo e contato.`
-            : `Termo gerado${r.enviados > 0 ? " e enviado por e-mail" : " (envie o link ao cliente)"}.`;
+          const r = j as { enviado?: boolean; motivo_envio?: string | null; recalculada?: unknown };
+          const base = r.enviado
+            ? `Termo de ${l.razao_social} gerado e convite enviado.`
+            : `Termo de ${l.razao_social} gerado, mas o convite não saiu${
+                r.motivo_envio ? ` (${r.motivo_envio})` : ""
+              } — abra a empresa e copie o link.`;
+          return r.recalculada
+            ? `${base} A análise foi refeita nesta emissão: confira antes de mandar ao cliente.`
+            : base;
         }
       );
     }
@@ -377,7 +429,12 @@ export function Cockpit({
       setRecado(`Link de assinatura de ${l.razao_social} copiado.`);
       return;
     }
-    setGaveta({ id: l.id, aba: l.acao === "contato" || l.acao === "fora" ? "dossie" : "decisao" });
+    /* o destino agora sai do mapa de lib/cockpit.ts, que é a mesma fonte que a
+       Trilha lê — o `l.acao === "contato" || …` escrito aqui era a terceira
+       cópia da mesma regra, e cópia é como as três passam a discordar */
+    const destino = DESTINO_DA_ACAO[l.acao];
+    if (destino.tipo === "gaveta") setGaveta({ id: l.id, aba: destino.aba });
+    else if (destino.tipo === "nenhum") setGaveta({ id: l.id, aba: "dossie" });
   }
 
   function lote(chave: "analisar" | "emitir" | "enviar" | "termo") {
@@ -462,6 +519,31 @@ export function Cockpit({
         );
       }
     );
+  }
+
+  /**
+   * REVISAR A CARTEIRA COM OS PARÂMETROS VIGENTES.
+   *
+   * O que ela NÃO faz é o mais importante, e por isso está no recado: não
+   * reescreve análise existente e não toca em laudo emitido. Cria uma rodada
+   * nova sobre as mesmas respostas — o antes continua verificável, e o depois
+   * é documento novo, cobrável. Era isso, e não uma tela de relatório, que
+   * faltava para o e-mail de outubro dizer a verdade.
+   */
+  function revisarCarteira() {
+    return chamar("/api/janela", { modo: "revisao", exercicio: 2027 }, "revisao", (j) => {
+      const r = j as { criadas: number; ja_existiam: number };
+      if (r.criadas === 0) {
+        return r.ja_existiam > 0
+          ? "A carteira já foi revisada nesta rodada — nada a refazer."
+          : "Não havia análise anterior para revisar.";
+      }
+      return (
+        `${r.criadas} empresas recalculadas numa rodada nova, com as mesmas respostas e os ` +
+        `parâmetros vigentes. A rodada anterior continua inteira e nenhum laudo emitido mudou — ` +
+        `abra as que trocaram de recomendação e emita a segunda via.`
+      );
+    });
   }
 
   async function marcarLido(aviso: Aviso) {
@@ -666,11 +748,33 @@ export function Cockpit({
 
         <div className="mt-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-linesoft pt-2.5">
           <div className="text-[12.5px] text-slate2">
+            {/* 08/08/2026: dizia "N empresas urgentes sem laudo" e somava só a
+                faixa A. O mapa de risco da primeira tela promete as quatro
+                faixas — a metade da carteira que gera laudo curto sumia daqui,
+                e com ela a receita mais fácil do produto. Agora a linha mostra
+                a mesma conta do mapa, aberta nos dois entregáveis. */}
             <b className="font-mono text-[15px] text-ink">{moeda(mesa.valor)}</b> ainda na mesa —{" "}
-            {mesa.empresas} {mesa.empresas === 1 ? "empresa urgente sem laudo" : "empresas urgentes sem laudo"}
+            {mesa.completos > 0 && (
+              <>
+                {mesa.completos} {mesa.completos === 1 ? "laudo completo" : "laudos completos"}
+              </>
+            )}
+            {mesa.completos > 0 && mesa.curtos > 0 && " · "}
+            {mesa.curtos > 0 && (
+              <>
+                {mesa.curtos} {mesa.curtos === 1 ? "laudo curto" : "laudos curtos"}
+              </>
+            )}
+            {mesa.empresas === 0 && "nada pendente"}
           </div>
+          {/* DE ONDE VEM O R$ 600 — 08/08/2026. O honorário de referência é a
+              premissa que transforma o mapa de risco em número de dinheiro, e
+              aparecia sem nenhuma origem declarada: o contador via uma cifra
+              default e não sabia se era pesquisa de mercado, média da base ou
+              chute. Número sem procedência num produto que vende prova é o tipo
+              de coisa que corrói a confiança nos números que TÊM origem. */}
           <label className="flex items-center gap-1.5 text-[11.5px] text-muted">
-            honorário
+            <span title={ORIGEM_HONORARIO}>honorário</span>
             <span className="flex items-center rounded-sm border border-line px-2">
               <span className="font-mono text-[11px] text-muted">R$</span>
               <input
@@ -682,6 +786,9 @@ export function Cockpit({
             </span>
           </label>
         </div>
+        <p className="mt-1.5 text-[11px] leading-snug text-muted">
+          {ORIGEM_HONORARIO}
+        </p>
       </div>
 
       {/* ================================= 3b. O EMPURRÃO — a UMA coisa a fazer
@@ -767,17 +874,35 @@ export function Cockpit({
                   )}
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-1.5">
-                  <button
-                    onClick={() => {
-                      setFoco({ aviso: av, ids: new Set(av.empresas) });
-                      setEtapa(null);
-                      setBusca("");
-                      setMostrar(PAGINA);
-                    }}
-                    className="rounded-sm bg-ink px-3 py-2 text-[12.5px] font-semibold text-white"
-                  >
-                    Trazer {av.empresas.length} para a fila
-                  </button>
+                  {/* aviso sem empresa não ganha o botão: "Trazer 0 para a fila"
+                      é um clique que não faz nada, e clique que não faz nada
+                      ensina a não clicar nos que fazem (08/08/2026) */}
+                  {av.empresas.length > 0 && (
+                    <button
+                      onClick={() => {
+                        setFoco({ aviso: av, ids: new Set(av.empresas) });
+                        setEtapa(null);
+                        setBusca("");
+                        setMostrar(PAGINA);
+                      }}
+                      className="rounded-sm bg-ink px-3 py-2 text-[12.5px] font-semibold text-white"
+                    >
+                      Trazer {av.empresas.length} para a fila
+                    </button>
+                  )}
+                  {/* O TRABALHO EM LOTE QUE FALTAVA (08/08/2026). Este aviso
+                      mandava reabrir empresa por empresa; agora ele executa. A
+                      rodada nova recalcula sobre as mesmas respostas e preserva
+                      a anterior — nenhum laudo emitido é tocado. */}
+                  {av.acao_revisao && (
+                    <button
+                      onClick={revisarCarteira}
+                      disabled={!!ocupado}
+                      className="rounded-sm border border-ink px-3 py-2 text-[12.5px] font-semibold text-ink disabled:opacity-40"
+                    >
+                      {ocupado === "revisao" ? "…" : `Revisar a carteira (${av.empresas.length})`}
+                    </button>
+                  )}
                   {av.tipo === "radar" && (
                     <button
                       onClick={() => marcarLido(av)}
@@ -982,14 +1107,48 @@ export function Cockpit({
                       </span>
                     )}
                     <span className="truncate text-[13.5px] font-semibold">{l.razao_social}</span>
+                    {/* O SELO DA REFORMA (08/08/2026). O monitor cruza cada
+                        norma nova com a carteira todo dia e gravava o resultado
+                        onde ninguém olhava. É o trabalho cobrável que sobrevive
+                        ao fechamento da janela: ele tem de aparecer na linha da
+                        empresa, não numa sub-aba dentro de "Aprender". */}
+                    {!!l.apontamentos && l.apontamentos > 0 && (
+                      <span
+                        title={`${l.apontamentos} ponto${l.apontamentos > 1 ? "s" : ""} da Reforma em aberto para esta empresa`}
+                        className="rounded-full bg-accentwash px-1.5 py-0.5 font-mono text-[9.5px] font-semibold text-accentdeep"
+                      >
+                        reforma {l.apontamentos}
+                      </span>
+                    )}
                   </div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[10.5px] text-muted">
                     <span>{mascararCnpj(l.cnpj)}</span>
-                    <span className={`rounded-full px-1.5 md:hidden ${COR_FAIXA[l.faixa]}`}>{ROTULO_FAIXA[l.faixa]}</span>
+                    <span title={EXPLICA_FAIXA[l.faixa]?.oQueFazer} className={`rounded-full px-1.5 md:hidden ${COR_FAIXA[l.faixa]}`}>{ROTULO_FAIXA[l.faixa]}</span>
                     <span className="md:hidden">{l.regime ?? ""}</span>
-                    {l.saida && <span>{l.saida}</span>}
-                    {l.re != null && <span>repasse {pct(l.re)}</span>}
-                    {l.estimada && <span className="text-amarelo">premissas estimadas</span>}
+                    {/* O JARGÃO GANHOU EXPLICAÇÃO — 08/08/2026.
+                        `S1`..`S5`, "repasse" e "premissas estimadas" estreavam
+                        aqui, crus e em fonte mono, e só ganhavam contexto DENTRO
+                        do formulário de análise — a tela seguinte. Quem abre a
+                        fila pela primeira vez lê três códigos que não significam
+                        nada e conclui que o produto fala uma língua que ele não
+                        tem. O `title` é o custo mais barato possível: não ocupa
+                        espaço na linha e responde no lugar onde a dúvida nasce. */}
+                    {l.saida && (
+                      <span title={l.saida ? EXPLICA_SAIDA[l.saida] : undefined}>{l.saida}</span>
+                    )}
+                    {l.re != null && (
+                      <span title="Quanto o preço precisa subir nas vendas para empresa para que a mudança de regime não custe nada a esta empresa.">
+                        repasse {pct(l.re)}
+                      </span>
+                    )}
+                    {l.estimada && (
+                      <span
+                        className="text-amarelo"
+                        title="As respostas do questionário foram estimadas pelo perfil típico do CNAE, não informadas por você. O laudo só sai depois de você conferir."
+                      >
+                        premissas estimadas
+                      </span>
+                    )}
                     {/*
                       O ESTADO DO FORMULÁRIO, na fila.
                       Quem manda 20 pedidos de dados na segunda precisa saber na

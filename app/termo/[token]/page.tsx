@@ -5,6 +5,8 @@ import { FolhaTermo } from "@/components/FolhaTermo";
 import { trilhaEmTexto } from "@/lib/esign";
 import { decisaoDoSnapshot } from "@/lib/termo";
 import type { Metadata } from "next";
+import { situacaoDoLink } from "@/lib/token-validade";
+import { LinkEncerrado } from "@/components/LinkEncerrado";
 
 /**
  * NOINDEX NA PRÓPRIA PÁGINA — 08/08/2026.
@@ -54,11 +56,18 @@ export default async function TermoPublico({ params }: { params: { token: string
   const { data: termo } = await supabase
     .from("termos")
     .select(
-      "decisao, assinante_nome, assinante_cpf, assinante_email, assinado_em, assinatura_status, metodo, hash_documento, evidencia, carimbo, analise_id, snapshot"
+      "decisao, assinante_nome, assinante_cpf, assinante_email, assinado_em, assinatura_status, metodo, hash_documento, evidencia, carimbo, analise_id, snapshot, token_expira_em, revogado_em"
     )
     .eq("token", params.token)
     .maybeSingle();
   if (!termo) notFound();
+
+  /* O LINK TEM PRAZO — 08/08/2026, migration 0068. O termo PENDENTE vale 90
+     dias (é convite, e convite parado três meses não vai ser aceito); assinado,
+     um gatilho no banco estende para dois anos, porque aí ele virou prova e o
+     cliente volta a ele quando alguém perguntar. */
+  const situacao = situacaoDoLink(termo);
+  if (situacao !== "valido") return <LinkEncerrado motivo={situacao} tipo="termo de ciência" />;
 
   const assinado = termo.assinatura_status === "assinado" || !!termo.assinado_em;
 

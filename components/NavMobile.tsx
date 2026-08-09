@@ -24,6 +24,7 @@ export function NavMobile({
   email,
   dias,
   posPct,
+  selo,
   ehSuperadmin = false,
 }: {
   escritorio: string;
@@ -34,6 +35,9 @@ export function NavMobile({
   dias: number;
   /** posição na régua, 0 a 100, calculada no servidor */
   posPct: number;
+  /** o selo da FASE atual — o celular recebia só a janela de setembro e, a
+      partir de 01/10/2026, imprimia "fim" para sempre */
+  selo?: string | null;
 }) {
   const menu = navDe(ehSuperadmin);
   const atalhos = atalhosDe(ehSuperadmin);
@@ -78,7 +82,7 @@ export function NavMobile({
           <div className="truncate font-mono text-[10px] text-slate-400">{escritorio}</div>
         </div>
         <div className="flex shrink-0 items-center gap-2.5">
-          <ContagemCurta dias={dias} posPct={posPct} />
+          <ContagemCurta dias={dias} posPct={posPct} selo={selo} />
           <button
             onClick={() => setAberto(true)}
             aria-label="Abrir o menu"
@@ -174,7 +178,29 @@ export function NavMobile({
  * Os números vêm prontos do servidor: calcular a data aqui faria o servidor e o
  * navegador renderizarem valores diferentes e quebraria a hidratação.
  */
-function ContagemCurta({ dias, posPct }: { dias: number; posPct: number }) {
+function ContagemCurta({
+  dias,
+  posPct,
+  selo,
+}: {
+  dias: number;
+  posPct: number;
+  selo?: string | null;
+}) {
+  /**
+   * "FIM" NÃO ERA UMA FASE — conserto de 08/08/2026.
+   *
+   * Isto recebia `estadoDaJanela()`, que só conhece a janela de setembro, e
+   * imprimia literalmente **"fim"** a partir de 1º/10/2026 — para sempre, com a
+   * barrinha travada em 100%. Enquanto o desktop passava por seis fases
+   * (alíquota, cancelamento, efeito, próxima), o celular dizia que o produto
+   * tinha acabado. Metade dos acessos é celular.
+   *
+   * Agora o selo da fase manda quando existe; a contagem em dias fica como
+   * reserva para chamadas antigas. Quando o selo é longo demais para 390px,
+   * ele é cortado com reticências em vez de empurrar o menu.
+   */
+  const rotulo = selo?.trim() || (dias > 0 ? `${dias}d` : "—");
   return (
     <span className="flex items-center gap-1.5">
       <span className="relative block h-1 w-9 overflow-hidden rounded-full bg-slate-300/25">
@@ -183,8 +209,11 @@ function ContagemCurta({ dias, posPct }: { dias: number; posPct: number }) {
           style={{ width: `${posPct}%` }}
         />
       </span>
-      <span className="whitespace-nowrap font-mono text-[10.5px] text-accentbright">
-        {dias > 0 ? `${dias}d` : "fim"}
+      <span
+        title={selo ?? undefined}
+        className="block max-w-[11ch] truncate whitespace-nowrap font-mono text-[10.5px] text-accentbright"
+      >
+        {rotulo}
       </span>
     </span>
   );

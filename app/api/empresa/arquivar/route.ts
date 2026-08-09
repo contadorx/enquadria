@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
+import { erroDeBanco } from "@/lib/erro-banco";
 
 /**
  * ARQUIVAR, DESARQUIVAR OU APAGAR UMA EMPRESA.
@@ -49,7 +50,7 @@ export async function POST(req: Request) {
       .from("empresas")
       .update({ arquivada_em: null, arquivada_motivo: null })
       .eq("id", id);
-    if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
+    if (error) return NextResponse.json({ erro: erroDeBanco(error, "empresa/arquivar") }, { status: 500 });
     return NextResponse.json({ ok: true, acao: "desarquivada" });
   }
 
@@ -83,7 +84,7 @@ export async function POST(req: Request) {
     // sem documento, apagar é seguro: as análises vão junto
     if (ids.length) await supabase.from("analises").delete().in("id", ids);
     const { error } = await supabase.from("empresas").delete().eq("id", id);
-    if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
+    if (error) return NextResponse.json({ erro: erroDeBanco(error, "empresa/arquivar") }, { status: 500 });
     return NextResponse.json({ ok: true, acao: "apagada" });
   }
 
@@ -94,6 +95,6 @@ export async function POST(req: Request) {
       arquivada_motivo: (corpo.motivo ?? "").trim() || null,
     })
     .eq("id", id);
-  if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ erro: erroDeBanco(error, "empresa/arquivar") }, { status: 500 });
   return NextResponse.json({ ok: true, acao: "arquivada" });
 }

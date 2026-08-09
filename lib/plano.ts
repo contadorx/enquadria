@@ -121,12 +121,17 @@ export function montarMuro(
   const proximo = s.usados + 1;
   return {
     titulo: `Você já emitiu ${s.usados} ${s.usados === 1 ? "laudo" : "laudos"}. Este é o ${proximo}º.`,
+    /* 08/08/2026: as duas linhas falavam só da ANÁLISE, que é o entregável da
+       minoria da carteira. O que o plano libera é o documento de TODO cliente —
+       laudo completo para quem decide, laudo curto para quem permanece, termo
+       assinado para os dois. O muro é a única superfície de conversão que este
+       produto tem: ele não pode vender menos do que o produto entrega. */
     linhas: conta
       ? [
-          "Uma única análise cobrada do seu cliente paga o Enquadria por um ano inteiro.",
+          "O plano libera o documento de todo cliente da carteira: laudo completo para quem tem decisão a tomar, laudo curto de permanência para quem não tem, e termo de ciência assinado para os dois.",
           `Referência da sua tela: ${moedaBR(conta.honorario)} por empresa · o plano anual custa ${moedaBR(conta.anual)}.`,
         ]
-      : ["Uma única análise cobrada do seu cliente paga o Enquadria por um ano inteiro."],
+      : ["O plano libera o documento de todo cliente da carteira: laudo completo para quem tem decisão a tomar, laudo curto de permanência para quem não tem, e termo de ciência assinado para os dois."],
     conta,
     nota_anual:
       "A opção é semestral: esta janela fecha em 30/09 e a mesma carteira volta à mesa na janela do primeiro semestre de 2027. O anual cobre as duas.",

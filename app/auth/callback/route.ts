@@ -75,6 +75,43 @@ export async function GET(req: Request) {
       const empresa = (Array.isArray(t) ? t[0]?.nome : t?.nome) ?? null;
       const tenantId = (perfil as { tenant_id?: string } | null)?.tenant_id;
 
+      /**
+       * O QUE A PESSOA DIGITOU NO CADASTRO CHEGA AO ESCRITÓRIO — 08/08/2026.
+       *
+       * O nome do escritório e o CRC são pedidos no `signUp` e ficam no
+       * metadado do usuário. O gatilho que cria o tenant é anterior a este
+       * repositório e nasce com o nome genérico "Escritório" — então a pessoa
+       * digitava o nome, confirmava o e-mail, e o painel abria dizendo
+       * "Escritório", com a trilha mandando preencher tudo de novo em
+       * Configurações. Dois campos digitados e jogados fora.
+       *
+       * A gravação é CONSERVADORA: só preenche o que ainda está no padrão ou
+       * vazio. Nunca sobrescreve o que já existe — reconfirmar o e-mail meses
+       * depois não pode reverter o nome que o escritório ajustou depois.
+       */
+      const meta = (user.user_metadata ?? {}) as { escritorio?: string; crc?: string };
+      const nomeAtual = (Array.isArray(t) ? t[0]?.nome : t?.nome) ?? "";
+      if (tenantId) {
+        const patch: Record<string, string> = {};
+        const nomeNovo = (meta.escritorio ?? "").trim();
+        const crcNovo = (meta.crc ?? "").trim();
+        if (nomeNovo && (!nomeAtual || nomeAtual === "Escritório")) patch.nome = nomeNovo;
+        if (crcNovo) patch.crc = crcNovo;
+        if (Object.keys(patch).length > 0) {
+          /* o CRC só entra se ainda não houver um: mesma regra do nome */
+          const { data: atual } = await supabase
+            .from("tenants")
+            .select("crc")
+            .eq("id", tenantId)
+            .maybeSingle();
+          if (atual?.crc && patch.crc) delete patch.crc;
+          if (Object.keys(patch).length > 0) {
+            const { error: errT } = await supabase.from("tenants").update(patch).eq("id", tenantId);
+            if (errT) console.error("[cadastro] escritório não preenchido:", errT.message);
+          }
+        }
+      }
+
       const r = await avisarContatia({
         evento: "cadastro_ativo",
         /* a chave é o TENANT, não o instante: reconfirmar o e-mail ou clicar

@@ -449,6 +449,38 @@ export function PainelEmpresa({
   }
 
   /**
+   * ENCERRAR O ACESSO POR UM LINK — 08/08/2026.
+   *
+   * O documento fica; o endereço para de abrir. É o que faltava para o
+   * reencaminhamento indevido ter conserto: até aqui, um link entregue era um
+   * link para sempre.
+   */
+  async function revogarLink(tabela: string, id: string) {
+    setOcupado("revogar");
+    setAvisoEnvio(null);
+    try {
+      const resp = await fetch("/api/documento/revogar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tabela, id }),
+      });
+      const json = await resp.json().catch(() => ({}));
+      setAvisoEnvio({
+        ok: resp.ok,
+        texto: (json.aviso as string) ?? (json.erro as string) ?? "não foi possível alterar o acesso",
+      });
+      if (resp.ok) mudou();
+    } catch {
+      setAvisoEnvio({
+        ok: false,
+        texto: "não foi possível falar com o servidor — o link continua como estava.",
+      });
+    } finally {
+      setOcupado(null);
+    }
+  }
+
+  /**
    * ENVIAR O LAUDO AO CLIENTE. Não emite: se o laudo não existe, o botão nem
    * aparece. Emitir por tabela furaria o gate de plano que vive em /api/laudo.
    */
@@ -711,6 +743,9 @@ export function PainelEmpresa({
             detalhesIniciais={daColeta?.detalhes ?? a?.parametros?.detalhes ?? null}
             segmentosIniciais={a?.parametros?.segmentos ?? null}
             custoInicial={a?.parametros?.custo_apuracao_anual ?? null}
+            /* o que esta tela leu ao abrir — o servidor usa para avisar quando
+               um colega grava a mesma empresa no meio (08/08/2026) */
+            calculadoEmInicial={a?.calculado_em ?? null}
             /* o formulário pergunta o CRESCIMENTO; a análise guarda a RBT12
                anterior. A volta é a mesma conta ao contrário, para reabrir
                mostrando o que foi respondido em vez de um campo vazio. */
@@ -751,6 +786,21 @@ export function PainelEmpresa({
                   >
                     Abrir laudo nº {String(d.laudo.numero).padStart(4, "0")}
                   </a>
+                )}
+                {/* CORTAR O LINK — 08/08/2026. Os documentos por token eram
+                    eternos e irrevogáveis: um endereço reencaminhado abria CNPJ
+                    e receita do cliente anos depois, e o contador não tinha
+                    saída nenhuma. Revogar não apaga o documento nem invalida
+                    assinatura — fecha a porta daquele endereço, e /verificar
+                    continua conferindo pelo número e pelo CNPJ. */}
+                {d.laudo && (
+                  <button
+                    onClick={() => void revogarLink("laudos", d.laudo!.id)}
+                    disabled={ocupado === "revogar"}
+                    className="rounded-sm border border-line px-3.5 py-2 text-[13px] font-semibold text-slate2 disabled:opacity-40"
+                  >
+                    {ocupado === "revogar" ? "…" : "Encerrar o link público"}
+                  </button>
                 )}
               </div>
               {estimada && !d.laudo && (
@@ -1015,6 +1065,20 @@ export function PainelEmpresa({
               do fim do ano. */}
           <Bloco titulo="Apontamentos da Reforma">
             <ApontamentosEmpresa empresaId={e.id} />
+            {/* O RELATÓRIO ANUAL SAI DAQUI (08/08/2026) — e é a peça de
+                renovação. O acompanhamento bem feito não deixa rastro: a maior
+                parte das normas termina em "analisado, não alcança esta
+                empresa", e o cliente nunca fica sabendo que houve trabalho.
+                Este link transforma o registro em papel com a marca do
+                escritório, que é o que se leva para a reunião de honorário. */}
+            <a
+              href={`/doc/anuario/${e.id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 inline-block rounded-sm border border-line px-3 py-2 text-[12.5px] font-semibold text-accentdeep"
+            >
+              Relatório do ano para o cliente →
+            </a>
           </Bloco>
 
           <Bloco titulo="Decisão registrada">

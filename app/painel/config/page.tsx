@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { AbasEscritorio } from "@/components/AbasEscritorio";
 import { NovaRodada } from "@/components/NovaRodada";
 import { COLUNAS_ESCRITORIO, type Escritorio } from "@/lib/escritorio";
+import Link from "next/link";
 
 export default function Config() {
   const router = useRouter();
@@ -168,13 +169,30 @@ export default function Config() {
             </p>
           )}
 
-          <button
-            onClick={salvar}
-            disabled={salvando}
-            className="rounded-sm bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
-          >
-            {salvando ? "Salvando…" : ok ? "Salvo ✓" : "Salvar"}
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={salvar}
+              disabled={salvando}
+              className="rounded-sm bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+            >
+              {salvando ? "Salvando…" : ok ? "Salvo ✓" : "Salvar"}
+            </button>
+            {/* A VOLTA PARA O TRABALHO — 08/08/2026.
+                Esta tela é o passo 1 da trilha: a pessoa é MANDADA para cá pelo
+                cockpit e, depois de salvar, ficava. Não havia link de volta,
+                nenhuma indicação de que o passo tinha fechado, nada. O caminho
+                que a trilha desenhou terminava num beco, e o próximo movimento
+                dependia de a pessoa achar "Cockpit" no menu lateral. O botão só
+                aparece DEPOIS de salvar, para não competir com o de salvar. */}
+            {ok && (
+              <Link
+                href="/painel"
+                className="rounded-sm border border-ink px-4 py-2.5 text-sm font-semibold text-ink"
+              >
+                Voltar ao cockpit →
+              </Link>
+            )}
+          </div>
 
           {/* o CRC não é enfeite: é o que fecha o passo 1 dos primeiros passos
               e o que dá credencial ao laudo. Dizer isso aqui evita a pessoa

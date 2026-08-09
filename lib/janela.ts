@@ -100,6 +100,37 @@ export interface FaseAtual {
   previsto: boolean;
 }
 
+/**
+ * O SUBTÍTULO DO COCKPIT — acrescentado em 08/08/2026.
+ *
+ * A linha embaixo de "Cockpit da carteira" era uma string fixa: "N de M
+ * clientes precisam decidir até 30 de setembro". Em março de 2027 ela ainda
+ * diria isso — o produto pedindo uma decisão cujo prazo passou há seis meses,
+ * ao lado de um selo que já sabia que a fase era outra. As seis fases existiam
+ * neste arquivo e a frase principal da tela não consultava nenhuma.
+ *
+ * O número de empresas é o mesmo em todas as fases: quem tem trabalho tem
+ * trabalho. O que muda é o prazo que faz aquele trabalho valer agora.
+ */
+export function chamadaDaCarteira(fase: Fase, decidem: number, importadas: number): string {
+  if (decidem <= 0) return `${importadas} clientes na carteira.`;
+
+  switch (fase) {
+    case "antes":
+      return `${decidem} de ${importadas} clientes precisam decidir na janela de setembro.`;
+    case "aberta":
+      return `${decidem} de ${importadas} clientes precisam decidir até 30 de setembro.`;
+    case "aliquota":
+      return `${decidem} de ${importadas} clientes seguem sem decisão registrada — e a alíquota de referência sai até 31/10.`;
+    case "cancelamento":
+      return `${decidem} de ${importadas} clientes sem decisão registrada. A opção ainda pode ser cancelada até 30/11.`;
+    case "efeito":
+      return `${decidem} de ${importadas} clientes entram na próxima janela sem decisão da anterior.`;
+    default:
+      return `${decidem} de ${importadas} clientes chegam à nova janela sem decisão registrada.`;
+  }
+}
+
 const fimDoDia = (iso: string) => new Date(iso + "T23:59:59Z").getTime();
 
 /**

@@ -4,6 +4,8 @@ import type { Escritorio } from "@/lib/escritorio";
 import { ComparativoFolha } from "@/components/ComparativoFolha";
 import type { ResultadoComparativo } from "@/lib/comparativo";
 import type { Metadata } from "next";
+import { situacaoDoLink } from "@/lib/token-validade";
+import { LinkEncerrado } from "@/components/LinkEncerrado";
 
 /**
  * NOINDEX NA PRÓPRIA PÁGINA — 08/08/2026.
@@ -42,10 +44,17 @@ export default async function ComparativoPublico({ params }: { params: { token: 
 
   const { data: doc } = await supabase
     .from("comparativos")
-    .select("numero, emitido_em, entrada, premissas, resultado, empresa_id, escritorio")
+    .select("numero, emitido_em, entrada, premissas, resultado, empresa_id, escritorio, token_expira_em, revogado_em")
     .eq("token", params.token)
     .maybeSingle();
   if (!doc) notFound();
+
+  /* O LINK TEM PRAZO — 08/08/2026. Antes da migration 0068 nenhum documento por
+     token tinha validade nem revogação: um endereço reencaminhado abria CNPJ e
+     receita de um cliente de terceiro anos depois. `notFound()` seria a resposta
+     errada aqui — o documento existe; o que acabou foi o acesso por este link. */
+  const situacao = situacaoDoLink(doc);
+  if (situacao !== "valido") return <LinkEncerrado motivo={situacao} tipo="comparativo" />;
 
   const { data: empresa } = doc.empresa_id
     ? await supabase

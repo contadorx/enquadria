@@ -83,6 +83,16 @@ try {
     "lib/recalculo.ts", "lib/slug.ts", "lib/reforma-publica.ts", "lib/radar.ts", "lib/radar-form.ts", "lib/radar-aviso.ts", "lib/digest.ts", "lib/reforma.ts",
     "lib/novidade.ts", "lib/mailer/templates.ts", "lib/entrega.ts", "lib/passos.ts", "lib/funil.ts",
     "lib/venda.ts", "lib/proposta.ts", "lib/entrega-garantida.ts",
+    /* a receita única dos parâmetros congelados: três rotas gravam análise, e
+       o que não for congelado aqui não aparece no laudo — que é prova e não
+       recalcula nada */
+    "lib/parametros-analise.ts",
+    /* a carteira da página pública /exemplo: afirmação verificável precisa de teste */
+    "lib/exemplo.ts",
+    /* a frase do produto: sete proposições foi o defeito, uma é a decisão */
+    "lib/proposta-de-valor.ts",
+    /* o relatório anual: números que vão para a mesa do cliente do contador */
+    "lib/anuario.ts",
   ];
   const cfg = path.join(RAIZ, "tsconfig.testes.json");
   fs.writeFileSync(cfg, JSON.stringify({
@@ -129,6 +139,10 @@ const laudo = await import(path.join(TMP, "laudo.js"));
 const triagem = await import(path.join(TMP, "triagem.js"));
 const csvlib = await import(path.join(TMP, "csv.js"));
 const coleta = await import(path.join(TMP, "coleta.js"));
+/* a regra de "o que o clique faz e onde ele cai" vive em lib/cockpit.ts desde
+   08/08/2026 — antes era ternário escrito na tela e um mapa morto que dizia o
+   contrário */
+const cockLib = await import(path.join(TMP, "cockpit.js"));
 
 /* ============================================ 1. SUÍTES DE FUNÇÃO PURA == */
 secao("Suítes de função pura");
@@ -1312,8 +1326,14 @@ secao("Contratação — o clique que não fazia nada");
     ok("...com chave idempotente por escritório",
        /chaveDe\("cadastro_ativo", tenantId \?\? user\.id\)/.test(cb));
     /* falha do CRM não pode impedir alguém de entrar no produto */
+    /* 08/08/2026: a versão anterior media a DISTÂNCIA em caracteres entre o
+       `try {` e o `avisarContatia` (900 no máximo). Isso não testava a
+       propriedade — testava o tamanho do bloco: acrescentar qualquer coisa
+       dentro do mesmo try quebrava o teste sem que nada tivesse piorado. Agora
+       o bloco é extraído e a pergunta é a certa: a chamada está DENTRO dele? */
+    const blocoTry = cb.slice(cb.indexOf("try {"), cb.lastIndexOf("} catch"));
     ok("...dentro de try/catch, sem segurar o redirecionamento",
-       /try \{[\s\S]{0,900}avisarContatia[\s\S]{0,600}\} catch/.test(cb));
+       blocoTry.includes("avisarContatia") && /\} catch/.test(cb));
 
     const wh4 = fs.readFileSync(path.join(RAIZ, "app/api/asaas/route.ts"), "utf8");
     ok("quem paga vira 'Cliente', com evento próprio",
@@ -1466,6 +1486,144 @@ ok("parseAnexo lê dígito", csvlib.parseAnexo("2") === 2);
 ok("parseAnexo recusa lixo", csvlib.parseAnexo("x") === undefined);
 ok("parseAnexo recusa fora da faixa 1..5", csvlib.parseAnexo("9") === undefined);
 
+/* ═══ O CSV QUE SOBROU (08/08/2026) ════════════════════════════════════════
+   Cinco defeitos do mesmo tipo: o arquivo é lido, alguma coisa se perde, e
+   NADA na tela conta. Os quatro primeiros grupos guardam consertos do parser;
+   o último lê a tela, porque o defeito era ela contradizer o parser.
+
+   Estes casos rodam SEMPRE, sem depender do CSV de conferência — foi debaixo
+   dessa dependência que a coluna de anexo passou despercebida. ═════════════ */
+secao("O CSV que sobrou: coluna trocada, linha perdida e aviso engolido");
+{
+  /* ── 1 · COLISÃO DE SINÔNIMO: a coluna que parece outra ─────────────────
+     "Inscrição Estadual" casava `cnpj` pelo sinônimo "inscricao". Vindo ANTES
+     do CNPJ no arquivo ela ficava com a vaga, todo documento era inválido, e
+     como `colunas_reconhecidas.cnpj` existia o erro específico não disparava:
+     o contador lia "confira os 14 dígitos" sobre documentos corretos. */
+  const cIE = cabecalhoDe("Inscrição Estadual;CNPJ;Razão Social\n123456789;33.000.167/0001-01;ACME");
+  ok("'Inscrição Estadual' NÃO ocupa a vaga do CNPJ, mesmo vindo antes",
+     cIE.cnpj === "CNPJ", cIE);
+  ok("...e a coluna vetada aparece na lista do que não usei (visível, não sumida)",
+     csvlib.parsearCarteira("Inscrição Estadual;CNPJ\n123;33.000.167/0001-01")
+       .colunas_ignoradas.includes("Inscrição Estadual"));
+  ok("'Inscrição Municipal' também não vira CNPJ",
+     cabecalhoDe("CNPJ;Inscrição Municipal\n33.000.167/0001-01;99").cnpj === "CNPJ");
+  ok("e o cabeçalho 'CNPJ' continua sendo CNPJ (o veto não pode comer o certo)",
+     cabecalhoDe("CNPJ\n33.000.167/0001-01").cnpj === "CNPJ");
+
+  /* nome fantasia não tem valor jurídico e ia para a capa do laudo e do termo */
+  const cNF = cabecalhoDe("CNPJ;Nome Fantasia;Razão Social\n33.000.167/0001-01;Padaria da Ana;Ana Alimentos ME");
+  ok("'Nome Fantasia' não vence 'Razão Social' quando as duas existem",
+     cNF.razao_social === "Razão Social", cNF);
+  const soFantasia = csvlib.parsearCarteira("CNPJ;Nome Fantasia\n33.000.167/0001-01;Padaria da Ana");
+  ok("...e sozinha ela também não vira razão social — o nome vem da Receita",
+     !soFantasia.colunas_reconhecidas.razao_social &&
+     soFantasia.linhas[0].razao_social === "(sem razão social)", soFantasia.linhas[0].razao_social);
+
+  /* o contador do escritório virava o signatário do termo do cliente dele */
+  const cCT = cabecalhoDe("CNPJ;Contador Responsável;Responsável\n33.000.167/0001-01;João;Maria");
+  ok("'Contador Responsável' não vira o signatário do termo do cliente",
+     cCT.contato_nome === "Responsável", cCT);
+  ok("...e 'Responsável' sozinho continua sendo o contato",
+     cabecalhoDe("CNPJ;Responsável\n33.000.167/0001-01;Maria").contato_nome === "Responsável");
+
+  /* ── 2 · A LINHA DESCARTADA TEM NOME ────────────────────────────────────
+     "2 descartadas" numa carteira de 300 é a mesma informação que nada: o
+     contador sabe que perdeu clientes e não sabe quais nem onde corrigir. */
+  const rej = csvlib.parsearCarteira(
+    "CNPJ;Razão Social\n11.222.333/0001-99;Padaria Aurora\n07.526.557/0001-00;Casa Nova\n" +
+    "07.526.557/0001-00;Casa Nova 2\nxxx;"
+  );
+  ok("a lista de rejeitadas nomeia o CNPJ com DV inválido",
+     rej.rejeitadas[0].motivo === "cnpj_invalido" &&
+     rej.rejeitadas[0].razao_social === "Padaria Aurora", rej.rejeitadas[0]);
+  ok("...com o documento COMO VEIO no arquivo, que é como ele o acha na planilha",
+     rej.rejeitadas[0].cnpj_bruto === "11.222.333/0001-99", rej.rejeitadas[0].cnpj_bruto);
+  ok("...a repetida entra com o motivo 'duplicada'",
+     rej.rejeitadas[1].motivo === "duplicada" && rej.rejeitadas[1].razao_social === "Casa Nova 2",
+     rej.rejeitadas[1]);
+  ok("...razão social vazia vira null, e não string vazia (a tela decide o rótulo)",
+     rej.rejeitadas[2].razao_social === null, rej.rejeitadas[2]);
+  ok("...e os contadores agregados continuam batendo com a lista",
+     rej.descartadas === 2 && rej.duplicadas === 1 &&
+     rej.rejeitadas.length === rej.descartadas + rej.duplicadas,
+     [rej.descartadas, rej.duplicadas, rej.rejeitadas.length]);
+
+  /* a lista tem teto; a CONTAGEM não pode ter — ela é o que vai para o banco */
+  const muitas = csvlib.parsearCarteira(
+    "CNPJ\n" + Array.from({ length: 60 }, (_, i) => `1122233300019${i % 10}`).join("\n")
+  );
+  ok("60 linhas ruins: a lista para em 50 e a contagem segue exata",
+     muitas.rejeitadas.length === 50 && muitas.descartadas + muitas.duplicadas === 60,
+     [muitas.rejeitadas.length, muitas.descartadas, muitas.duplicadas]);
+
+  /* ── 3 · `parsed.errors` ERA DESCARTADO ─────────────────────────────────
+     Uma aspa aberta e não fechada engole o resto do arquivo dentro de um campo
+     só: o parse termina sem lançar nada, a carteira de 300 chega com 1, e a
+     tela comemora. O aviso do papaparse existia e ninguém lia. */
+  const aspas = csvlib.parsearCarteira(
+    'CNPJ;Razão Social\n33.000.167/0001-01;"Padaria Aurora\n07.526.557/0001-00;Casa Nova\n22.333.444/0001-81;Vale Verde'
+  );
+  ok("aspas abertas: o arquivo trunca e agora a tela tem o que dizer",
+     aspas.linhas.length === 1 && aspas.erros_leitura.length === 1,
+     [aspas.linhas.length, aspas.erros_leitura]);
+  ok("...o aviso está em português e cita a linha do ARQUIVO, não o índice",
+     /^Linha 2: /.test(aspas.erros_leitura[0]) && /aspas/.test(aspas.erros_leitura[0]),
+     aspas.erros_leitura[0]);
+  ok("...e não sobrou inglês do papaparse",
+     !/quoted|field|delimiter/i.test(aspas.erros_leitura[0]), aspas.erros_leitura[0]);
+  const sobra = csvlib.parsearCarteira("CNPJ,Razão Social\n33.000.167/0001-01,ACME,sobra\n07.526.557/0001-00,Casa Nova");
+  ok("linha com mais colunas que o cabeçalho também é relatada, com a linha",
+     /^Linha 2: .*colunas/.test(sobra.erros_leitura[0] ?? ""), sobra.erros_leitura);
+  ok("arquivo bem formado não inventa aviso nenhum",
+     csvlib.parsearCarteira("CNPJ;Razão Social\n33.000.167/0001-01;ACME").erros_leitura.length === 0);
+
+  /* ── 4 · RBT12 ABAIXO DE MIL, RECUSADO EM SILÊNCIO ──────────────────────
+     A regra do parser NÃO muda: sem o corte de R$ 1.000, o "3" de uma coluna
+     de faixa viraria receita. O que faltava era a tela distinguir "o arquivo
+     não tem RBT12" de "o arquivo tem e eu recusei todos". */
+  ok("parseValorBRL('480') segue recusado — a regra não foi afrouxada",
+     csvlib.parseValorBRL("480") === undefined, csvlib.parseValorBRL("480"));
+  ok("parseValorBRL('480000') segue aceito", csvlib.parseValorBRL("480000") === 480000);
+  ok("parseValorBRL('1.200.000,00') segue aceito", csvlib.parseValorBRL("1.200.000,00") === 1200000);
+  ok("pareceValorEmMilhares reconhece o número pequeno", csvlib.pareceValorEmMilhares("480") === true);
+  ok("...e não confunde faixa textual com valor em milhares",
+     csvlib.pareceValorEmMilhares("acima de 3,6mi") === false);
+  const mil = csvlib.parsearCarteira("CNPJ;RBT12\n33.000.167/0001-01;480\n07.526.557/0001-00;220");
+  ok("planilha em milhares: nenhum RBT12 aceito, e a tela sabe por quê",
+     mil.rbt12_recusados === 2 && mil.rbt12_em_milhares === 2 &&
+     mil.linhas.every((l) => l.rbt12 === undefined),
+     [mil.rbt12_recusados, mil.rbt12_em_milhares]);
+  const faixa = csvlib.parsearCarteira("CNPJ;Faturamento\n33.000.167/0001-01;acima de 3,6mi");
+  ok("faixa textual conta como recusada, mas NÃO como milhares",
+     faixa.rbt12_recusados === 1 && faixa.rbt12_em_milhares === 0,
+     [faixa.rbt12_recusados, faixa.rbt12_em_milhares]);
+  ok("RBT12 de verdade não acusa nada",
+     csvlib.parsearCarteira("CNPJ;RBT12\n33.000.167/0001-01;480000").rbt12_recusados === 0);
+
+  /* ── 5 · A TELA CONTRADIZIA O PARSER ────────────────────────────────────
+     Ela dizia "Só o CNPJ é obrigatório" e, seis linhas acima, marcava a razão
+     social como essencial: chip vermelho e rodapé no plural. O parser nunca
+     barrou a falta do nome. Vermelho gasto em campo opcional ensina a ignorar
+     vermelho — inclusive o do CNPJ, que barra de verdade. */
+  const imp = fs.readFileSync(path.join(RAIZ, "components/Importador.tsx"), "utf8");
+  ok("só o CNPJ é marcado como essencial na tabela de campos",
+     (imp.match(/essencial: true/g) || []).length === 1,
+     (imp.match(/essencial: true/g) || []).length);
+  ok("a razão social não é mais campo essencial",
+     !/chave: "razao_social"[^\n]*essencial/.test(imp));
+  ok("o rodapé da tabela fala de UM obrigatório", /\* o único obrigatório/.test(imp));
+  ok("e a frase de sempre continua dizendo a mesma coisa",
+     /Só o CNPJ é obrigatório/.test(imp));
+
+  /* a tela precisa MOSTRAR o que o parser passou a devolver, senão o conserto
+     morre na metade do caminho */
+  ok("a tela lista quem ficou de fora", /parse\.rejeitadas/.test(imp) && /MOTIVO_REJEICAO/.test(imp));
+  ok("a tela mostra os avisos de leitura do arquivo", /parse\.erros_leitura/.test(imp));
+  ok("a tela explica o RBT12 recusado em bloco e sugere os milhares",
+     /rbt12_recusados/.test(imp) && /milhares/.test(imp));
+}
+
 /* ══ A ABA SEGUE A AÇÃO, E A TELA DIZ O QUE FAZER (07/08/2026) ═════════════
    "Confirmar premissas" abria o Dossiê quando a gaveta já estava aberta:
    `useState(abaInicial)` lê a prop uma vez, e a gaveta não desmonta entre um
@@ -1478,8 +1636,22 @@ secao("Primeiro acesso da empresa: a aba certa e a instrução certa");
      /useEffect\(\s*\(\)\s*=>\s*\{\s*setAba\(abaInicial\);?\s*\}\s*,\s*\[abaInicial\]\)/.test(painel));
 
   const cock = fs.readFileSync(path.join(RAIZ, "components/Cockpit.tsx"), "utf8");
+  /* 08/08/2026: a regra saiu do ternário escrito no Cockpit e virou o mapa
+     `DESTINO_DA_ACAO`, em lib/cockpit.ts — a mesma fonte que a Trilha lê. Havia
+     TRÊS cópias da mesma decisão (Cockpit, Trilha e um `ACAO_ABRE_GAVETA` sem
+     nenhum importador, que declarava o oposto das outras duas). Este teste
+     passa a conferir o mapa, que é o que agora governa o clique. */
   ok("a ação de confirmar/analisar abre a ANÁLISE, não o dossiê",
-     /aba:\s*l\.acao === "contato" \|\| l\.acao === "fora" \? "dossie" : "decisao"/.test(cock));
+     cockLib.DESTINO_DA_ACAO.confirmar.aba === "decisao" &&
+     cockLib.DESTINO_DA_ACAO.analisar.aba === "decisao",
+     cockLib.DESTINO_DA_ACAO.confirmar);
+  ok("...e 'cadastrar contato' abre o DOSSIÊ, que é onde o dado que falta mora",
+     cockLib.DESTINO_DA_ACAO.contato.aba === "dossie", cockLib.DESTINO_DA_ACAO.contato);
+  ok("sem trabalho pendente não há destino — o botão fica apagado",
+     cockLib.DESTINO_DA_ACAO.pronto.tipo === "nenhum" &&
+     cockLib.DESTINO_DA_ACAO.fora.tipo === "nenhum");
+  ok("o Cockpit LÊ o mapa em vez de reescrever a regra",
+     /DESTINO_DA_ACAO\[l\.acao\]/.test(cock));
   ok("clicar no nome de empresa SEM análise leva ao formulário",
      /aba:\s*l\.analise_id \? "dossie" : "decisao"/.test(cock));
 
@@ -1855,6 +2027,394 @@ function montarPreviaColeta() {
     <div id="p${i + 1}">${p.opcoes.map((o) =>
       `<button>${o.rotulo}${o.equivale ? `<span> ${o.equivale}</span>` : ""}</button>`).join("")}</div>`;
   return `<!doctype html><meta charset="utf-8"><body>${PERGUNTAS.map(bloco).join("")}</body>`;
+}
+
+/* ══ O PRODUTO ATRAVESSA OUTUBRO? (08/08/2026) ═══════════════════════════════
+   Três defeitos desta frente tinham a mesma forma: a regra existia, estava
+   certa, e a tela não a consultava. As fases da janela existiam e o subtítulo
+   do cockpit era string fixa. O carimbo do laudo tinha `fixada: false` cravado,
+   então publicar a Resolução do Senado deixaria o documento dizendo
+   "estimativa, prazo até 31/10/2026" embaixo de um número que já é norma. E a
+   rodada nova gravava seis campos, produzindo um laudo mais pobre justamente
+   na revisão que o produto vende por e-mail.
+   Testar aqui é barato; descobrir em novembro, não. */
+secao("Depois da janela — a frase, o carimbo e a segunda rodada");
+{
+  const janela = await import(path.join(TMP, "janela.js"));
+  const params = await import(path.join(TMP, "parametros-analise.js"));
+
+  /* a frase principal da tela segue a fase — antes dizia "até 30 de setembro"
+     em março de 2027, ao lado de um selo que já sabia que a fase era outra */
+  const frase = (f) => janela.chamadaDaCarteira(f, 12, 40);
+  ok("na janela aberta, a frase cita 30 de setembro",
+     /30 de setembro/.test(frase("aberta")), frase("aberta"));
+  ok("na fase da alíquota, ela para de citar setembro e cita 31/10",
+     !/30 de setembro/.test(frase("aliquota")) && /31\/10/.test(frase("aliquota")), frase("aliquota"));
+  ok("na fase de cancelamento, cita o prazo de 30/11",
+     /30\/11/.test(frase("cancelamento")), frase("cancelamento"));
+  ok("em 'proxima', fala da nova janela e não do prazo vencido",
+     /nova janela/.test(frase("proxima")) && !/30 de setembro/.test(frase("proxima")), frase("proxima"));
+  ok("sem trabalho na fila, a frase é só a contagem da carteira",
+     janela.chamadaDaCarteira("aberta", 0, 40) === "40 clientes na carteira.");
+
+  /* o carimbo impresso no laudo passa a saber quando o número virou norma */
+  const semNorma = motor.carimboAliquota(0.088, "2026-08-08T00:00:00Z");
+  ok("sem origem, o carimbo é o de hoje: estimativa, não fixada",
+     semNorma.fixada === false && /Resolução do Senado/.test(semNorma.fonte));
+  const comNorma = motor.carimboAliquota(0.091, "2026-11-02T00:00:00Z", {
+    fixada: true, fonte: "Resolução do Senado Federal nº 55/2026",
+  });
+  ok("com a norma publicada, o carimbo cita a norma e marca fixada",
+     comNorma.fixada === true && comNorma.fonte === "Resolução do Senado Federal nº 55/2026", comNorma.fonte);
+  ok("...e a nota do cenário alternativo deixa de chamá-lo de estimativa declarada",
+     !/sensibilidade declarada/.test(comNorma.nota_alternativa), comNorma.nota_alternativa);
+
+  /* a segunda rodada não pode gerar laudo mais pobre que a primeira: o laudo
+     não recalcula nada, então o que não for congelado aqui não sai no papel */
+  const respostas = { pj: 0.7, credito: 0.8, preco: 3, folha: 0.2 };
+  const { resultado, parametros } = params.calcularEcongelar({
+    respostas, anexo: 1, rbt12: 1_200_000, exercicio: 2027, param: null,
+    origemPremissas: params.ORIGEM_RODADA, agora: "2026-11-02T00:00:00Z",
+  });
+  for (const campo of ["cenarios", "sensibilidade", "dinheiro", "carimbo", "partilha",
+                       "motivo", "fator_r", "origens", "motor", "ddas", "rqMin", "absorcaoMax"]) {
+    ok(`a rodada nova congela '${campo}' — o laudo lê e não recalcula`,
+       parametros[campo] !== undefined, parametros[campo]);
+  }
+  ok("...e devolve o resultado do motor junto, para não calcular duas vezes",
+     !!resultado.saida, resultado.saida);
+  ok("os dois cenários de alíquota vão no congelado", Array.isArray(parametros.cenarios) && parametros.cenarios.length >= 2,
+     parametros.cenarios?.length);
+
+  /* a alíquota do banco manda sobre a constante — era o que não tinha porta */
+  const comBanco = params.calcularEcongelar({
+    respostas, anexo: 1, rbt12: 1_200_000, exercicio: 2027,
+    param: { aliquota_cbs: 0.09, aliquota_ibs: 0.001, corte_s1: 0, fronteira_min: 0.8,
+             fronteira_max: 1.2, fixada: true, fonte: "Resolução do Senado Federal nº 55/2026" },
+    origemPremissas: "contador", agora: "2026-11-02T00:00:00Z",
+  }).parametros;
+  ok("a alíquota publicada no banco vence a constante do motor",
+     Math.abs(comBanco.aliquota - 0.091) < 1e-9, comBanco.aliquota);
+  ok("...e a procedência dela viaja para o carimbo do laudo",
+     comBanco.carimbo.fixada === true, comBanco.carimbo);
+}
+
+/* ══ O ANUÁRIO — a peça de renovação (08/08/2026) ═══════════════════════════
+   "Virou serviço" era só um rótulo: mudava a cor do botão e a informação
+   morria ali. O que estes casos guardam é o comportamento de um documento que
+   vai para a MESA DO CLIENTE do contador — e onde um número errado não é um bug
+   de tela, é o escritório cobrando por trabalho que não fez.
+
+   Três invariantes: o total só soma o que foi declarado; o trabalho invisível
+   (analisado e descartado) aparece; e o corte de período segue a data do FATO,
+   não a do registro. */
+secao("O anuário — o que a Reforma exigiu no ano");
+{
+  const an = await import(path.join(TMP, "anuario.js"));
+  const P = an.anoCivil(2026);
+  const materia = (titulo) => ({ titulo, resumo: null, o_que_fazer: "providência", fonte: "Res. X", severidade: "alta", publicado_em: null, vigencia_em: null });
+  const ponto = (o) => ({
+    id: o.id ?? "p", status: o.status, nota: o.nota ?? null,
+    criado_em: o.criado_em ?? "2026-03-10T00:00:00Z",
+    tratado_em: o.tratado_em ?? null, virou_servico_em: o.virou_servico_em ?? null,
+    honorario_centavos: o.honorario ?? null, materia: materia(o.titulo ?? "Norma"),
+  });
+
+  const base = [
+    ponto({ id: "1", status: "virou_servico", virou_servico_em: "2026-05-02T00:00:00Z", honorario: 35000 }),
+    ponto({ id: "2", status: "virou_servico", virou_servico_em: "2026-06-02T00:00:00Z" }), // sem valor
+    ponto({ id: "3", status: "nao_se_aplica", tratado_em: "2026-04-01T00:00:00Z" }),
+    ponto({ id: "4", status: "superado", tratado_em: "2026-04-02T00:00:00Z" }),
+    ponto({ id: "5", status: "novo" }),
+  ];
+  const a = an.montarAnuario(base, [], P);
+
+  ok("conta as normas que alcançaram a empresa no ano", a.pontos === 5, a.pontos);
+  ok("o TRABALHO INVISÍVEL aparece: analisado e descartado é resultado",
+     a.descartados === 2, a.descartados);
+  ok("conta os serviços prestados", a.servicos === 2, a.servicos);
+  ok("o total soma SÓ o que foi declarado", a.honorario_centavos === 35000, a.honorario_centavos);
+  ok("...e diz quantos ficaram sem valor, em vez de esconder num total incompleto",
+     a.servicos_sem_valor === 1, a.servicos_sem_valor);
+  ok("o que segue em aberto é contado à parte", a.abertos === 1, a.abertos);
+  ok("as linhas saem em ordem de tempo",
+     a.linhas.map((l) => l.quando.slice(0, 7)).join("|") === "2026-03|2026-04|2026-04|2026-05|2026-06",
+     a.linhas.map((l) => l.quando.slice(0, 10)));
+
+  /* o desfecho é escrito para o EMPRESÁRIO: "nao_se_aplica" é vocabulário de
+     fila de trabalho e não pode chegar ao papel */
+  const textos = a.linhas.map((l) => l.desfecho).join(" ");
+  ok("nenhum estado interno vaza para o documento",
+     !/nao_se_aplica|virou_servico|superado|\bnovo\b/.test(textos), textos);
+  ok("o descarte é dito como trabalho feito, não como ausência",
+     /não alcança esta empresa/.test(an.desfechoDoPonto("nao_se_aplica").texto));
+  ok("só 'virou serviço' é marcado como cobrável",
+     an.desfechoDoPonto("virou_servico").cobravel === true &&
+     an.desfechoDoPonto("tratado").cobravel === false);
+
+  /* a nota do contador sobre AQUELE cliente vence o texto genérico da norma */
+  const comNota = an.montarAnuario(
+    [ponto({ id: "n", status: "tratado", tratado_em: "2026-07-01T00:00:00Z", nota: "migramos o emissor em 12/07" })],
+    [], P
+  );
+  ok("a nota do contador vence o texto genérico da norma",
+     comNota.linhas[0].detalhe === "migramos o emissor em 12/07", comNota.linhas[0].detalhe);
+
+  /* o corte é pela data do FATO: tratar em janeiro de 2027 um ponto criado em
+     dezembro de 2026 tem de aparecer no anuário de 2027, senão o trabalho de
+     janeiro some do relatório do ano em que foi feito */
+  const virada = [ponto({ id: "v", status: "tratado", criado_em: "2026-12-20T00:00:00Z", tratado_em: "2027-01-15T00:00:00Z" })];
+  ok("o ponto tratado em 2027 NÃO entra no anuário de 2026",
+     an.montarAnuario(virada, [], an.anoCivil(2026)).pontos === 0);
+  ok("...e entra no de 2027, que é quando o trabalho aconteceu",
+     an.montarAnuario(virada, [], an.anoCivil(2027)).pontos === 1);
+
+  /* documentos: a prova material do serviço, recortada pelo mesmo período */
+  const docs = [
+    { tipo: "laudo", numero: 7, em: "2026-09-15T00:00:00Z" },
+    { tipo: "termo", numero: null, em: "2025-09-15T00:00:00Z", assinado: true },
+  ];
+  ok("os documentos são recortados pelo período do relatório",
+     an.montarAnuario([], docs, P).documentos.length === 1);
+
+  /* a abertura: o caso mais difícil de cobrar é aquele em que nada precisou
+     ser feito, e é o que o cliente mais confunde com "não fizeram nada" */
+  const vazio = an.montarAnuario([], [], P);
+  const aberturaVazia = an.aberturaDoAnuario(vazio, "ACME LTDA");
+  ok("sem nenhuma norma, a abertura afirma o acompanhamento em vez de calar",
+     /nenhuma das normas/.test(aberturaVazia) && /também é resultado/.test(aberturaVazia), aberturaVazia);
+  const abertura = an.aberturaDoAnuario(a, "ACME LTDA");
+  ok("com movimento, a abertura cita o volume, o descarte e os serviços",
+     /5 normas/.test(abertura) && /2 foram analisadas/.test(abertura) && /2 viraram serviços/.test(abertura),
+     abertura);
+
+  /* a carteira: a pergunta que o próprio código dizia não saber responder */
+  const carteira = an.resumirCarteira([
+    { empresa_id: "e1", nome: "ACME", anuario: a },
+    { empresa_id: "e2", nome: "BETA", anuario: an.montarAnuario([ponto({ id: "b", status: "virou_servico", virou_servico_em: "2026-08-01T00:00:00Z", honorario: 90000 })], [], P) },
+    { empresa_id: "e3", nome: "SEM NADA", anuario: vazio },
+  ], P);
+  ok("empresa sem nenhum ponto não entra na conta da carteira",
+     carteira.empresas_tocadas === 2, carteira.empresas_tocadas);
+  ok("o total da carteira é a soma do declarado",
+     carteira.honorario_centavos === 125000, carteira.honorario_centavos);
+  ok("os destaques vêm por dinheiro, para a conversa de renovação começar certo",
+     carteira.destaques[0].nome === "BETA", carteira.destaques.map((d) => d.nome));
+  ok("e os serviços sem valor continuam visíveis no consolidado",
+     carteira.servicos_sem_valor === 1, carteira.servicos_sem_valor);
+
+  ok("R$ sai redondo — honorário não se fala em centavos",
+     an.emReaisRedondos(125000) === "R$ 1.250", an.emReaisRedondos(125000));
+
+  /* a ressalva é o que impede o total de ser lido como cobrança, economia ou
+     promessa — as três leituras erradas de um número num papel com marca */
+  ok("a ressalva nega apuração, cobrança e promessa de resultado",
+     /não constitui apuração fiscal/.test(an.RESSALVA_ANUARIO) &&
+     /cobrança/.test(an.RESSALVA_ANUARIO) &&
+     /resultado futuro/.test(an.RESSALVA_ANUARIO));
+  ok("...e deixa claro que o valor foi informado pelo escritório",
+     /informados pelo próprio escritório/.test(an.RESSALVA_ANUARIO));
+}
+
+/* ================================ 12. O QUE SOBRA DEPOIS DA JANELA ======= */
+secao("Radar sem critério e o calendário depois de setembro");
+{
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * ALERTA SEM CRITÉRIO ALCANÇAVA A BASE INTEIRA — 08/08/2026.
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * `afeta()` devolve `true` quando o critério não tem nenhuma dimensão — a
+   * leitura certa para a aba Reforma, que é feed. No cockpit ela vira outra
+   * coisa: o item publicado assim gera um apontamento para CADA empresa de
+   * CADA escritório, e a fila de trabalho de todo mundo abre com o mesmo
+   * aviso. A validação já DESCREVIA isso ("Alcança TODAS as empresas de todos
+   * os escritórios") e não bloqueava nada — descrever o estrago não impede o
+   * estrago.
+   */
+  const rf = await import(path.join(TMP, "radar-form.js"));
+
+  const rascunho = (x = {}) => ({
+    titulo: "Resolução fixa a janela de setembro",
+    resumo: "A opção por apurar IBS/CBS fora do DAS vai de 1º a 30 de setembro de 2026.",
+    o_que_fazer: "Abra a carteira e separe quem vende para PJ antes do dia 30.",
+    fonte: "https://www.gov.br/receitafederal",
+    publicado_em: "2026-08-05", vigencia_em: "2026-09-01",
+    severidade: "alta", criterio: {}, ativo: true, no_cockpit: true, ...x,
+  });
+
+  ok("alerta sem critério nenhum NÃO publica",
+     rf.bloqueado(rf.validar(rascunho())),
+     rf.validar(rascunho()));
+
+  ok("...e o erro diz o tamanho do estrago e a saída",
+     rf.validar(rascunho()).some((p) => p.bloqueia && /todos os escritórios/.test(p.texto) && /notícia/.test(p.texto)),
+     rf.validar(rascunho()));
+
+  ok("com uma dimensão preenchida, o alerta volta a publicar",
+     !rf.bloqueado(rf.validar(rascunho({ criterio: { anexos: [3] } }))),
+     rf.validar(rascunho({ criterio: { anexos: [3] } })));
+
+  ok("faixa, saída, CNAE ou 'só com análise' bastam — não é o anexo que salva",
+     [{ faixas: ["A"] }, { saidas: ["S4"] }, { divisoes_cnae: ["62"] }, { somente_com_analise: true }]
+       .every((c) => !rf.bloqueado(rf.validar(rascunho({ criterio: c })))));
+
+  /* notícia é feed, não fila: continua podendo valer para todo mundo */
+  ok("notícia sem critério continua publicando — quem decide é o no_cockpit",
+     !rf.bloqueado(rf.validar(rascunho({ no_cockpit: false }))),
+     rf.validar(rascunho({ no_cockpit: false })));
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * A DATA DA PRÓXIMA JANELA EM DOIS LUGARES — 08/08/2026.
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * `lib/reguas.ts` tinha `const MARCOS_PROXIMA = "2027-03"`, cópia à mão do
+   * `MARCOS.proxima_prevista` de `lib/janela.ts`. As duas nunca são lidas
+   * juntas: uma decide quando a fase vira, a outra entra na chave de dedupe.
+   * Mudar a de lá quando a data for publicada e esquecer a daqui não dá erro
+   * — a fase muda no dia certo e a chave carimba o mês antigo, então o aviso
+   * da janela nova não sai para quem recebeu o da anterior.
+   */
+  {
+    const src = fs.readFileSync(path.join(RAIZ, "lib/reguas.ts"), "utf8");
+    ok("a chave de dedupe não repete a data da próxima janela à mão",
+       !/MARCOS_PROXIMA\s*=\s*["']\d{4}-\d{2}/.test(src),
+       "achei a data escrita à mão em lib/reguas.ts");
+    ok("...ela é derivada do MARCOS de lib/janela.ts",
+       /import\s*\{[^}]*\bMARCOS\b[^}]*\}\s*from\s*["']\.\/janela["']/.test(src) &&
+       /MARCOS_PROXIMA\s*=\s*MARCOS\.proxima_prevista/.test(src),
+       "não achei a derivação de MARCOS.proxima_prevista");
+  }
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * O SILÊNCIO QUE COMEÇAVA EM 02/03/2027.
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * A categoria `janela` cobria `aliquota`, `cancelamento` e `efeito`. A fase
+   * `proxima` — para onde o calendário vai e onde ele fica, já que não há fase
+   * depois dela — não tinha régua nenhuma: dali em diante sobravam cutucada de
+   * inatividade e cobrança.
+   */
+  {
+    const src = fs.readFileSync(path.join(RAIZ, "lib/reguas.ts"), "utf8");
+    ok("a fase `proxima` tem régua no planejador",
+       /f\.fase\s*===\s*["']proxima["']/.test(src) && /monta\(\s*\n?\s*["']nova_janela["']/.test(src),
+       "não achei o disparo da régua `nova_janela` na fase proxima");
+
+    const mig = path.join(RAIZ, "supabase/migrations/0069_regua_da_proxima_janela.sql");
+    const sql = fs.existsSync(mig) ? fs.readFileSync(mig, "utf8") : "";
+    ok("o texto da régua nova está no banco, não no código",
+       sql.includes("'nova_janela'") && /on conflict \(chave\) do nothing/.test(sql),
+       sql === "" ? "migration 0069 não encontrada" : "faltou a chave ou o on conflict");
+    ok("e o e-mail da janela prevista não promete resultado nem anuncia data não publicada",
+       sql !== "" && !/economia|economizar|garantid[ao]|blindagem/i.test(sql) &&
+       /depende de publicação/.test(sql),
+       "o corpo da régua promete resultado ou trata a previsão como norma");
+  }
+}
+
+/* ══ A PÁGINA QUE PROVA QUE O PRODUTO NÃO MENTE (08/08/2026) ═══════════════
+   `/exemplo` é pública e o argumento dela é "confira com os seus olhos". Ela
+   afirmava, em `lib/exemplo.ts` e na própria tela, que os CNPJs fictícios têm
+   dígito verificador válido — e DEZ dos doze não tinham. A página não quebrava
+   porque `triar()` não valida DV, mas qualquer contador que colasse um daqueles
+   números no importador via a linha ser descartada pelo próprio produto.
+   Afirmação verificável e falsa é o pior defeito que uma página de prova pode
+   ter, e é o tipo de coisa que volta sozinha na próxima empresa inventada. */
+secao("A carteira de exemplo é verificável");
+{
+  const ex = await import(path.join(TMP, "exemplo.js"));
+  const cnpjlib = await import(path.join(TMP, "cnpj.js"));
+  const carteira = ex.CARTEIRA_EXEMPLO;
+  ok("a carteira de exemplo tem as doze empresas que a página anuncia",
+     carteira.length === 12, carteira.length);
+  const invalidos = carteira.filter((e) => !cnpjlib.cnpjValido(e.cnpj)).map((e) => e.cnpj);
+  ok("TODOS os CNPJs do exemplo passam no dígito verificador",
+     invalidos.length === 0, invalidos);
+  /* e continuam fictícios: DV válido não pode virar desculpa para usar CNPJ de
+     empresa real numa página aberta */
+  ok("nenhum deles é o CNPJ de conferência usado nos testes de CNPJ",
+     !carteira.some((e) => e.cnpj === "33000167000101"));
+}
+
+/* ══ UMA FRASE, NÃO SETE (08/08/2026) ══════════════════════════════════════
+   A única frase idêntica nas seis páginas públicas estava no RODAPÉ. O H1 da
+   home, o de /precos e o de /como-funciona vendiam três produtos diferentes, e
+   a frase que de fato diferencia vivia no lead do hero e em nenhum outro lugar.
+   Um contador decide em cinco segundos se aquilo é para ele; sete versões
+   significam que nenhuma foi testada. Isto trava a decisão: a manchete das três
+   páginas passa a falar da mesma coisa, e o texto vive em lib/proposta-de-valor. */
+secao("A frase do produto é uma só");
+{
+  const pv = await import(path.join(TMP, "proposta-de-valor.js"));
+  const home = fs.readFileSync(path.join(RAIZ, "app/page.tsx"), "utf8");
+  const precos = fs.readFileSync(path.join(RAIZ, "app/precos/page.tsx"), "utf8");
+  const como = fs.readFileSync(path.join(RAIZ, "app/como-funciona/page.tsx"), "utf8");
+
+  ok("a home lidera pela carteira documentada, não pela triagem",
+     /<h1>Saia da janela com a .*carteira inteira documentada/.test(home));
+  ok("/precos parou de liderar pelo preço",
+     !/<h1>Uma análise cobrada paga o ano/.test(precos) &&
+     /<h1>O preço de um cliente, para documentar a carteira inteira/.test(precos));
+  ok("/como-funciona fala do mesmo produto que a home",
+     /<h1>Da carteira inteira ao documento de cada cliente/.test(como));
+
+  /* as três manchetes têm de dizer "carteira": é o substantivo da promessa, e
+     é o que estava diferente em cada página */
+  for (const [nome, txt] of [["home", home], ["precos", precos], ["como-funciona", como]]) {
+    const h1 = (txt.match(/<h1>(.*?)<\/h1>/) || [])[1] ?? "";
+    ok(`a manchete de ${nome} fala da carteira`, /carteira/i.test(h1), h1.slice(0, 80));
+  }
+
+  /* e o texto canônico existe num lugar só, para a oitava versão não nascer
+     escrita direto numa página */
+  ok("a frase canônica menciona a carteira documentada",
+     /carteira inteira documentada/.test(pv.TITULO), pv.TITULO);
+  ok("o lead diz que a MAIORIA não precisa decidir — a parte que o mercado não vê",
+     /maioria não precisa/.test(pv.LEAD));
+  ok("a distinção nomeia a categoria concorrente sem citar marca",
+     /Simulador calcula uma empresa/.test(pv.DISTINCAO) && !/\b(SAP|Domínio|Alterdata|Contmatic)\b/i.test(pv.DISTINCAO));
+  /**
+   * O PRO NÃO PODE VENDER O QUE JÁ É GRÁTIS — 08/08/2026.
+   *
+   * A lista do plano pago anunciava "Relatório do escritório", "Dossiê por
+   * empresa" e "Radar da transição". Nenhum dos três tem gate: `situacaoPlano`
+   * só é consultado na emissão de laudo, na coleta, no comparativo impresso e
+   * no estudo de abertura impresso — as outras telas abrem para qualquer conta.
+   * Vender o que a pessoa já tem não converte ninguém e queima a lista inteira
+   * no dia em que ela percebe.
+   *
+   * O teste lê as ROTAS, não a página: se alguém criar o gate de verdade, o
+   * item volta a poder ser anunciado, e este teste passa a permitir.
+   */
+  /* o anchor evita as aspas escapadas do HTML dentro da string do .tsx:
+     casar `\\"` em regex de arquivo lido como texto é a receita de teste
+     que passa a não testar nada */
+  const listaPro = (precos.match(/plan pro[\s\S]*?<\/ul>/) || [""])[0];
+  const gates = fs.readFileSync(path.join(RAIZ, "lib/plano.ts"), "utf8");
+  const temGate = (rota) => {
+    const arq = path.join(RAIZ, rota);
+    return fs.existsSync(arq) && /situacaoPlano|bloqueado_por_plano/.test(fs.readFileSync(arq, "utf8"));
+  };
+  ok("o gate do plano existe e é do servidor", /export function situacaoPlano/.test(gates));
+  ok("a lista do PRO não anuncia o relatório do escritório, que não tem gate",
+     !/Relatório do escritório/.test(listaPro) || temGate("app/doc/relatorio/page.tsx"));
+  ok("...nem o dossiê por empresa",
+     !/Dossiê por empresa/.test(listaPro) || temGate("app/api/dossie/route.ts"));
+  ok("...nem o radar da transição",
+     !/Radar da transição/.test(listaPro) || temGate("app/api/radar/route.ts"));
+  /* e o que ela anuncia tem de ser o que o servidor realmente cobra */
+  ok("a lista do PRO lidera pelo entregável que o gate protege",
+     /Laudos ilimitados/.test(listaPro), listaPro.slice(0, 120));
+  ok("o comparativo e a abertura são vendidos como IMPRESSOS, que é o que muda",
+     /impressos/.test(listaPro));
+
+  /* nada da proposta de valor pode prometer resultado */
+  const tudo = [pv.TITULO, pv.LEAD, pv.CURTA, pv.DISTINCAO, ...pv.PROVAS.map((p) => p.texto)].join(" ");
+  ok("nenhuma peça da proposta promete economia, ganho ou garantia",
+     !/econom|garant|lucro|retorno garantido|blindagem/i.test(tudo), tudo.slice(0, 120));
 }
 
 function fim() {

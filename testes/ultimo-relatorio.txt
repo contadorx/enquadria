@@ -12,7 +12,7 @@ ok    suíte assinatura (36 asserções)
 ok    suíte cnpj (47 asserções)
 ok    suíte cobranca (15 asserções)
 ok    suíte cobranca-fonte (28 asserções)
-ok    suíte cockpit (37 asserções)
+ok    suíte cockpit (43 asserções)
 ok    suíte coleta (42 asserções)
 ok    suíte curso (9 asserções)
 ok    suíte deriva (45 asserções)
@@ -35,7 +35,7 @@ ok    suíte muro (12 asserções)
 ok    suíte negocio (20 asserções)
 ok    suíte novidade (27 asserções)
 ok    suíte nps (40 asserções)
-ok    suíte passos (54 asserções)
+ok    suíte passos (71 asserções)
 ok    suíte pressao (29 asserções)
 ok    suíte projecao (54 asserções)
 ok    suíte proposta (50 asserções)
@@ -45,7 +45,7 @@ ok    suíte recalculo (31 asserções)
 ok    suíte recibo (18 asserções)
 ok    suíte reforma (25 asserções)
 ok    suíte reforma-publica (36 asserções)
-ok    suíte reguas (52 asserções)
+ok    suíte reguas (55 asserções)
 ok    suíte reguas-indicacao (40 asserções)
 ok    suíte repasse (26 asserções)
 ok    suíte roteiro (24 asserções)
@@ -268,9 +268,48 @@ ok    parseAnexo lê dígito
 ok    parseAnexo recusa lixo
 ok    parseAnexo recusa fora da faixa 1..5
 
+── O CSV que sobrou: coluna trocada, linha perdida e aviso engolido 
+ok    'Inscrição Estadual' NÃO ocupa a vaga do CNPJ, mesmo vindo antes
+ok    ...e a coluna vetada aparece na lista do que não usei (visível, não sumida)
+ok    'Inscrição Municipal' também não vira CNPJ
+ok    e o cabeçalho 'CNPJ' continua sendo CNPJ (o veto não pode comer o certo)
+ok    'Nome Fantasia' não vence 'Razão Social' quando as duas existem
+ok    ...e sozinha ela também não vira razão social — o nome vem da Receita
+ok    'Contador Responsável' não vira o signatário do termo do cliente
+ok    ...e 'Responsável' sozinho continua sendo o contato
+ok    a lista de rejeitadas nomeia o CNPJ com DV inválido
+ok    ...com o documento COMO VEIO no arquivo, que é como ele o acha na planilha
+ok    ...a repetida entra com o motivo 'duplicada'
+ok    ...razão social vazia vira null, e não string vazia (a tela decide o rótulo)
+ok    ...e os contadores agregados continuam batendo com a lista
+ok    60 linhas ruins: a lista para em 50 e a contagem segue exata
+ok    aspas abertas: o arquivo trunca e agora a tela tem o que dizer
+ok    ...o aviso está em português e cita a linha do ARQUIVO, não o índice
+ok    ...e não sobrou inglês do papaparse
+ok    linha com mais colunas que o cabeçalho também é relatada, com a linha
+ok    arquivo bem formado não inventa aviso nenhum
+ok    parseValorBRL('480') segue recusado — a regra não foi afrouxada
+ok    parseValorBRL('480000') segue aceito
+ok    parseValorBRL('1.200.000,00') segue aceito
+ok    pareceValorEmMilhares reconhece o número pequeno
+ok    ...e não confunde faixa textual com valor em milhares
+ok    planilha em milhares: nenhum RBT12 aceito, e a tela sabe por quê
+ok    faixa textual conta como recusada, mas NÃO como milhares
+ok    RBT12 de verdade não acusa nada
+ok    só o CNPJ é marcado como essencial na tabela de campos
+ok    a razão social não é mais campo essencial
+ok    o rodapé da tabela fala de UM obrigatório
+ok    e a frase de sempre continua dizendo a mesma coisa
+ok    a tela lista quem ficou de fora
+ok    a tela mostra os avisos de leitura do arquivo
+ok    a tela explica o RBT12 recusado em bloco e sugere os milhares
+
 ── Primeiro acesso da empresa: a aba certa e a instrução certa ─
 ok    a aba sincroniza quando a ação muda de destino
 ok    a ação de confirmar/analisar abre a ANÁLISE, não o dossiê
+ok    ...e 'cadastrar contato' abre o DOSSIÊ, que é onde o dado que falta mora
+ok    sem trabalho pendente não há destino — o botão fica apagado
+ok    o Cockpit LÊ o mapa em vez de reescrever a regra
 ok    clicar no nome de empresa SEM análise leva ao formulário
 ok    premissa estimada vira TAREFA numerada, não só aviso de estado
 ok    empresa sem análise nenhuma também recebe instrução
@@ -350,6 +389,92 @@ ok    análise de um anexo só mantém o passo 1 de sempre
 ── Navegador — curso estático e formulário da coleta ───────────
 FALHA playwright disponível → "instale para rodar as checagens de navegador"
 
+── Depois da janela — a frase, o carimbo e a segunda rodada ────
+ok    na janela aberta, a frase cita 30 de setembro
+ok    na fase da alíquota, ela para de citar setembro e cita 31/10
+ok    na fase de cancelamento, cita o prazo de 30/11
+ok    em 'proxima', fala da nova janela e não do prazo vencido
+ok    sem trabalho na fila, a frase é só a contagem da carteira
+ok    sem origem, o carimbo é o de hoje: estimativa, não fixada
+ok    com a norma publicada, o carimbo cita a norma e marca fixada
+ok    ...e a nota do cenário alternativo deixa de chamá-lo de estimativa declarada
+ok    a rodada nova congela 'cenarios' — o laudo lê e não recalcula
+ok    a rodada nova congela 'sensibilidade' — o laudo lê e não recalcula
+ok    a rodada nova congela 'dinheiro' — o laudo lê e não recalcula
+ok    a rodada nova congela 'carimbo' — o laudo lê e não recalcula
+ok    a rodada nova congela 'partilha' — o laudo lê e não recalcula
+ok    a rodada nova congela 'motivo' — o laudo lê e não recalcula
+ok    a rodada nova congela 'fator_r' — o laudo lê e não recalcula
+ok    a rodada nova congela 'origens' — o laudo lê e não recalcula
+ok    a rodada nova congela 'motor' — o laudo lê e não recalcula
+ok    a rodada nova congela 'ddas' — o laudo lê e não recalcula
+ok    a rodada nova congela 'rqMin' — o laudo lê e não recalcula
+ok    a rodada nova congela 'absorcaoMax' — o laudo lê e não recalcula
+ok    ...e devolve o resultado do motor junto, para não calcular duas vezes
+ok    os dois cenários de alíquota vão no congelado
+ok    a alíquota publicada no banco vence a constante do motor
+ok    ...e a procedência dela viaja para o carimbo do laudo
+
+── O anuário — o que a Reforma exigiu no ano ───────────────────
+ok    conta as normas que alcançaram a empresa no ano
+ok    o TRABALHO INVISÍVEL aparece: analisado e descartado é resultado
+ok    conta os serviços prestados
+ok    o total soma SÓ o que foi declarado
+ok    ...e diz quantos ficaram sem valor, em vez de esconder num total incompleto
+ok    o que segue em aberto é contado à parte
+ok    as linhas saem em ordem de tempo
+ok    nenhum estado interno vaza para o documento
+ok    o descarte é dito como trabalho feito, não como ausência
+ok    só 'virou serviço' é marcado como cobrável
+ok    a nota do contador vence o texto genérico da norma
+ok    o ponto tratado em 2027 NÃO entra no anuário de 2026
+ok    ...e entra no de 2027, que é quando o trabalho aconteceu
+ok    os documentos são recortados pelo período do relatório
+ok    sem nenhuma norma, a abertura afirma o acompanhamento em vez de calar
+ok    com movimento, a abertura cita o volume, o descarte e os serviços
+ok    empresa sem nenhum ponto não entra na conta da carteira
+ok    o total da carteira é a soma do declarado
+ok    os destaques vêm por dinheiro, para a conversa de renovação começar certo
+ok    e os serviços sem valor continuam visíveis no consolidado
+ok    R$ sai redondo — honorário não se fala em centavos
+ok    a ressalva nega apuração, cobrança e promessa de resultado
+ok    ...e deixa claro que o valor foi informado pelo escritório
+
+── Radar sem critério e o calendário depois de setembro ────────
+ok    alerta sem critério nenhum NÃO publica
+ok    ...e o erro diz o tamanho do estrago e a saída
+ok    com uma dimensão preenchida, o alerta volta a publicar
+ok    faixa, saída, CNAE ou 'só com análise' bastam — não é o anexo que salva
+ok    notícia sem critério continua publicando — quem decide é o no_cockpit
+ok    a chave de dedupe não repete a data da próxima janela à mão
+ok    ...ela é derivada do MARCOS de lib/janela.ts
+ok    a fase `proxima` tem régua no planejador
+ok    o texto da régua nova está no banco, não no código
+ok    e o e-mail da janela prevista não promete resultado nem anuncia data não publicada
+
+── A carteira de exemplo é verificável ─────────────────────────
+ok    a carteira de exemplo tem as doze empresas que a página anuncia
+ok    TODOS os CNPJs do exemplo passam no dígito verificador
+ok    nenhum deles é o CNPJ de conferência usado nos testes de CNPJ
+
+── A frase do produto é uma só ─────────────────────────────────
+ok    a home lidera pela carteira documentada, não pela triagem
+ok    /precos parou de liderar pelo preço
+ok    /como-funciona fala do mesmo produto que a home
+ok    a manchete de home fala da carteira
+ok    a manchete de precos fala da carteira
+ok    a manchete de como-funciona fala da carteira
+ok    a frase canônica menciona a carteira documentada
+ok    o lead diz que a MAIORIA não precisa decidir — a parte que o mercado não vê
+ok    a distinção nomeia a categoria concorrente sem citar marca
+ok    o gate do plano existe e é do servidor
+ok    a lista do PRO não anuncia o relatório do escritório, que não tem gate
+ok    ...nem o dossiê por empresa
+ok    ...nem o radar da transição
+ok    a lista do PRO lidera pelo entregável que o gate protege
+ok    o comparativo e a abertura são vendidos como IMPRESSOS, que é o que muda
+ok    nenhuma peça da proposta promete economia, ganho ou garantia
+
 ── Resultado ───────────────────────────────────────────────────
 
-2 FALHA(S) em 303 verificações
+2 FALHA(S) em 416 verificações

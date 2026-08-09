@@ -14,13 +14,26 @@ import {
   ehPlanilha,
   type ResultadoParse,
   type LinhaCarteira,
+  type LinhaRejeitada,
 } from "@/lib/csv";
 import { ROTULO_FAIXA, triar, type Faixa } from "@/lib/triagem";
 
-/** o que cada campo faz — mostrado na confirmação de leitura do arquivo */
+/**
+ * UM SÓ É OBRIGATÓRIO, E A TELA DIZIA DUAS COISAS — conserto de 08/08/2026.
+ *
+ * O texto afirmava "Só o CNPJ é obrigatório" e, seis linhas acima, este array
+ * marcava `razao_social` como essencial: o chip nascia VERMELHO quando o
+ * arquivo não trazia o nome, e o rodapé fechava com "* obrigatórios", no
+ * plural. O parser nunca barrou isso — sem razão social a linha entra e o nome
+ * vem da Receita ao confirmar.
+ *
+ * Vermelho é a cor de "isto vai impedir a importação". Usá-la para um campo
+ * opcional ensina o contador a ignorar vermelho, e aí ele ignora o do CNPJ
+ * também — o único que barra de verdade.
+ */
 const CAMPOS: { chave: keyof LinhaCarteira; rotulo: string; papel: string; essencial?: boolean }[] = [
   { chave: "cnpj", rotulo: "CNPJ", papel: "identifica a empresa e busca os dados na Receita", essencial: true },
-  { chave: "razao_social", rotulo: "Razão social", papel: "nome que aparece no laudo", essencial: true },
+  { chave: "razao_social", rotulo: "Razão social", papel: "nome do laudo — vem da Receita se faltar" },
   { chave: "cnae_principal", rotulo: "CNAE", papel: "define a faixa da triagem" },
   { chave: "rbt12", rotulo: "RBT12", papel: "torna a alíquota efetiva, não estimada" },
   { chave: "anexo", rotulo: "Anexo", papel: "afina o cálculo do que sai do DAS" },
@@ -31,6 +44,26 @@ const CAMPOS: { chave: keyof LinhaCarteira; rotulo: string; papel: string; essen
   { chave: "contato_email", rotulo: "E-mail", papel: "para enviar o link de assinatura em lote" },
   { chave: "contato_telefone", rotulo: "Telefone", papel: "acompanhamento comercial" },
 ];
+
+/**
+ * A LINHA PERDIDA PRECISA TER NOME — conserto de 08/08/2026.
+ *
+ * A tela mostrava "2 descartadas · 1 duplicada" e parava aí. Para uma carteira
+ * de trezentas empresas, isso é a mesma informação que nada: o contador sabe
+ * que perdeu clientes e não sabe QUAIS, então não tem o que corrigir na
+ * planilha. O CNPJ vai como veio no arquivo, de propósito — é assim que ele
+ * acha a linha lá dentro.
+ */
+const MOTIVO_REJEICAO: Record<LinhaRejeitada["motivo"], string> = {
+  cnpj_invalido: "o dígito verificador não confere",
+  duplicada: "CNPJ repetido no arquivo",
+};
+
+/** "11.222.333/0001-81 — Padaria Aurora", ou só o documento quando não há nome */
+function descreveRejeitada(r: LinhaRejeitada): string {
+  const doc = r.cnpj_bruto.trim() || "(célula vazia)";
+  return r.razao_social ? `${doc} — ${r.razao_social}` : doc;
+}
 
 const MODELO_CSV = `cnpj,razao_social,cnae_principal,porte,regime,anexo,rbt12,contato,email,telefone
 11.222.333/0001-81,Distribuidora Exemplo Ltda,4649-4/08,EPP,Simples Nacional,1,480000,Marcos Aurélio,marcos@exemplo.com.br,(11) 90000-0000
@@ -226,19 +259,27 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
     }
     setCodificacao(codificacao);
     const resultado = parsearCarteira(texto);
+    /* o primeiro aviso de formato acompanha o erro: separador indecifrável e
+       aspas abertas produzem exatamente estes dois becos sem saída */
+    const primeiroAviso = resultado.erros_leitura[0] ? ` ${resultado.erros_leitura[0]}` : "";
     if (!resultado.colunas_reconhecidas.cnpj) {
       const achadas = (resultado.colunas_ignoradas ?? []).slice(0, 6).join(", ");
       setErro(
         `Não encontrei a coluna de CNPJ.${
           achadas ? ` Li estas colunas: ${achadas}.` : ""
-        } Renomeie a coluna dos documentos para "cnpj" (ou baixe o modelo e cole seus dados nele).`
+        } Renomeie a coluna dos documentos para "cnpj" (ou baixe o modelo e cole seus dados nele).` +
+          primeiroAviso
       );
       setParse(null);
       return;
     }
     if (resultado.linhas.length === 0) {
+      /* NOMEAR AS PRIMEIRAS: "47 descartadas" não diz onde olhar na planilha */
+      const exemplos = resultado.rejeitadas.slice(0, 3).map(descreveRejeitada).join(" · ");
       setErro(
-        `Confira se os documentos têm os 14 dígitos. Li o cabeçalho, mas nenhuma linha tinha CNPJ válido — ${resultado.descartadas} descartadas.`
+        `Confira se os documentos têm os 14 dígitos. Li o cabeçalho, mas nenhuma linha tinha CNPJ válido — ${resultado.descartadas} descartadas.` +
+          (exemplos ? ` Comece por estas: ${exemplos}.` : "") +
+          primeiroAviso
       );
       setParse(null);
       return;
@@ -594,6 +635,25 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
             </button>{" "}
             — uma empresa fictícia, com os dados prontos, que vai até o laudo.
           </p>
+          {/* A CARTEIRA DE EXEMPLO PRONTA, QUE NINGUÉM ACHAVA — 08/08/2026.
+              `/exemplo` é uma página pública com doze empresas fictícias
+              triadas e um laudo gerado pelo motor de verdade. Ela foi feita
+              exatamente para a hesitação que acontece nesta tela — e a única
+              referência a ela no projeto inteiro era o sitemap: nenhum link no
+              login, no cockpit vazio ou aqui. A peça desenhada para vencer a
+              dúvida não era oferecida a quem duvida. */}
+          <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
+            Prefere ver antes de digitar qualquer coisa?{" "}
+            <a
+              href="/exemplo"
+              target="_blank"
+              rel="noreferrer"
+              className="font-semibold text-accentdeep underline underline-offset-2"
+            >
+              Veja uma carteira de doze empresas já triada
+            </a>{" "}
+            — abre em outra aba, sem mexer na sua.
+          </p>
         </div>
       </div>
 
@@ -676,7 +736,7 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
             </div>
           </div>
           <p className="mt-2 text-[11.5px] text-muted">
-            * obrigatórios. Nomes diferentes são aceitos: &quot;documento&quot;, &quot;nome
+            * o único obrigatório. Nomes diferentes são aceitos: &quot;documento&quot;, &quot;nome
             empresarial&quot;, &quot;faturamento 12 meses&quot; e afins são reconhecidos
             automaticamente.
           </p>
@@ -786,6 +846,83 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
               </p>
             )}
           </div>
+
+          {/* O QUE O PAPAPARSE JÁ SABIA E NINGUÉM PERGUNTAVA (08/08/2026).
+              `parsed.errors` nunca era lido. Uma aspa aberta e não fechada
+              engole o resto do arquivo dentro de um campo só: o parse termina
+              sem lançar nada, a carteira chega pela metade e a tela comemora. */}
+          {parse.erros_leitura.length > 0 && (
+            <div className="mt-3 rounded-sm bg-amarelowash px-3 py-2 text-[12px] leading-relaxed text-slate2">
+              <b>Algumas linhas não estão no formato de tabela.</b> O que vem depois delas pode ter
+              sido lido errado — confira estas linhas na planilha antes de gravar.
+              <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[11.5px]">
+                {parse.erros_leitura.map((e) => (
+                  <li key={e}>{e}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* QUEM FICOU DE FORA, PELO NOME. Ver o comentário de MOTIVO_REJEICAO. */}
+          {parse.rejeitadas.length > 0 &&
+            (() => {
+              const mostrar = parse.rejeitadas.slice(0, 6);
+              const resto = parse.descartadas + parse.duplicadas - mostrar.length;
+              return (
+                <div className="mt-3 rounded border border-line bg-surface p-4">
+                  <div className="mb-2 font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
+                    Linhas que ficaram de fora
+                  </div>
+                  <ul className="space-y-1 text-[12px] leading-relaxed text-slate2">
+                    {mostrar.map((r, i) => (
+                      <li key={`${r.cnpj_bruto}-${i}`}>
+                        <span className="font-mono text-[11.5px]">
+                          {r.cnpj_bruto.trim() || "(célula vazia)"}
+                        </span>{" "}
+                        {r.razao_social ?? (
+                          <span className="italic text-muted">sem razão social no arquivo</span>
+                        )}{" "}
+                        <span className="text-muted">— {MOTIVO_REJEICAO[r.motivo]}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {resto > 0 && (
+                    <p className="mt-1.5 text-[11.5px] text-muted">
+                      + {resto} {resto === 1 ? "outra linha" : "outras linhas"} pelos mesmos motivos.
+                    </p>
+                  )}
+                  <p className="mt-2 text-[11.5px] leading-relaxed text-muted">
+                    Nenhuma delas entra na carteira. Corrija na planilha e suba o arquivo de novo —
+                    o que já entrou não é duplicado.
+                  </p>
+                </div>
+              );
+            })()}
+
+          {/* RBT12 RECUSADO EM BLOCO (08/08/2026). O corte de R$ 1.000 no parser
+              existe para faixa textual não virar receita, e continua. O que
+              faltava era dizer isso: quem exporta faturamento em milhares via
+              só "Nenhuma linha trouxe RBT12", que descreve o fim e esconde a
+              causa. A regra de leitura não muda — quem multiplica é ele, no
+              arquivo, porque receita inventada vira alíquota inventada. */}
+          {(() => {
+            const nenhumAceito = parse.linhas.every((l) => l.rbt12 == null);
+            if (!nenhumAceito || parse.rbt12_recusados === 0) return null;
+            const milhares = parse.rbt12_em_milhares * 2 > parse.rbt12_recusados;
+            return (
+              <p className="mt-3 rounded-sm bg-amarelowash px-3 py-2 text-[12px] leading-relaxed text-slate2">
+                <b>
+                  A coluna de receita veio preenchida em {parse.rbt12_recusados}{" "}
+                  {parse.rbt12_recusados === 1 ? "linha" : "linhas"} e nenhum valor virou RBT12.
+                </b>{" "}
+                {milhares
+                  ? "Os números vieram abaixo de R$ 1.000: se a planilha está em milhares, multiplique a coluna por 1.000 e suba de novo."
+                  : "O que veio parece faixa de texto, e não valor em reais — só valor em reais vira RBT12."}{" "}
+                Dá para importar assim mesmo; sem RBT12 a alíquota do laudo sai estimada pelo topo da
+                faixa.
+              </p>
+            );
+          })()}
 
           {semCnae ? (
             /* O ESTADO HONESTO: nenhum número de faixa, porque nenhum deles

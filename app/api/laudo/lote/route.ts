@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { situacaoPlano, type Assinatura } from "@/lib/plano";
 import { ORIGEM_LOTE } from "@/lib/premissas-padrao";
+import { erroDeBanco } from "@/lib/erro-banco";
 
 /**
  * TEMPO DE FUNÇÃO — declarado em 08/08/2026.
@@ -67,7 +68,7 @@ export async function POST(req: Request) {
   let q = supabase.from("analises").select("id, empresa_id, parametros");
   if (corpo.analise_ids?.length) q = q.in("id", corpo.analise_ids);
   const { data: analises, error: errA } = await q.limit(1000);
-  if (errA) return NextResponse.json({ erro: errA.message }, { status: 500 });
+  if (errA) return NextResponse.json({ erro: erroDeBanco(errA, "laudo/lote") }, { status: 500 });
   if (!analises?.length) {
     return NextResponse.json({ ok: true, emitidos: 0, ja_tinham: 0, bloqueados: 0, sem_confirmar: 0 });
   }

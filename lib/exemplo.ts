@@ -47,6 +47,21 @@ import type { AnaliseGravada } from "./laudo";
  * o exemplo mostraria a coisa errada), mas as empresas não existem. Publicar
  * carteira de cliente numa página aberta seria vazamento de dado de terceiro —
  * e o produto inteiro se vende como o lugar onde isso não acontece.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * OS DÍGITOS ESTAVAM ERRADOS — conserto de 08/08/2026.
+ *
+ * A afirmação acima era falsa: de doze CNPJs, DOIS passavam no dígito
+ * verificador. Os outros dez foram escritos com terminações plausíveis e
+ * nunca conferidos. A página não quebrava porque `triar()` não valida DV — mas
+ * a `/exemplo` é pública, o argumento dela é "confira com os seus olhos", e
+ * qualquer contador que colasse um daqueles números no importador via a linha
+ * ser descartada pelo próprio produto. Afirmação verificável e falsa, na
+ * página que existe para provar que o produto não mente.
+ *
+ * Os dez dígitos foram recalculados pelo módulo 11 (o mesmo `lib/cnpj.ts`); as
+ * doze primeiras posições não mudaram, então nenhuma faixa da triagem se
+ * moveu — o exemplo continua mostrando exatamente a mesma carteira.
  */
 
 export interface EmpresaExemplo extends EmpresaBruta {
@@ -66,16 +81,16 @@ export interface EmpresaExemplo extends EmpresaBruta {
 export const CARTEIRA_EXEMPLO: EmpresaExemplo[] = [
   { razao_social: "Aurora Distribuidora de Peças Ltda", cnpj: "11222333000181", cnae_principal: "4530-7/03", porte: "EPP", situacao: "ATIVA", regime: "Simples Nacional", faturamento_faixa: "2.400.000" },
   { razao_social: "Metalúrgica Ponte Nova Ltda",        cnpj: "07526557000100", cnae_principal: "2599-3/99", porte: "EPP", situacao: "ATIVA", regime: "Simples Nacional", faturamento_faixa: "3.100.000" },
-  { razao_social: "Softlar Sistemas Ltda",              cnpj: "22333444000155", cnae_principal: "6201-5/01", porte: "ME",  situacao: "ATIVA", regime: "Simples Nacional", faturamento_faixa: "980.000" },
-  { razao_social: "Transportes Vale Claro Ltda",        cnpj: "33444555000128", cnae_principal: "4930-2/02", porte: "EPP", situacao: "ATIVA", regime: "Simples Nacional", faturamento_faixa: "1.750.000" },
-  { razao_social: "Gráfica Bandeirante Ltda",           cnpj: "44555666000109", cnae_principal: "1813-0/01", porte: "ME",  situacao: "ATIVA", regime: "Simples Nacional", faturamento_faixa: "620.000" },
-  { razao_social: "Consultoria Prumo Ltda",             cnpj: "55666777000180", cnae_principal: "7020-4/00", porte: "ME",  situacao: "ATIVA", regime: "Simples Nacional", faturamento_faixa: "410.000" },
-  { razao_social: "Padaria Trigo de Ouro Ltda",         cnpj: "66777888000160", cnae_principal: "4721-1/02", porte: "ME",  situacao: "ATIVA", regime: "Simples Nacional", faturamento_faixa: "540.000" },
-  { razao_social: "Salão Bem Estar Ltda",               cnpj: "77888999000141", cnae_principal: "9602-5/01", porte: "ME",  situacao: "ATIVA", regime: "Simples Nacional", faturamento_faixa: "180.000" },
-  { razao_social: "Mercearia São Judas Ltda",           cnpj: "88999000000121", cnae_principal: "4712-1/00", porte: "ME",  situacao: "ATIVA", regime: "Simples Nacional", faturamento_faixa: "300.000" },
-  { razao_social: "João da Silva Serviços MEI",         cnpj: "99000111000103", cnae_principal: "4321-5/00", porte: "MEI", situacao: "ATIVA", regime: "MEI",             faturamento_faixa: "70.000" },
-  { razao_social: "Comercial Antiga Ltda",              cnpj: "10111222000174", cnae_principal: "4649-4/99", porte: "ME",  situacao: "BAIXADA", regime: "Simples Nacional", faturamento_faixa: "0" },
-  { razao_social: "Indústria Sul Forte S/A",            cnpj: "12222333000155", cnae_principal: "2229-3/99", porte: "DEMAIS", situacao: "ATIVA", regime: "Lucro Presumido", faturamento_faixa: "9.400.000" },
+  { razao_social: "Softlar Sistemas Ltda",              cnpj: "22333444000181", cnae_principal: "6201-5/01", porte: "ME",  situacao: "ATIVA", regime: "Simples Nacional", faturamento_faixa: "980.000" },
+  { razao_social: "Transportes Vale Claro Ltda",        cnpj: "33444555000181", cnae_principal: "4930-2/02", porte: "EPP", situacao: "ATIVA", regime: "Simples Nacional", faturamento_faixa: "1.750.000" },
+  { razao_social: "Gráfica Bandeirante Ltda",           cnpj: "44555666000181", cnae_principal: "1813-0/01", porte: "ME",  situacao: "ATIVA", regime: "Simples Nacional", faturamento_faixa: "620.000" },
+  { razao_social: "Consultoria Prumo Ltda",             cnpj: "55666777000181", cnae_principal: "7020-4/00", porte: "ME",  situacao: "ATIVA", regime: "Simples Nacional", faturamento_faixa: "410.000" },
+  { razao_social: "Padaria Trigo de Ouro Ltda",         cnpj: "66777888000181", cnae_principal: "4721-1/02", porte: "ME",  situacao: "ATIVA", regime: "Simples Nacional", faturamento_faixa: "540.000" },
+  { razao_social: "Salão Bem Estar Ltda",               cnpj: "77888999000181", cnae_principal: "9602-5/01", porte: "ME",  situacao: "ATIVA", regime: "Simples Nacional", faturamento_faixa: "180.000" },
+  { razao_social: "Mercearia São Judas Ltda",           cnpj: "88999000000198", cnae_principal: "4712-1/00", porte: "ME",  situacao: "ATIVA", regime: "Simples Nacional", faturamento_faixa: "300.000" },
+  { razao_social: "João da Silva Serviços MEI",         cnpj: "99000111000165", cnae_principal: "4321-5/00", porte: "MEI", situacao: "ATIVA", regime: "MEI",             faturamento_faixa: "70.000" },
+  { razao_social: "Comercial Antiga Ltda",              cnpj: "10111222000135", cnae_principal: "4649-4/99", porte: "ME",  situacao: "BAIXADA", regime: "Simples Nacional", faturamento_faixa: "0" },
+  { razao_social: "Indústria Sul Forte S/A",            cnpj: "12222333000144", cnae_principal: "2229-3/99", porte: "DEMAIS", situacao: "ATIVA", regime: "Lucro Presumido", faturamento_faixa: "9.400.000" },
 ];
 
 export interface LinhaCarteira {

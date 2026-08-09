@@ -21,6 +21,7 @@ import {
   type Segmento,
 } from "@/lib/motor";
 import { anexoPorCnae } from "@/lib/triagem";
+import { erroDeBanco } from "@/lib/erro-banco";
 
 /**
  * TEMPO DE FUNÇÃO — declarado em 08/08/2026.
@@ -83,6 +84,13 @@ export async function POST(req: Request) {
      * comércio, indústria e serviço dentro do mesmo CNPJ.
      */
     segmentos?: Segmento[] | null;
+    /**
+     * `calculado_em` da análise que a TELA leu ao abrir. Serve para detectar
+     * que um colega gravou no meio — ver a nota do conflito, mais abaixo.
+     */
+    base_calculado_em?: string | null;
+    /** confirmação explícita de gravar por cima do que o colega salvou */
+    sobrescrever?: boolean;
   };
   try {
     corpo = await req.json();
@@ -93,10 +101,60 @@ export async function POST(req: Request) {
     return NextResponse.json({ erro: "empresa_id e respostas obrigatórios" }, { status: 400 });
   }
 
+  /**
+   * O TRABALHO DO COLEGA NÃO SOME EM SILÊNCIO — conserto de 08/08/2026.
+   *
+   * O `upsert` abaixo é por (empresa, janela), e o produto é vendido para
+   * escritório com equipe. Dois contadores na mesma empresa: o segundo a salvar
+   * substitui respostas, parâmetros e origens do primeiro, e nenhum dos dois
+   * recebe qualquer sinal — o histórico é por JANELA, não por revisão, então o
+   * trabalho sobrescrito não deixa rastro.
+   *
+   * Não é caso de bloqueio (campo travado por quem esqueceu a aba aberta) nem
+   * de presença em tempo real (infraestrutura cara para um aviso). É caso de
+   * DIZER: a tela devolve o `calculado_em` que leu ao abrir; se o banco estiver
+   * mais novo que isso, alguém gravou no meio. Recusa uma vez, com nome e hora,
+   * e a decisão de recarregar ou gravar por cima volta a ser de gente.
+   */
+  const { data: jaExiste } = await supabase
+    .from("analises")
+    // schema-ok: atualizado_por vem da migration 0067
+    .select("id, calculado_em, atualizado_por")
+    .eq("empresa_id", corpo.empresa_id)
+    .eq("janela_id", corpo.janela_id ?? null)
+    .maybeSingle();
+
+  if (jaExiste?.calculado_em && corpo.base_calculado_em && !corpo.sobrescrever) {
+    const gravadoEm = new Date(jaExiste.calculado_em).getTime();
+    const vistoEm = new Date(corpo.base_calculado_em).getTime();
+    if (gravadoEm > vistoEm && jaExiste.atualizado_por !== user.id) {
+      const { data: autor } = jaExiste.atualizado_por
+        ? await supabase
+            .from("profiles")
+            .select("nome, email")
+            .eq("id", jaExiste.atualizado_por)
+            .maybeSingle()
+        : { data: null };
+      const quem = autor?.nome || autor?.email || "outra pessoa do escritório";
+      return NextResponse.json(
+        {
+          erro:
+            `Esta análise foi salva por ${quem} às ` +
+            `${new Date(jaExiste.calculado_em).toLocaleTimeString("pt-BR")}, depois de você abrir a tela. ` +
+            "Recarregue para ver o que mudou, ou salve de novo para gravar a sua versão por cima.",
+          conflito: true,
+          gravado_em: jaExiste.calculado_em,
+          gravado_por: quem,
+        },
+        { status: 409 }
+      );
+    }
+  }
+
   // parâmetros vigentes do exercício (fonte da verdade é o banco)
   const { data: param } = await supabase
     .from("parametros_exercicio")
-    .select("aliquota_cbs, aliquota_ibs, corte_s1, fronteira_min, fronteira_max")
+    .select("aliquota_cbs, aliquota_ibs, corte_s1, fronteira_min, fronteira_max, fixada, fonte")
     .eq("exercicio", 2027)
     .maybeSingle();
 
@@ -239,7 +297,7 @@ export async function POST(req: Request) {
       ? { ...projecao, divergem: comProjecao.divergem, saida_hoje: comProjecao.hoje.saida,
           saida_projetada: comProjecao.projetado.saida, linhas: comProjecao.linhas }
       : null,
-    carimbo: carimboAliquota(aliquota, agora),
+    carimbo: carimboAliquota(aliquota, agora, { fixada: param?.fixada, fonte: param?.fonte }),
     cenarios: doisCenarios,
     dinheiro,
     sensibilidade: linhasSensibilidade,
@@ -280,11 +338,21 @@ export async function POST(req: Request) {
 
   const { data, error } = await supabase
     .from("analises")
-    .upsert(registro, { onConflict: "empresa_id,janela_id" })
+    /* quem salvou por último, para o próximo conflito ter nome em vez de
+       "alguém" — ver a migration 0067 */
+    .upsert({ ...registro, atualizado_por: user.id }, { onConflict: "empresa_id,janela_id" })
     .select("id")
     .single();
 
-  if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ erro: erroDeBanco(error, "analise") }, { status: 500 });
 
-  return NextResponse.json({ ok: true, analise_id: data.id, resultado: r, alerta_fator_r: alerta });
+  return NextResponse.json({
+    ok: true,
+    analise_id: data.id,
+    resultado: r,
+    alerta_fator_r: alerta,
+    /* a tela guarda isto e devolve no próximo salvamento: é o que permite
+       detectar que um colega gravou no meio */
+    calculado_em: agora,
+  });
 }

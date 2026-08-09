@@ -13,6 +13,7 @@ import { honorarioSugerido } from "@/lib/proposta";
 import { COLUNAS_ESCRITORIO, type Escritorio } from "@/lib/escritorio";
 import { responsavelDoTenant } from "@/lib/escritorio-server";
 import { ORIGEM_LOTE } from "@/lib/premissas-padrao";
+import { erroDeBanco } from "@/lib/erro-banco";
 
 /**
  * TEMPO DE FUNÇÃO — declarado em 08/08/2026.
@@ -169,7 +170,7 @@ export async function POST(req: Request) {
     .rpc("emitir_laudo", { p_analise: corpo.analise_id })
     .single();
 
-  if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ erro: erroDeBanco(error, "laudo") }, { status: 500 });
   const laudo = data as { id: string; numero: number };
 
   /**

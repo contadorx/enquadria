@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
-import { decidir, dDASefetivo, PARAMETROS_2027, type Respostas } from "@/lib/motor";
+import { type Respostas } from "@/lib/motor";
 import { anexoPorCnae } from "@/lib/triagem";
+import { calcularEcongelar, ORIGEM_RODADA } from "@/lib/parametros-analise";
+import { erroDeBanco } from "@/lib/erro-banco";
 
 /**
  * NOVA RODADA DE JANELA — o que torna a perenidade real.
@@ -29,12 +31,45 @@ export async function POST(req: Request) {
   const tenantId = perfil?.tenant_id;
   if (!tenantId) return NextResponse.json({ erro: "workspace não encontrado" }, { status: 400 });
 
-  let corpo: { janela_codigo?: string; nome?: string; abre?: string; fecha?: string; exercicio?: number };
+  let corpo: {
+    janela_codigo?: string;
+    nome?: string;
+    abre?: string;
+    fecha?: string;
+    exercicio?: number;
+    /** "revisao": o código e o nome saem do exercício, não do teclado */
+    modo?: string;
+  };
   try {
     corpo = await req.json();
   } catch {
     corpo = {};
   }
+
+  /**
+   * O MODO REVISÃO — 08/08/2026.
+   *
+   * A rodada nova existia e era 100% manual: escondida em Configurações,
+   * pedindo código, nome, duas datas e o exercício. Ninguém digita isso em
+   * outubro, e o aviso do cockpit ("N análises mudam de recomendação com os
+   * parâmetros vigentes") mandava o contador REABRIR EMPRESA POR EMPRESA à
+   * mão. Numa carteira de duzentas, isso não acontece — e era esse justamente
+   * o trabalho que o produto vendia por e-mail quando a alíquota saísse.
+   *
+   * No modo revisão o contador clica um botão. O código é derivado do
+   * exercício e do mês, então clicar duas vezes no mesmo mês não cria duas
+   * rodadas: cai na mesma janela e o laço abaixo pula quem já tem análise
+   * nela. Repetir por engano não duplica trabalho nem documento.
+   */
+  if (corpo.modo === "revisao" && !corpo.janela_codigo) {
+    const ex = corpo.exercicio ?? 2027;
+    const agoraData = new Date();
+    const marca = `${agoraData.getUTCFullYear()}${String(agoraData.getUTCMonth() + 1).padStart(2, "0")}`;
+    corpo.janela_codigo = `revisao-${ex}-${marca}`;
+    corpo.nome = `Revisão da carteira — parâmetros de ${ex}`;
+    corpo.exercicio = ex;
+  }
+
   if (!corpo.janela_codigo || !corpo.nome) {
     return NextResponse.json({ erro: "informe o código e o nome da janela" }, { status: 400 });
   }
@@ -60,7 +95,7 @@ export async function POST(req: Request) {
       })
       .select("id")
       .single();
-    if (errJ) return NextResponse.json({ erro: errJ.message }, { status: 500 });
+    if (errJ) return NextResponse.json({ erro: erroDeBanco(errJ, "janela") }, { status: 500 });
     janelaId = nova.id;
   }
 
@@ -102,31 +137,44 @@ export async function POST(req: Request) {
     .in("id", Array.from(porEmpresa.keys()));
   const mapaEmpresa = new Map((empresas ?? []).map((e) => [e.id, e]));
 
+  const exercicio = corpo.exercicio ?? 2027;
   const { data: param } = await supabase
     .from("parametros_exercicio")
-    .select("aliquota_cbs, aliquota_ibs, corte_s1, fronteira_min, fronteira_max")
-    .eq("exercicio", corpo.exercicio ?? 2027)
+    .select("aliquota_cbs, aliquota_ibs, corte_s1, fronteira_min, fronteira_max, fonte")
+    .eq("exercicio", exercicio)
     .maybeSingle();
-  const aliquota = param
-    ? Number(param.aliquota_cbs) + Number(param.aliquota_ibs)
-    : PARAMETROS_2027.aliquota;
 
+  const agora = new Date().toISOString();
+
+  /**
+   * A SEGUNDA RODADA NÃO PODE PRODUZIR LAUDO PIOR QUE A PRIMEIRA — 08/08/2026.
+   *
+   * Esta rota montava `parametros` com seis campos: alíquota, das, os três
+   * cortes e o ddas. O laudo lê muito mais do que isso — `cenarios`,
+   * `sensibilidade`, `dinheiro`, `carimbo`, `partilha`, `motivo`, `fator_r`,
+   * `origens`, `motor` — e como ele NÃO recalcula (é prova, não simulador), o
+   * que não fosse congelado aqui simplesmente não apareceria no papel.
+   *
+   * Ou seja: o documento da rodada seguinte, que é justamente o que sustenta a
+   * assinatura depois que a janela fecha, sairia sem os dois cenários de
+   * alíquota, sem a análise de sensibilidade e sem o quadro em reais. O
+   * contador cobraria pela revisão e entregaria menos do que entregou em
+   * setembro. Agora as três rotas que gravam análise montam pela mesma função.
+   */
   const registros = Array.from(porEmpresa.entries())
     .map(([empresaId, dados]) => {
       const e = mapaEmpresa.get(empresaId);
       if (!e || !dados.respostas) return null;
       const anexo = e.anexo ?? anexoPorCnae(e.cnae_principal) ?? 1;
-      const ddas = dDASefetivo(anexo, e.rbt12 != null ? Number(e.rbt12) : null);
-      const parametros = {
-        aliquota,
-        das: ddas.das,
-        corteS1: param ? Number(param.corte_s1) : PARAMETROS_2027.corteS1,
-        fronteiraMin: param ? Number(param.fronteira_min) : PARAMETROS_2027.fronteiraMin,
-        fronteiraMax: param ? Number(param.fronteira_max) : PARAMETROS_2027.fronteiraMax,
-        ddas,
-        origem_premissas: "rodada_anterior",
-      };
-      const r = decidir(dados.respostas as Respostas, parametros);
+      const { resultado: r, parametros } = calcularEcongelar({
+        respostas: dados.respostas as Respostas,
+        anexo,
+        rbt12: e.rbt12 != null ? Number(e.rbt12) : null,
+        exercicio,
+        param,
+        origemPremissas: ORIGEM_RODADA,
+        agora,
+      });
       return {
         tenant_id: tenantId,
         empresa_id: empresaId,
@@ -141,7 +189,7 @@ export async function POST(req: Request) {
         saida: r.saida,
         prioridade: r.prioridade,
         parametros,
-        calculado_em: new Date().toISOString(),
+        calculado_em: agora,
       };
     })
     .filter(Boolean) as Record<string, unknown>[];
@@ -151,7 +199,7 @@ export async function POST(req: Request) {
   }
 
   const { error } = await supabase.from("analises").insert(registros);
-  if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ erro: erroDeBanco(error, "janela") }, { status: 500 });
 
   return NextResponse.json({
     ok: true,

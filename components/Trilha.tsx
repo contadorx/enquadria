@@ -35,6 +35,12 @@ export interface EstadoTrilha {
    * rótulo da próxima ação que alguém inventar.
    */
   proximaAcao: AcaoDaFila | null;
+  /**
+   * Se este escritório JÁ emitiu laudo alguma vez, contado na tabela e não na
+   * fila. Sem isto, arquivar a carteira fazia o onboarding recomeçar para quem
+   * já tinha trabalhado — ver `primeiroCiclo`.
+   */
+  jaEmitiuAlgumaVez?: boolean;
 }
 
 export type AcaoDaFila = "analisar" | "confirmar" | "emitir" | "contato" | "termo" | "cobrar";
@@ -72,7 +78,21 @@ export function Trilha({
   const [oculta, setOculta] = useState(false);
   if (oculta) return null;
 
-  const primeiroCiclo = estado.laudos === 0;
+  /**
+   * O ONBOARDING NÃO RENASCE — conserto de 08/08/2026.
+   *
+   * `estado.laudos` vem da FILA, e a fila exclui empresa arquivada. Um
+   * escritório que arquivou a carteira depois de trabalhá-la (o caminho normal
+   * de fim de janela, e o único permitido quando já existe documento) via o
+   * contador voltar a zero — e o assistente de quatro passos reaparecia
+   * mandando "adicione a primeira empresa" para quem já emitiu laudo numerado.
+   * Pior: o menu, que lê a tabela `laudos` direto, continuava tratando a mesma
+   * pessoa como veterana. Duas fontes discordando na mesma tela.
+   *
+   * `jaEmitiuAlgumaVez` vem da contagem da tabela, sem filtro de arquivamento:
+   * emitir laudo é um fato do passado e não desacontece.
+   */
+  const primeiroCiclo = estado.laudos === 0 && !estado.jaEmitiuAlgumaVez;
 
   /* ------------------------------------------------ assistente da 1ª vez */
   if (primeiroCiclo) {
@@ -129,10 +149,27 @@ export function Trilha({
       {
         n: 3,
         titulo: "Faça a primeira análise",
+        /**
+         * O BECO DA CARTEIRA SEM FILA — conserto de 08/08/2026.
+         *
+         * Quando a carteira inteira cai em MEI ou fora do Simples (acontece, e
+         * acontecia muito mais quando a coluna de anexo era lida como regime),
+         * não há próxima empresa: o passo virava o "faça agora" da trilha com
+         * um texto genérico e NENHUM botão. A pessoa ficava olhando um passo
+         * marcado como pendente, sem ação e sem explicação — e a conclusão
+         * óbvia é que o produto travou.
+         *
+         * Não travou: não há o que analisar, e isso é um resultado. O texto
+         * passa a dizer isso, e o passo deixa de cobrar o que não existe.
+         */
         texto: estado.proxima
           ? `Comece pela empresa de maior prioridade: ${estado.proxima.nome}. Cada pergunta explica por que está sendo feita.`
-          : "Depois da triagem, o cockpit aponta por qual empresa começar.",
-        feito: estado.analises > 0,
+          : estado.empresas > 0
+            ? "Nenhuma empresa desta carteira tem decisão a tomar nesta janela: MEI e quem já saiu do Simples ficam de fora. O laudo curto documenta a permanência."
+            : "Depois da triagem, o cockpit aponta por qual empresa começar.",
+        /* sem fila o passo não é pendência: cobrar trabalho que não existe é o
+           que fazia a trilha parecer travada */
+        feito: estado.analises > 0 || (estado.empresas > 0 && !estado.proxima),
         cta: estado.proxima ? (
           <button onClick={() => aoAbrirEmpresa(estado.proxima!.id, "decisao")} className="btn">
             Analisar {estado.proxima.nome}

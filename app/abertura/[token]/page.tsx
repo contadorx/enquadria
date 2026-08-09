@@ -4,6 +4,8 @@ import { FolhaAbertura } from "@/components/FolhaAbertura";
 import type { EstudoAbertura } from "@/lib/abertura";
 import type { Escritorio } from "@/lib/escritorio";
 import type { Metadata } from "next";
+import { situacaoDoLink } from "@/lib/token-validade";
+import { LinkEncerrado } from "@/components/LinkEncerrado";
 
 /**
  * NOINDEX NA PRÓPRIA PÁGINA — 08/08/2026.
@@ -37,10 +39,17 @@ export default async function AberturaPublica({ params }: { params: { token: str
 
   const { data: doc } = await supabase
     .from("aberturas")
-    .select("numero, emitido_em, nome_negocio, responsavel, resultado, escritorio")
+    .select("numero, emitido_em, nome_negocio, responsavel, resultado, escritorio, token_expira_em, revogado_em")
     .eq("token", params.token)
     .maybeSingle();
   if (!doc) notFound();
+
+  /* O LINK TEM PRAZO — 08/08/2026. Antes da migration 0068 nenhum documento por
+     token tinha validade nem revogação: um endereço reencaminhado abria CNPJ e
+     receita de um cliente de terceiro anos depois. `notFound()` seria a resposta
+     errada aqui — o documento existe; o que acabou foi o acesso por este link. */
+  const situacao = situacaoDoLink(doc);
+  if (situacao !== "valido") return <LinkEncerrado motivo={situacao} tipo="estudo" />;
 
   return (
     <FolhaAbertura

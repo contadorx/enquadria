@@ -45,6 +45,9 @@ export function ApontamentosEmpresa({ empresaId }: { empresaId: string }) {
   const [linhas, setLinhas] = useState<Linha[] | null>(null);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [aberto, setAberto] = useState<string | null>(null);
+  /** o ponto que está esperando o valor do serviço */
+  const [cobrando, setCobrando] = useState<string | null>(null);
+  const [valor, setValor] = useState("");
 
   const carregar = useCallback(async () => {
     try {
@@ -60,19 +63,42 @@ export function ApontamentosEmpresa({ empresaId }: { empresaId: string }) {
     void carregar();
   }, [carregar]);
 
-  async function decidir(id: string, status: StatusApontamento) {
+  async function decidir(id: string, status: StatusApontamento, honorarioCentavos?: number | null) {
     setOcupado(id);
     try {
       await fetch("/api/apontamentos", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, status }),
+        body: JSON.stringify({
+          id,
+          status,
+          ...(status === "virou_servico" ? { honorario_centavos: honorarioCentavos ?? null } : {}),
+        }),
       });
       await carregar();
     } finally {
       setOcupado(null);
+      setCobrando(null);
+      setValor("");
     }
   }
+
+  /**
+   * QUANTO FOI COBRADO — o campo que faltava para o rótulo virar registro.
+   *
+   * "Virou serviço" mudava a cor do botão e a informação morria ali. Sem valor,
+   * ninguém responde "quanto a carteira rendeu de revisão no ano" — que é a
+   * pergunta de março de 2027 e o argumento de renovação da assinatura.
+   *
+   * O valor é OPCIONAL de propósito: obrigar a informar transformaria um clique
+   * de dois segundos numa decisão de preço, e o contador deixaria de marcar. É
+   * melhor ter o registro do serviço sem valor do que não ter registro nenhum;
+   * o relatório anual conta quantos ficaram sem valor e diz isso na cara.
+   */
+  const emCentavos = (txt: string): number | null => {
+    const n = Number(txt.replace(/\./g, "").replace(",", ".").trim());
+    return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : null;
+  };
 
   if (linhas === null) {
     return <p className="text-[12.5px] text-muted">Carregando os apontamentos…</p>;
@@ -152,7 +178,7 @@ export function ApontamentosEmpresa({ empresaId }: { empresaId: string }) {
                 </>
               )}
 
-              {novo && (
+              {novo && cobrando !== l.id && (
                 <div className="mt-2.5 flex flex-wrap gap-1.5">
                   {(
                     [
@@ -163,13 +189,68 @@ export function ApontamentosEmpresa({ empresaId }: { empresaId: string }) {
                   ).map(([s, rotulo]) => (
                     <button
                       key={s}
-                      onClick={() => void decidir(l.id, s)}
+                      /* "virou serviço" abre o campo do valor logo abaixo, em vez
+                         de gravar direto: é o único dos três que produz número
+                         para o relatório anual, e perguntar depois é perguntar
+                         nunca */
+                      onClick={() =>
+                        s === "virou_servico" ? setCobrando(l.id) : void decidir(l.id, s)
+                      }
                       disabled={ocupado === l.id}
                       className="rounded-sm border border-line bg-surface px-2.5 py-1.5 text-[12px] font-semibold text-slate2 disabled:opacity-40"
                     >
                       {ocupado === l.id ? "…" : rotulo}
                     </button>
                   ))}
+                </div>
+              )}
+
+              {/* ux-ok: o campo abre imediatamente abaixo do botão que o pediu */}
+              {novo && cobrando === l.id && (
+                <div className="mt-2.5 rounded-sm border border-line bg-surface p-2.5">
+                  <label className="block text-[11.5px] font-semibold text-slate2">
+                    Quanto você cobrou por este serviço?
+                  </label>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <div className="flex items-center rounded-sm border border-line px-2">
+                      <span className="font-mono text-[11px] text-muted">R$</span>
+                      <input
+                        value={valor}
+                        onChange={(e) => setValor(e.target.value.replace(/[^\d.,]/g, ""))}
+                        inputMode="decimal"
+                        placeholder="350,00"
+                        autoFocus
+                        className="w-28 bg-transparent px-1.5 py-1.5 font-mono text-[13px] outline-none"
+                      />
+                    </div>
+                    <button
+                      onClick={() => void decidir(l.id, "virou_servico", emCentavos(valor))}
+                      disabled={ocupado === l.id}
+                      className="rounded-sm bg-ink px-3 py-2 text-[12px] font-semibold text-white disabled:opacity-40"
+                    >
+                      {ocupado === l.id ? "…" : "Registrar serviço"}
+                    </button>
+                    <button
+                      onClick={() => void decidir(l.id, "virou_servico", null)}
+                      disabled={ocupado === l.id}
+                      className="text-[11.5px] font-semibold text-muted underline underline-offset-2 disabled:opacity-40"
+                    >
+                      registrar sem valor
+                    </button>
+                    <button
+                      onClick={() => {
+                        setCobrando(null);
+                        setValor("");
+                      }}
+                      className="text-[11.5px] text-muted underline underline-offset-2"
+                    >
+                      cancelar
+                    </button>
+                  </div>
+                  <p className="mt-1.5 text-[11px] leading-snug text-muted">
+                    Entra no relatório anual desta empresa. É o valor que você informa — o
+                    Enquadria não cobra nada por aqui.
+                  </p>
                 </div>
               )}
 

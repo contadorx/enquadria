@@ -45,12 +45,50 @@ const RESUMO =
   "As normas da transição do IBS/CBS que afetam empresas do Simples Nacional, " +
   "com o que fazer em cada uma. Atualizado à medida que a regulamentação sai.";
 
-export const metadata: Metadata = {
-  title: TITULO,
-  description: RESUMO,
-  alternates: { canonical: "/reforma" },
-  openGraph: { title: TITULO, description: RESUMO, url: "/reforma", siteName: "Enquadria", locale: "pt_BR", type: "website" },
-};
+/**
+ * O CANONICAL É O DA PÁGINA PEDIDA, NÃO O DA PÁGINA 1 — 08/08/2026.
+ *
+ * O DEFEITO: aqui havia um `metadata` estático com `canonical: "/reforma"`.
+ * Como o mesmo módulo responde por `/reforma?p=2`, `?p=3`…, a página 2 saía
+ * dizendo "o endereço de verdade deste conteúdo é /reforma" — e /reforma mostra
+ * OUTRAS oito matérias. Canonical só é obedecido quando aponta para uma página
+ * equivalente; apontando para conteúdo diferente ele é descartado, e aí quem
+ * decide o que indexar é o buscador. Pior: o JSON-LD logo abaixo já declarava a
+ * URL paginada, então a mesma resposta trazia duas afirmações opostas sobre si
+ * mesma — e o sitemap, uma terceira.
+ *
+ * A CORREÇÃO: `generateMetadata` lê o `?p` e devolve o canonical (e o og:url) da
+ * página realmente servida, que é o mesmo endereço que o JSON-LD já usava. A
+ * outra metade está em `app/sitemap.ts`, que parou de publicar as paginadas.
+ *
+ * POR QUE ISTO CONSULTA A LISTA DE NOVO. `paginar()` PUXA para dentro o `?p`
+ * fora do intervalo — `?p=99` num índice de 2 páginas mostra a 2. Sem saber
+ * quantas páginas existem, `?p=99`, `?p=100` e `?p=2` sairiam com três
+ * canonicals diferentes para a mesma tela: seria reabrir por outra porta o
+ * defeito de conteúdo repetido que este conserto fecha. A página é
+ * `force-dynamic` e a leitura é a mesma consulta de sempre; a leitura a mais
+ * por visita é deliberada.
+ *
+ * A numeração no título é parte do mesmo conserto: duas URLs com título
+ * idêntico são, para quem lê o resultado da busca, a mesma página duas vezes.
+ */
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ p?: string }>;
+}): Promise<Metadata> {
+  const { p } = await searchParams;
+  const pag = paginar(await materiasPublicas(), p);
+  const endereco = enderecoPagina(pag.pagina);
+  const titulo = pag.pagina > 1 ? `${TITULO} — página ${pag.pagina}` : TITULO;
+
+  return {
+    title: titulo,
+    description: RESUMO,
+    alternates: { canonical: endereco },
+    openGraph: { title: titulo, description: RESUMO, url: endereco, siteName: "Enquadria", locale: "pt_BR", type: "website" },
+  };
+}
 
 export default async function ReformaPublica({
   searchParams,

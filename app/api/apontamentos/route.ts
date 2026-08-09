@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import type { StatusApontamento } from "@/lib/apontamentos";
+import { erroDeBanco } from "@/lib/erro-banco";
 
 /**
  * OS APONTAMENTOS DE UMA EMPRESA — ler e decidir.
@@ -55,7 +56,14 @@ export async function PATCH(req: Request) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ erro: "não autenticado" }, { status: 401 });
 
-  let corpo: { id?: string; ids?: string[]; status?: StatusApontamento; nota?: string | null };
+  let corpo: {
+    id?: string;
+    ids?: string[];
+    status?: StatusApontamento;
+    nota?: string | null;
+    /** quanto o escritório declara ter cobrado; só existe em `virou_servico` */
+    honorario_centavos?: number | null;
+  };
   try {
     corpo = await req.json();
   } catch {
@@ -76,6 +84,37 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ erro: "status inválido" }, { status: 400 });
   }
 
+  /**
+   * O VALOR SÓ VIAJA COM O ESTADO QUE O JUSTIFICA — 08/08/2026.
+   *
+   * "Virou serviço" era só um rótulo: mudava a cor do botão e a informação
+   * morria ali. Sem valor e sem data, ninguém conseguia responder quanto a
+   * carteira rendeu de revisão no ano — que é a pergunta de março de 2027, e a
+   * única resposta que faz o contador renovar a assinatura.
+   *
+   * O número é DECLARAÇÃO DELE sobre o que cobrou, igual ao honorário de
+   * referência do mapa de risco. O produto não fatura nada por aqui e não
+   * promete receita: registra o que o escritório declarou, para virar papel no
+   * fim do ano.
+   *
+   * Sair de "virou serviço" LIMPA o valor e a data. Sem isso, um ponto
+   * remarcado como "não se aplica" levaria consigo um honorário para dentro do
+   * relatório anual — trabalho somado que o próprio escritório disse não ter
+   * feito. A mesma regra está no banco (migration 0066), porque regra que só
+   * vive na rota some na segunda rota.
+   */
+  const virouServico = corpo.status === "virou_servico";
+  const valor = corpo.honorario_centavos;
+  if (valor != null && (!Number.isFinite(valor) || valor < 0 || valor > 100_000_000)) {
+    return NextResponse.json({ erro: "valor do serviço inválido" }, { status: 400 });
+  }
+  if (valor != null && !virouServico) {
+    return NextResponse.json(
+      { erro: "só um ponto marcado como serviço carrega valor" },
+      { status: 400 }
+    );
+  }
+
   /* `superado` não entra na lista de válidos: quem supera é a varredura, olhando
      o critério. Deixar a tela marcar superado seria confundir "o fato mudou"
      com "eu decidi" — e são as duas informações que este registro separa. */
@@ -84,10 +123,14 @@ export async function PATCH(req: Request) {
     nota: corpo.nota ?? null,
     tratado_em: corpo.status === "novo" ? null : new Date().toISOString(),
     tratado_por: corpo.status === "novo" ? null : user.id,
+    /* data própria: um ponto pode ser tratado em março e só virar serviço em
+       maio, e o relatório anual precisa saber em qual mês o dinheiro entrou */
+    virou_servico_em: virouServico ? new Date().toISOString() : null,
+    honorario_centavos: virouServico ? valor ?? null : null,
   };
 
   const { error } = await supabase.from("apontamentos").update(patch).in("id", ids);
-  if (error) return NextResponse.json({ erro: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ erro: erroDeBanco(error, "apontamentos") }, { status: 500 });
 
   return NextResponse.json({ ok: true, atualizados: ids.length });
 }

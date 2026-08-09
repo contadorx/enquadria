@@ -233,6 +233,63 @@
   box-shadow: 0 0 0 4px rgba(6, 182, 212, 0.18);
 }
 
+/* ==========================================================================
+   O PALCO CLARO DA MATÉRIA — 08/08/2026.
+
+   A página de uma norma usava o mesmo palco escuro do índice e das páginas de
+   venda. Ali o hero é um palco: anuncia a seção e convida a descer. Numa
+   matéria ele não anuncia nada — ele É o texto, e o texto continua logo abaixo
+   em cinza claro. O resultado era uma página partida ao meio: dois parágrafos
+   brancos sobre azul-marinho e o resto do mesmo assunto em cinza, com o
+   contraste mudando no meio da leitura.
+
+   Aqui o palco vira folha: mesmo fundo das seções, tipografia de leitura, o
+   grafismo quadriculado desligado. O título continua sendo o maior elemento da
+   página — hierarquia se faz com tamanho e peso, não com cor de fundo.
+
+   O índice (/reforma) continua com o palco escuro: lá ele abre uma seção, que
+   é o trabalho para o qual ele foi feito.
+   ========================================================================== */
+.casca-hero--claro {
+  background: #f6f9fc;
+  color: #334155;
+  padding: 46px 0 10px;
+}
+.casca-hero--claro::before {
+  /* o quadriculado é grafismo de palco escuro; sobre o claro vira sujeira */
+  display: none;
+}
+.casca-hero--claro .casca-titulo {
+  color: #0f172a;
+  /* menor que o do índice: aqui ele divide a página com o corpo do texto, não
+     abre uma seção inteira */
+  font-size: clamp(1.8rem, 3.4vw, 2.5rem);
+}
+.casca-hero--claro .casca-lead {
+  color: #334155;
+  font-size: 1.06rem;
+  max-width: 68ch;
+}
+.casca-hero--claro .casca-migalhas {
+  color: #64748b;
+}
+.casca-hero--claro .casca-migalhas a {
+  color: #0e7490;
+  font-weight: 600;
+}
+
+/* a seção que vem logo depois do palco claro não repete o respiro do topo:
+   somados, os dois abriam um vão que parecia falta de conteúdo */
+.casca-secao--continua {
+  padding-top: 22px;
+}
+/* o primeiro bloco também não: sem isto somam-se três espaços (fim do palco,
+   topo da seção e margem do bloco) e o texto parece ter acabado antes da hora */
+.casca-secao--continua .casca-destaque:first-child,
+.casca-secao--continua .casca-card:first-child {
+  margin-top: 0;
+}
+
 .casca-secao {
   padding: 72px 0;
   background: #f6f9fc;
@@ -584,6 +641,13 @@
   }
   .casca-hero {
     padding: 44px 0 48px;
+  }
+  /* o palco claro não fecha embaixo: quem fecha é a seção que continua o texto */
+  .casca-hero--claro {
+    padding: 32px 0 6px;
+  }
+  .casca-secao--continua {
+    padding-top: 20px;
   }
   .casca-vizinhas {
     grid-template-columns: 1fr;

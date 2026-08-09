@@ -401,9 +401,38 @@ export const FRONTEIRA_CONTA_NEGOCIACAO =
   "resultado comercial depende da conversa com cada cliente e é decisão do empresário. Nenhum " +
   "número deste laudo garante que o repasse será aceito.";
 
+/**
+ * A recomendação como ela vai para o PAPEL — 08/08/2026.
+ *
+ * `descricao` de `SAIDAS` é escrita para o contador e estava sendo impressa na
+ * via do cliente; a `descricao_cliente` diz o mesmo fato na segunda pessoa e
+ * sem vocabulário de ferramenta. Esta função devolve a do documento, porque é
+ * ela que o laudo usa nos dois formatos (completo e curto). As telas internas
+ * continuam lendo `SAIDAS` direto.
+ */
+/**
+ * A RESSALVA QUE FICA COLADA NA CONCLUSÃO — 08/08/2026.
+ *
+ * A caixa da recomendação não tinha disclaimer nenhum: é o primeiro bloco que o
+ * empresário lê, tem borda colorida e abre com um verbo no imperativo ("Optar",
+ * "Não optar"), e o aviso correspondente estava quatro seções abaixo, no rodapé.
+ * No laudo CURTO — que atende o maior volume da carteira — não havia nem isso,
+ * porque a nota de parâmetros e a ressalva da negociação moram em blocos que
+ * ele não imprime.
+ *
+ * Curta de propósito: o rodapé continua trazendo a versão completa. O que faltava
+ * aqui era uma linha no lugar onde a dúvida acontece.
+ */
+export const RESSALVA_DA_RECOMENDACAO =
+  "Recomendação técnica sobre estimativa de cenário, a partir das premissas declaradas neste " +
+  "documento e dos parâmetros congelados na data de emissão. Não é apuração fiscal nem garantia " +
+  "de resultado: a decisão é da empresa, e a responsabilidade técnica sobre a análise é do " +
+  "profissional que assina.";
+
 export function recomendacao(a: AnaliseGravada): { titulo: string; descricao: string; cor: string } {
   const s = (a.saida ?? "S1") as Saida;
-  return SAIDAS[s];
+  const saida = SAIDAS[s];
+  return { titulo: saida.titulo, descricao: saida.descricao_cliente, cor: saida.cor };
 }
 
 /**
@@ -661,7 +690,18 @@ export function memoriaDeCalculo(a: AnaliseGravada): PassoCalculo[] {
       resultado: `dDAS = ${pct(d.das, 3)} da receita total`,
     });
   } else if (d) {
-    const tabela = ANEXOS_SIMPLES[d.anexo]?.[d.faixa - 1];
+    /* A SUBSTITUIÇÃO LÊ O QUE FOI CONGELADO — 08/08/2026.
+       Isto ia buscar a linha em `ANEXOS_SIMPLES` na hora de renderizar, e a
+       tabela é constante viva (mudou na 6ª faixa em 05/08). Um laudo de julho
+       reaberto hoje imprimia a nominal de hoje dentro de uma conta cuja
+       alíquota foi congelada ontem — a substituição parava de fechar com o
+       resultado, justamente na tabela que existe para ser refeita no papel.
+       A tabela viva fica como reserva para as análises anteriores a esta data,
+       que não têm as células gravadas. */
+    const tabela =
+      d.nominal != null && d.deduzir != null
+        ? { nominal: d.nominal, deduzir: d.deduzir }
+        : ANEXOS_SIMPLES[d.anexo]?.[d.faixa - 1];
     if (d.fonte === "efetiva" && d.rbt12 && tabela) {
       passos.push({
         passo: "1. Alíquota efetiva do Simples Nacional",

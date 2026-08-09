@@ -30,6 +30,78 @@ export async function OPTIONS(req: Request) {
 }
 
 /**
+ * O CRM SAIU DO NAVEGADOR (08/08/2026).
+ *
+ * O endereço do CRM e o hash que identifica o formulário estavam escritos em
+ * `public/assets/guia.js` e `public/assets/curso.js` — arquivos servidos ao
+ * público. Quem abrisse o código-fonte tinha, de graça, a chave para escrever
+ * direto na lista: dava para injetar contato, dava para encher a base de
+ * endereços de terceiros que nunca pediram nada, e não sobrava registro nenhum
+ * do lado de cá dizendo de onde aquilo veio. Como o disparo era `no-cors`, o
+ * navegador nem sabia dizer se tinha chegado.
+ *
+ * O segredo agora é variável de ambiente e o repasse acontece aqui. O
+ * navegador só fala com esta rota — nosso domínio, nossa trilha: o repasse é a
+ * ÚLTIMA coisa que acontece, depois da tentativa de gravar em `curso_leads`, e
+ * a `origem` que vai junto é a que a rota viu, não a que o cliente diria ao
+ * CRM. Se o banco estiver fora, o repasse acontece assim mesmo: um lead que
+ * chegou não pode sumir porque a nossa metade da captura falhou.
+ *
+ * CUSTO LGPD DECLARADO: o e-mail do lead continua saindo para um operador de
+ * terceiro, como já saía. O que muda é que sai do servidor — sem o IP do
+ * titular, sem os cookies e sem o resto do que o navegador dele carregava — e
+ * só depois de ter deixado registro no banco próprio. Sem a variável
+ * configurada, nada sai: o lead fica só aqui.
+ */
+const CRM_TIMEOUT_MS = 5000;
+
+/**
+ * A TAG DECIDE A CADÊNCIA, e por isso deixou de vir do cliente (08/08/2026).
+ *
+ * Era o JavaScript público que mandava `tags` ao CRM: `Enquadria-Guia` num
+ * arquivo, `Enquadria-Curso` no outro. Qualquer pessoa podia mandar a tag que
+ * quisesse e jogar um contato na sequência errada — quem baixou o guia ainda
+ * pode não saber que existe prazo; quem baixou os materiais do curso já sabe e
+ * quer executar. Aqui a tag vem da origem que a própria rota gravou.
+ */
+function tagDoLead(origem: string): string {
+  return origem.includes("guia") ? "Enquadria-Guia" : "Enquadria-Curso";
+}
+
+/**
+ * O REPASSE NÃO PODE DERRUBAR A CAPTURA.
+ *
+ * Trazer o CRM para o servidor cria um risco que não existia: antes ele era um
+ * `fetch` solto no navegador e ninguém esperava por ele; agora está no caminho
+ * da resposta. Se o CRM estiver fora, lento ou devolvendo erro, o lead JÁ está
+ * no banco e a resposta continua 200 — daí o timeout curto e o `catch` que
+ * engole tudo. CRM caído não pode virar material que não libera.
+ */
+async function repassarAoCrm(email: string, origem: string): Promise<boolean> {
+  const url = process.env.CRM_WEBHOOK_URL;
+  if (!url) return false;
+
+  const form = new URLSearchParams();
+  form.append("email", email);
+  form.append("source", `${origem.startsWith("site-") ? origem : `site-${origem}`}-enquadria`);
+  form.append("tags", tagDoLead(origem));
+
+  try {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: form.toString(),
+      signal: AbortSignal.timeout(CRM_TIMEOUT_MS),
+      cache: "no-store",
+    });
+    return r.ok;
+  } catch {
+    /* rede, DNS, timeout: o lead já está gravado — não é motivo para negar */
+    return false;
+  }
+}
+
+/**
  * O ÚNICO PONTO DE CAPTURA DO CURSO.
  *
  * Rota pública: a página do curso não tem sessão. Por isso usa service role e
@@ -54,10 +126,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ erro: "Confira o e-mail — parece incompleto." }, { status: 400, headers: cab });
   }
 
+  const origem = corpo.origem ?? "curso";
+
   const supabase = createAdminClient();
   if (!supabase) {
     // sem SUPABASE_SERVICE_ROLE_KEY o app segue funcionando; só não captura
-    return NextResponse.json({ ok: true, gravado: false, motivo: "captura não configurada" }, { headers: cab });
+    const crm = await repassarAoCrm(email, origem);
+    return NextResponse.json({ ok: true, gravado: false, crm, motivo: "captura não configurada" }, { headers: cab });
   }
 
   const { error } = await supabase
@@ -65,7 +140,7 @@ export async function POST(req: Request) {
     .upsert(
       {
         email,
-        origem: corpo.origem ?? "curso",
+        origem,
         material: corpo.material ?? null,
         atualizado_em: new Date().toISOString(),
       },
@@ -74,8 +149,10 @@ export async function POST(req: Request) {
 
   if (error) {
     // a migration 0022 pode ainda não ter rodado — não é motivo para negar o material
-    return NextResponse.json({ ok: true, gravado: false, motivo: error.message }, { headers: cab });
+    const crm = await repassarAoCrm(email, origem);
+    return NextResponse.json({ ok: true, gravado: false, crm, motivo: error.message }, { headers: cab });
   }
 
-  return NextResponse.json({ ok: true, gravado: true }, { headers: cab });
+  const crm = await repassarAoCrm(email, origem);
+  return NextResponse.json({ ok: true, gravado: true, crm }, { headers: cab });
 }

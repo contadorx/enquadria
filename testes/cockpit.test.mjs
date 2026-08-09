@@ -68,8 +68,31 @@ ok(
   "esteira: " + JSON.stringify(e)
 );
 
-ok(naMesa(linhas, 600).valor === 0, "faixa A já com laudo sai da mesa");
-ok(naMesa(montarFila(empresas, analises, [], []), 600).valor === 600, "faixa A sem laudo entra na mesa");
+/* ── O QUE ESTÁ NA MESA passou a ser a carteira inteira (08/08/2026) ────────
+   A regra antiga era "faixa A sem laudo". O mapa de risco da PRIMEIRA tela
+   sempre prometeu as quatro faixas — (A+B) × honorário mais (C+D) × honorário
+   curto — e a partir do segundo dia o cockpit mostrava um número que ignorava
+   a faixa B inteira e a metade da carteira que gera laudo curto. Prometer numa
+   tela e esconder na seguinte é pior do que não prometer.
+   A massa tem: 1 empresa A (com laudo), 1 B (sem), 1 D (sem), 1 MEI. */
+const mesaCheia = naMesa(linhas, 600, 150);
+ok(mesaCheia.completos === 1, "faixa A já com laudo sai da mesa; a B sem laudo fica");
+ok(mesaCheia.curtos === 1, "a faixa D entra na mesa como laudo curto");
+ok(mesaCheia.valor === 600 + 150, "a mesa soma os dois honorários: " + mesaCheia.valor);
+ok(naMesa(linhas, 600, 150).empresas === 2, "MEI nunca entra na mesa");
+
+const mesaSemLaudo = naMesa(montarFila(empresas, analises, [], []), 600, 150);
+ok(mesaSemLaudo.completos === 2 && mesaSemLaudo.valor === 1200 + 150,
+   "sem nenhum laudo emitido, A e B entram como completos: " + JSON.stringify(mesaSemLaudo));
+
+/* a esteira ganhou a coluna que faltava: quem tem permanência a documentar */
+const esteiraCheia = contarEsteira(linhas);
+ok(esteiraCheia.permanencia === 1 && esteiraCheia.permanencia_pendentes === 1,
+   "esteira conta a permanência a documentar: " + JSON.stringify(esteiraCheia));
+ok(filtrarPorEtapa(linhas, "permanencia").length === 1,
+   "o clique na coluna nova filtra as faixas C e D");
+/* e a faixa D sem análise deixou de cair no degrau de "acabou de entrar" */
+ok(por["3"].etapa === "decide", "faixa D sem análise está na esteira, não em 'importada'");
 
 ok(ordenarFila(linhas)[0].id === "1", "prioridade máxima no topo");
 ok(filtrarPorEtapa(linhas, "laudos").length === 1, "filtro por etapa laudo");
