@@ -113,8 +113,10 @@ export const EXPLICA_FAIXA: Record<
     cobravel: true,
   },
   C: {
-    titulo: "Baixo risco",
-    oQueE: "Sem perfil empresarial dominante identificado no CNAE.",
+    /* ver a nota de ROTULO_FAIXA em lib/triagem.ts: o rótulo descreve a ação,
+       não um veredito de risco sobre empresa que não foi avaliada */
+    titulo: "Análise rápida",
+    oQueE: "Sem perfil empresarial dominante identificado no CNAE — ou sem CNAE para olhar.",
     oQueFazer: "Laudo curto confirmando a permanência. Serve de proteção e custa pouco tempo.",
     cobravel: true,
   },

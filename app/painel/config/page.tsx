@@ -5,12 +5,16 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase-browser";
 import { AbasEscritorio } from "@/components/AbasEscritorio";
 import { NovaRodada } from "@/components/NovaRodada";
+import { ZerarCarteira } from "@/components/ZerarCarteira";
 import { COLUNAS_ESCRITORIO, type Escritorio } from "@/lib/escritorio";
 import Link from "next/link";
 
 export default function Config() {
   const router = useRouter();
   const [tenantId, setTenantId] = useState<string | null>(null);
+  /* só a conta declarada em NEXT_PUBLIC_CONTA_DEMO vê o botão de zerar — e a
+     rota recusa qualquer outra, então esconder aqui é conveniência, não trava */
+  const [ehContaDemo, setEhContaDemo] = useState(false);
   const [nome, setNome] = useState("");
   const [crc, setCrc] = useState("");
   /** nome da PESSOA — assina o laudo, aparece na indicação e na equipe */
@@ -30,6 +34,8 @@ export default function Config() {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      const demo = (process.env.NEXT_PUBLIC_CONTA_DEMO ?? "").trim().toLowerCase();
+      setEhContaDemo(!!demo && (user.email ?? "").trim().toLowerCase() === demo);
       const { data } = await supabase
         .from("profiles")
         .select(`tenant_id, nome, tenants(${COLUNAS_ESCRITORIO})`)
@@ -275,6 +281,14 @@ export default function Config() {
           intactas.
         </p>
         <NovaRodada totalAnalises={totalAnalises} />
+      </div>
+
+      {/* GRAVAR UMA DEMONSTRAÇÃO EXIGE CARTEIRA VAZIA, VÁRIAS VEZES NO MESMO
+          DIA (10/08/2026). Antes isso era `delete` à mão em oito tabelas no
+          Supabase, na ordem certa — e no dia em que a ordem sai errada sobra
+          órfão e a reimportação falha por chave única, no meio da gravação. */}
+      <div className="max-w-xl">
+        <ZerarCarteira visivel={ehContaDemo} />
       </div>
     </div>
   );

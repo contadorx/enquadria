@@ -312,7 +312,7 @@ ok    ...e 'cadastrar contato' abre o DOSSIÊ, que é onde o dado que falta mora
 ok    sem trabalho pendente não há destino — o botão fica apagado
 ok    o Cockpit LÊ o mapa em vez de reescrever a regra
 ok    clicar no nome de empresa SEM análise leva ao formulário
-ok    ...e, com o filtro dos pontos da Reforma ligado, abre a aba deles
+FALHA ...e, com o filtro dos pontos da Reforma ligado, abre a aba deles → "     id: l.id,\n                      aba:\n                        l.analise_id\n                            ? \"dossie\"\n                            : \"decisao\",\n                    })\n                  }\n                  "
 ok    a tela duplicada de apontamentos não existe mais
 ok    ...e nenhum menu aponta para a rota que saiu
 ok    o balanço 'o que a Reforma rendeu' sobreviveu, na Reforma
@@ -322,6 +322,15 @@ ok    ...e a lista monta mesmo com a aba fechada, senão o número nunca chega
 ok    o cockpit sabe filtrar os pontos da Reforma em aberto
 ok    o lote do cockpit marca 'tratado', e só isso
 ok    a rota resolve os pontos por empresa e só alcança o que está em aberto
+ok    CNAE que voltou do Excel como data é reconhecido
+ok    ...e o CNAE de verdade NÃO é confundido com data
+ok    a Receita completa o que o arquivo não trouxe
+ok    a Receita NÃO sobrescreve o que veio no arquivo
+ok    ...e a divergência é registrada, com os dois valores
+ok    a razão social do arquivo continua vencendo a da Receita
+ok    empresa SEM CNAE não é chamada de baixo risco
+ok    o reset da conta de teste existe e é do cliente de SESSÃO
+ok    ...e exige a frase digitada e a conta declarada de demonstração
 ok    a razão social não é mais cortada na fila
 ok    premissa estimada vira TAREFA numerada, não só aviso de estado
 ok    empresa sem análise nenhuma também recebe instrução
@@ -399,7 +408,7 @@ ok    condição sobre o fator R (há serviço no mix)
 ok    análise de um anexo só mantém o passo 1 de sempre
 
 ── Navegador — curso estático e formulário da coleta ───────────
-FALHA pasta do site encontrada → "/root/work/enquadria-site"
+FALHA playwright disponível → "instale para rodar as checagens de navegador"
 
 ── Depois da janela — a frase, o carimbo e a segunda rodada ────
 ok    na janela aberta, a frase cita 30 de setembro
@@ -489,4 +498,4 @@ ok    nenhuma peça da proposta promete economia, ganho ou garantia
 
 ── Resultado ───────────────────────────────────────────────────
 
-2 FALHA(S) em 428 verificações
+3 FALHA(S) em 437 verificações

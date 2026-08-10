@@ -145,31 +145,113 @@ export async function enriquecer(cnpjs: string[]): Promise<ResultadoEnriquecimen
   return { dados, ativo: respondeu, configurado: true, falhas, detalhe, url };
 }
 
+/** um campo em que o arquivo do escritório e a Receita discordam */
+export interface Divergencia {
+  cnpj: string;
+  razao_social: string;
+  campo: "cnae_principal" | "porte" | "situacao" | "regime" | "anexo";
+  do_arquivo: string;
+  da_receita: string;
+}
+
+/** o rótulo que a tela usa — o nome do campo não é para os olhos do contador */
+export const ROTULO_CAMPO: Record<Divergencia["campo"], string> = {
+  cnae_principal: "CNAE",
+  porte: "porte",
+  situacao: "situação cadastral",
+  regime: "regime",
+  anexo: "anexo",
+};
+
+/** os campos que mudam a FAIXA — divergir neles muda a fila, não a estética */
+const CAMPOS_DA_TRIAGEM: Divergencia["campo"][] = [
+  "cnae_principal",
+  "porte",
+  "situacao",
+  "regime",
+  "anexo",
+];
+
+const mesmoValor = (a: unknown, b: unknown) =>
+  String(a ?? "").trim().toLowerCase().replace(/[^a-z0-9]/g, "") ===
+  String(b ?? "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+
 /**
- * Funde o dado da Receita sobre o do CSV. A Receita é a fonte mais confiável
- * para CNAE, porte e situação — MAS NÃO para razão social.
+ * Funde o dado da Receita com o do CSV — COMPLETANDO LACUNA, não substituindo.
  *
- * O contador costuma ter o cliente cadastrado pelo nome que usa no dia a dia
- * ("Padaria do Zé") e a Receita devolve o nome de registro ("JOSE DA SILVA
- * COMERCIO DE ALIMENTOS LTDA"). Trocar por baixo dos panos faria o contador
- * não reconhecer a própria carteira depois de importar. Então a razão social
- * da Receita só entra quando o CSV não trouxe nenhuma — que é exatamente o
- * caso da importação só com CNPJ.
+ * ═══════════════════════════════════════════════════════════════════════════
+ * O QUE ESTAVA ERRADO — 10/08/2026, achado numa gravação que não aconteceu
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * A regra era `{...csv, ...receita}`: tudo que a Receita devolvesse substituía
+ * o que veio no arquivo, sem dizer. Numa carteira de teste de 14 empresas, a
+ * faixa de OITO delas na tela não tinha relação nenhuma com o arquivo
+ * importado — CNAE, porte, situação e regime tinham sido trocados no caminho.
+ *
+ * O comentário antigo defendia a troca dizendo que a Receita "é a fonte mais
+ * confiável". Ela é — para quem importou só o CNPJ. Para quem exportou a
+ * carteira do próprio sistema, com regime que o escritório mantém, a troca
+ * silenciosa faz três coisas ruins de uma vez:
+ *
+ *   1. muda a FAIXA da empresa, ou seja, muda a fila de trabalho;
+ *   2. contradiz a coluna que a própria tela mostra ("Simples Nacional" ao
+ *      lado de "Já fora do Simples" — a tela discordando de si mesma);
+ *   3. tira do contador uma decisão que é dele. O produto inteiro se sustenta
+ *      em "quem decide e assina é o contador"; não dá para pregar isso na
+ *      página de vendas e sobrescrever o cadastro dele no importador.
+ *
+ * A REGRA NOVA. O que veio no arquivo FICA. O que faltava, a Receita completa.
+ * Onde os dois divergem, a divergência é REGISTRADA e devolvida para a tela
+ * dizer quantas são e quais — e o contador corrige na ficha se quiser.
+ *
+ * A razão social continua com a regra antiga, que já era esta: só entra a da
+ * Receita quando o arquivo não trouxe nenhuma.
  */
-export function fundir<T extends { razao_social?: string }>(
+export function fundir<T extends { razao_social?: string; cnpj?: string }>(
   csv: T,
-  receita?: DadosReceita
+  receita?: DadosReceita,
+  /* saco onde as divergências são acumuladas; opcional para não obrigar quem
+     só quer o objeto fundido a carregar um array */
+  divergencias?: Divergencia[]
 ): T & DadosReceita {
   if (!receita) return csv as T & DadosReceita;
 
-  const limpo: Record<string, unknown> = {};
+  const doArquivo = csv as unknown as Record<string, unknown>;
+  const completar: Record<string, unknown> = {};
+
   for (const [k, v] of Object.entries(receita)) {
-    if (v !== null && v !== undefined && v !== "") limpo[k] = v;
+    if (v === null || v === undefined || v === "") continue;
+
+    const atual = doArquivo[k];
+    const vazioNoArquivo =
+      atual === null || atual === undefined || (typeof atual === "string" && atual.trim() === "");
+
+    if (vazioNoArquivo) {
+      completar[k] = v;
+      continue;
+    }
+
+    /* o arquivo tem valor e a Receita discorda: o arquivo fica, e a
+       divergência vira aviso — mas só nos campos que mexem na triagem, porque
+       divergir em município ou telefone não muda fila de ninguém */
+    if (
+      divergencias &&
+      (CAMPOS_DA_TRIAGEM as string[]).includes(k) &&
+      !mesmoValor(atual, v)
+    ) {
+      divergencias.push({
+        cnpj: String(csv.cnpj ?? ""),
+        razao_social: String(csv.razao_social ?? ""),
+        campo: k as Divergencia["campo"],
+        do_arquivo: String(atual),
+        da_receita: String(v),
+      });
+    }
   }
 
   const doCsv = (csv.razao_social || "").trim();
   const temNomeProprio = doCsv.length > 0 && doCsv !== "(sem razão social)";
-  if (temNomeProprio) delete limpo.razao_social;
+  if (temNomeProprio) delete completar.razao_social;
 
-  return { ...csv, ...(limpo as DadosReceita) };
+  return { ...csv, ...(completar as DadosReceita) };
 }

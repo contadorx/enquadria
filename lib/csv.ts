@@ -8,7 +8,7 @@
  */
 
 import Papa from "papaparse";
-import { normalizarCnpj, cnpjValido } from "./cnpj";
+import { normalizarCnpj, cnpjValido, formatarCnpj } from "./cnpj";
 
 export interface LinhaCarteira {
   cnpj: string;
@@ -124,6 +124,10 @@ export interface ResultadoParse {
   rbt12_recusados: number;
   /** dentre os recusados, os que são número abaixo de mil (planilha em milhares) */
   rbt12_em_milhares: number;
+  /** CNAEs que o Excel converteu em data e que foram anulados na leitura */
+  cnae_virou_data: number;
+  /** até três exemplos, para a tela mostrar a cara do problema */
+  cnae_virou_data_exemplos: string[];
   total_lidas: number;
   colunas_reconhecidas: Partial<Record<keyof LinhaCarteira, string>>;
   colunas_ignoradas: string[];
@@ -193,6 +197,25 @@ export function traduzirErrosParse(erros: ErroDeLeitura[], fonte = ""): string[]
     return [...fora.slice(0, 4), `E mais ${resto} ${resto === 1 ? "linha" : "linhas"} com problema.`];
   }
   return fora;
+}
+
+/**
+ * O CNAE VOLTOU DO EXCEL COMO DATA?
+ *
+ * Duas barras e nenhum hífen é a assinatura: `08/04/4649`. CNAE de verdade tem
+ * a forma `0000-0/00` — uma barra e um hífen — e é isso que separa os dois sem
+ * falso positivo. Aceito também `08-04-4649`, que é o que sai de planilha
+ * configurada com traço.
+ *
+ * O ano de quatro dígitos no fim NÃO entra na regra: o Excel escreve o CNAE
+ * original ("4649") como se fosse ano, então o "ano" aqui é justamente o
+ * pedaço que sobrou do dado bom. Exigir 19xx/20xx deixaria passar todos.
+ */
+export function pareceDataNoLugarDoCnae(v?: string | null): boolean {
+  const t = (v ?? "").trim();
+  if (!t) return false;
+  if (/^\d{4}-\d\/\d{2}$/.test(t)) return false; // CNAE canônico: 4649-4/08
+  return /^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/.test(t);
 }
 
 const SINONIMOS: Record<keyof LinhaCarteira, string[]> = {
@@ -347,6 +370,9 @@ export function parsearCarteira(texto: string): ResultadoParse {
   let duplicadas = 0;
   let rbt12Recusados = 0;
   let rbt12EmMilhares = 0;
+  /* CNAEs que voltaram do Excel em formato de data — ver a nota no laço */
+  let cnaesComCaraDeData = 0;
+  const exemplosCnaeData: string[] = [];
 
   const pega = (row: Record<string, string>, campo: keyof LinhaCarteira) => {
     const col = mapa[campo];
@@ -395,10 +421,37 @@ export function parsearCarteira(texto: string): ResultadoParse {
       if (pareceValorEmMilhares(rbtRaw) || pareceValorEmMilhares(fatRaw)) rbt12EmMilhares++;
     }
 
+    /**
+     * O EXCEL COME O CNAE — 10/08/2026, achado numa massa de gravação.
+     *
+     * `4649-4/08` é data plausível para o Excel: ele reescreve a célula como
+     * `08/04/4649` ao ABRIR o arquivo, e grava assim se você salvar. Não é caso
+     * de borda — é o que acontece com quem abre o CSV para conferir uma linha
+     * antes de importar, que é quase todo mundo.
+     *
+     * O estrago é silencioso e parcial. `div()` passa a ler os dois primeiros
+     * dígitos de "08044649" — divisão 08, que não está em lista nenhuma — e a
+     * empresa cai no fallback "baixo risco": uma distribuidora de embalagens
+     * vira permanência documentada, sem nada na tela explicando por quê. E
+     * repare quais escapam: `2511-0/00` e `4744-0/99` sobrevivem porque mês 00
+     * e dia 99 não existem. Ou seja, o arquivo volta com PARTE da carteira
+     * destruída — pior do que voltar inteiro errado, porque parece certo.
+     *
+     * A linha NÃO é descartada: o CNAE é anulado e contado. Melhor uma empresa
+     * sem CNAE — que a Receita completa e a tela sinaliza — do que uma empresa
+     * com CNAE inventado por um formatador de planilha.
+     */
+    const cnaeBruto = pega(row, "cnae_principal");
+    const cnaeVirouData = pareceDataNoLugarDoCnae(cnaeBruto);
+    if (cnaeVirouData) {
+      cnaesComCaraDeData++;
+      if (exemplosCnaeData.length < 3) exemplosCnaeData.push(`${formatarCnpj(cnpj)} → "${cnaeBruto}"`);
+    }
+
     linhas.push({
       cnpj,
       razao_social: pega(row, "razao_social") || "(sem razão social)",
-      cnae_principal: pega(row, "cnae_principal") || undefined,
+      cnae_principal: (cnaeVirouData ? "" : cnaeBruto) || undefined,
       porte: pega(row, "porte") || undefined,
       situacao: pega(row, "situacao") || undefined,
       regime: pega(row, "regime") || undefined,
@@ -419,6 +472,8 @@ export function parsearCarteira(texto: string): ResultadoParse {
     erros_leitura: traduzirErrosParse(parsed.errors ?? [], texto),
     rbt12_recusados: rbt12Recusados,
     rbt12_em_milhares: rbt12EmMilhares,
+    cnae_virou_data: cnaesComCaraDeData,
+    cnae_virou_data_exemplos: exemplosCnaeData,
     total_lidas: parsed.data.length,
     colunas_reconhecidas: mapa,
     colunas_ignoradas: ignoradas,

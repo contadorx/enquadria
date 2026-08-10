@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { triar, resumir, anexoPorCnae, type EmpresaBruta } from "@/lib/triagem";
-import { enriquecer, fundir } from "@/lib/receita";
+import { enriquecer, fundir, type Divergencia } from "@/lib/receita";
 import type { LinhaCarteira } from "@/lib/csv";
 
 /**
@@ -61,8 +61,18 @@ export async function POST(req: Request) {
 
   const { dados, ativo, configurado, falhas, detalhe } = await enriquecer(linhas.map((l) => l.cnpj));
 
+  /**
+   * ONDE A RECEITA DISCORDA DO ARQUIVO — 10/08/2026.
+   *
+   * `fundir` deixou de sobrescrever e passou a completar lacuna; o que ela
+   * encontra de divergente cai aqui e volta na resposta. A tela precisa poder
+   * dizer "em N empresas a Receita discorda do seu arquivo, nestes campos" —
+   * antes a troca acontecia calada e a faixa da empresa mudava sem explicação.
+   */
+  const divergencias: Divergencia[] = [];
+
   const registros = linhas.map((l) => {
-    const enriquecido = fundir(l, dados[l.cnpj]);
+    const enriquecido = fundir(l, dados[l.cnpj], divergencias);
     const bruta: EmpresaBruta = {
       cnpj: enriquecido.cnpj,
       razao_social: enriquecido.razao_social,
@@ -177,6 +187,20 @@ export async function POST(req: Request) {
     receita_configurada: configurado,
     receita_falhas: falhas,
     receita_detalhe: detalhe ?? null,
+    /**
+     * ONDE A RECEITA DISCORDA DO SEU ARQUIVO — 10/08/2026.
+     *
+     * Até hoje a Receita simplesmente vencia, calada. Agora o arquivo vence e
+     * a discordância é dita: quantas empresas, em quais campos, com os dois
+     * valores lado a lado. São os campos que MUDAM A FAIXA — divergir em
+     * telefone não muda fila de ninguém.
+     *
+     * Devolvo no máximo 50 para a resposta não virar um despejo; o total vai
+     * separado, porque "8 de 143" e "8 de 8" pedem reações diferentes.
+     */
+    divergencias_total: divergencias.length,
+    divergencias_empresas: new Set(divergencias.map((d) => d.cnpj)).size,
+    divergencias: divergencias.slice(0, 50),
     // sem os dados essenciais no arquivo E sem a Receita respondendo, a
     // triagem não separa nada — a tela precisa dizer isso em vez de exibir
     // uma carteira inteira em "baixo risco" como se fosse resultado

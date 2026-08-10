@@ -924,6 +924,30 @@ export function Importador({ jaTem = 0 }: { jaTem?: number }) {
             );
           })()}
 
+          {/* O CNAE QUE O EXCEL TRANSFORMOU EM DATA (10/08/2026).
+              Este aviso existe porque o estrago é INVISÍVEL: o arquivo abre,
+              todas as linhas entram, nenhuma é descartada — e parte da carteira
+              cai em "baixo risco" porque a divisão do CNAE virou "08". Sem esta
+              caixa, não há como suspeitar do Excel. */}
+          {parse.cnae_virou_data > 0 && (
+            <p className="mt-3 rounded-sm bg-amarelowash px-3 py-2 text-[12px] leading-relaxed text-slate2">
+              <b>
+                {parse.cnae_virou_data}{" "}
+                {parse.cnae_virou_data === 1 ? "CNAE veio" : "CNAEs vieram"} em formato de data.
+              </b>{" "}
+              É o Excel: ele lê <span className="font-mono">4649-4/08</span> como data e reescreve
+              como <span className="font-mono">08/04/4649</span> ao abrir o arquivo.{" "}
+              {parse.cnae_virou_data_exemplos.length > 0 && (
+                <span className="font-mono text-[11px]">
+                  ({parse.cnae_virou_data_exemplos.join(" · ")})
+                </span>
+              )}{" "}
+              Ignorei esses CNAEs em vez de triar por um número inventado — a Receita completa o que
+              faltar. Para preservar: abra o CSV por <b>Dados → Obter dados → De texto/CSV</b> e
+              marque a coluna do CNAE como <b>Texto</b>, ou trabalhe em <b>.xlsx</b>.
+            </p>
+          )}
+
           {semCnae ? (
             /* O ESTADO HONESTO: nenhum número de faixa, porque nenhum deles
                significa alguma coisa ainda. O que entra no lugar é o que vai

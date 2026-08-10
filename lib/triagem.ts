@@ -168,6 +168,29 @@ export function triar(e: EmpresaBruta): Triagem {
           prioridade_maxima: false,
         };
   }
+  /**
+   * SEM CNAE NÃO É "SEM PERFIL DOMINANTE" — 10/08/2026.
+   *
+   * As duas coisas caíam no mesmo lugar, com o mesmo motivo, e o motivo
+   * afirmava algo sobre um CNAE que não existia. Foi assim que uma empresa
+   * importada só pelo CNPJ, com a Receita sem devolver a atividade, apareceu na
+   * fila como "baixo risco" — um veredito sobre uma empresa da qual o produto
+   * não sabia nada.
+   *
+   * A faixa continua C porque C é "olhe rápido", e é isso que se deve fazer. O
+   * que muda é o que a tela diz do porquê: a diferença entre "eu olhei o CNAE e
+   * ele não define" e "eu não tenho CNAE" é a diferença entre um resultado e a
+   * ausência dele.
+   */
+  if (!d) {
+    return {
+      faixa: "C",
+      motivo:
+        "Sem CNAE para triar: não veio no arquivo e a base da Receita não devolveu. Confirme a atividade antes de decidir.",
+      prioridade_maxima: false,
+    };
+  }
+
   return {
     faixa: "C",
     motivo: "CNAE sem perfil dominante identificado. Análise rápida para confirmar a permanência.",
@@ -180,7 +203,13 @@ export const ROTULO_FAIXA: Record<Faixa, string> = {
   FORA: "Já fora do Simples",
   A: "Urgente",
   B: "Avaliar",
-  C: "Baixo risco",
+  /* "BAIXO RISCO" ERA VEREDITO — 10/08/2026. A faixa C é onde caem tanto a
+     empresa cujo CNAE não define perfil quanto a empresa da qual não se sabe
+     nada. Chamar as duas de "baixo risco" é o produto afirmando segurança sobre
+     o que ele não avaliou; uma Petrobras importada por CNPJ solto aparecia
+     assim na fila. "Análise rápida" descreve a AÇÃO, que é o que a faixa
+     sempre significou — e é o que o próprio `oQueFazer` dela já dizia. */
+  C: "Análise rápida",
   D: "Permanência documentada",
 };
 

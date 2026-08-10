@@ -93,6 +93,10 @@ try {
     "lib/proposta-de-valor.ts",
     /* o relatório anual: números que vão para a mesa do cliente do contador */
     "lib/anuario.ts",
+    /* a fusão com a base da Receita: ela completa lacuna e NÃO sobrescreve o
+       que o escritório declarou — a regra antiga trocava CNAE, porte, situação
+       e regime calada, e mudava a faixa da empresa sem dizer */
+    "lib/receita.ts",
     /* o que vira link no texto da matéria — e, sobretudo, o que NÃO vira:
        inventar endereço de norma na página que se vende por citar a fonte é o
        pior defeito possível ali */
@@ -1720,6 +1724,65 @@ secao("Primeiro acesso da empresa: a aba certa e a instrução certa");
   /* nem `truncate` (reticências na primeira linha) nem `line-clamp` (corte
      silencioso na segunda): razão social aparece inteira, quebrando em quantas
      linhas precisar. A trava confere as duas formas de esconder. */
+  /* ═══ o que a gravação de 10/08/2026 revelou ═══════════════════════════
+     Três defeitos que só apareceram quando uma carteira de teste passou pelo
+     caminho inteiro: o Excel comendo o CNAE, a Receita sobrescrevendo o
+     arquivo e a faixa C afirmando "baixo risco" sobre empresa desconhecida. */
+  ok("CNAE que voltou do Excel como data é reconhecido",
+     csvlib.pareceDataNoLugarDoCnae("08/04/4649") === true &&
+     csvlib.pareceDataNoLugarDoCnae("02/02/4930") === true);
+  ok("...e o CNAE de verdade NÃO é confundido com data",
+     csvlib.pareceDataNoLugarDoCnae("4649-4/08") === false &&
+     csvlib.pareceDataNoLugarDoCnae("2511-0/00") === false &&
+     csvlib.pareceDataNoLugarDoCnae("") === false);
+
+  const receitaLib = await import(path.join(TMP, "receita.js"));
+  {
+    /* a Receita COMPLETA o que falta... */
+    const semCnae = receitaLib.fundir(
+      { cnpj: "1", razao_social: "ALFA", cnae_principal: undefined },
+      { cnae_principal: "4649-4/08", porte: "EPP" }
+    );
+    ok("a Receita completa o que o arquivo não trouxe",
+       semCnae.cnae_principal === "4649-4/08" && semCnae.porte === "EPP");
+
+    /* ...e NÃO troca o que o escritório declarou */
+    const divs = [];
+    const comCnae = receitaLib.fundir(
+      { cnpj: "2", razao_social: "BETA", cnae_principal: "4649-4/08", regime: "Simples Nacional" },
+      { cnae_principal: "5611-2/01", regime: "MEI" },
+      divs
+    );
+    ok("a Receita NÃO sobrescreve o que veio no arquivo",
+       comCnae.cnae_principal === "4649-4/08" && comCnae.regime === "Simples Nacional",
+       comCnae);
+    ok("...e a divergência é registrada, com os dois valores",
+       divs.length === 2 &&
+       divs.some((d) => d.campo === "regime" && d.do_arquivo === "Simples Nacional" && d.da_receita === "MEI"),
+       divs);
+    /* a razão social continua com a regra antiga: a do arquivo manda */
+    ok("a razão social do arquivo continua vencendo a da Receita",
+       receitaLib.fundir({ cnpj: "3", razao_social: "Padaria do Zé" },
+                         { razao_social: "JOSE DA SILVA COMERCIO LTDA" }).razao_social === "Padaria do Zé");
+  }
+
+  ok("empresa SEM CNAE não é chamada de baixo risco",
+     triagem.ROTULO_FAIXA.C === "Análise rápida" &&
+     /Sem CNAE para triar/.test(triagem.triar({ cnpj: "x", razao_social: "y" }).motivo),
+     triagem.triar({ cnpj: "x", razao_social: "y" }).motivo);
+
+  const zerar = path.join(RAIZ, "app/api/dev/zerar-carteira/route.ts");
+  /* a trava é o IMPORT, não a palavra: o comentário da rota cita
+     `createAdminClient` justamente para explicar por que ele não está lá, e a
+     primeira versão deste teste caiu nessa armadilha */
+  ok("o reset da conta de teste existe e é do cliente de SESSÃO",
+     fs.existsSync(zerar) &&
+     /import \{ createClient \} from "@\/lib\/supabase-server"/.test(fs.readFileSync(zerar, "utf8")) &&
+     !/createAdminClient\(/.test(fs.readFileSync(zerar, "utf8")));
+  ok("...e exige a frase digitada e a conta declarada de demonstração",
+     /APAGAR A CARTEIRA/.test(fs.readFileSync(zerar, "utf8")) &&
+     /NEXT_PUBLIC_CONTA_DEMO/.test(fs.readFileSync(zerar, "utf8")));
+
   ok("a razão social não é mais cortada na fila",
      !/truncate text-\[13\.5px\] font-semibold/.test(cock) &&
      !/line-clamp-\d[^"]*text-\[13\.5px\] font-semibold/.test(cock) &&
