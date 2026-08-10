@@ -1783,6 +1783,27 @@ secao("Primeiro acesso da empresa: a aba certa e a instrução certa");
      /APAGAR A CARTEIRA/.test(fs.readFileSync(zerar, "utf8")) &&
      /NEXT_PUBLIC_CONTA_DEMO/.test(fs.readFileSync(zerar, "utf8")));
 
+  /* ═══ a segunda gravação quebrada (10/08/2026) ═══════════════════════════
+     O roteiro mandava responder "5%" numa pergunta cujos botões são
+     "nenhum · poucos · cerca de um terço · mais da metade". Não existe campo
+     livre em pergunta nenhuma do formulário: o valor vem do BOTÃO. E os dois
+     únicos botões sem percentual no rótulo não diziam quanto valiam — o
+     contador clicava "quase todos" e o motor gravava 0,92 sem que nada na tela
+     explicasse de onde vinha a "receita qualificada" da linha de baixo. */
+  const formOpcoes = fs.readFileSync(path.join(RAIZ, "components/FormAnalise.tsx"), "utf8");
+  ok("as opções qualitativas dizem quanto valem",
+     /\["quase todos", 0\.92, "mais de 90%"\]/.test(formOpcoes) &&
+     /\["poucos", 0\.15, "uns 15%"\]/.test(formOpcoes));
+  /* equivalência é TEXTO e não `Math.round(v*100)`: o valor é ponto
+     representativo da faixa, não medida — "92%" fingiria precisão */
+  ok("...e a equivalência é declarada, não calculada do valor",
+     !/Math\.round\(v \* 100\)/.test(formOpcoes));
+  /* "sim"/"não" valem 1 e 0, "com esforço" vale 2: mostrar percentual ali
+     seria pior do que não mostrar nada */
+  ok("...e as perguntas que não são percentuais continuam sem número",
+     /\["sim", 1\], \["não", 0\]/.test(formOpcoes) &&
+     /\["com esforço", 2\]/.test(formOpcoes));
+
   ok("a razão social não é mais cortada na fila",
      !/truncate text-\[13\.5px\] font-semibold/.test(cock) &&
      !/line-clamp-\d[^"]*text-\[13\.5px\] font-semibold/.test(cock) &&

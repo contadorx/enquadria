@@ -83,7 +83,29 @@ export const RESPOSTAS_PADRAO: Respostas = {
 const QUAL_PADRAO: DetalheQual = { fora_simples: 0.92, sem_aproveitamento: 0 };
 const CRED_PADRAO: DetalheCred = { insumos: 0.45, servicos: 0.15, outros: 0.1 };
 
-type Opcao = [string, number];
+/**
+ * A OPÇÃO, E O NÚMERO QUE ELA VIRA — 10/08/2026.
+ *
+ * O terceiro elemento é a EQUIVALÊNCIA, e ele existe pela mesma razão que o
+ * `equivale` de `lib/coleta.ts`, escrito para o formulário do cliente: quem
+ * responde tem o número na cabeça — o contador sabe que "uns 60% dos clientes
+ * dele são Presumido" — e sem ver a equivalência não tem como perceber que
+ * marcou a faixa errada.
+ *
+ * Aqui o defeito era pior do que no formulário do cliente, porque este é o
+ * lado do contador: ele clicava "quase todos", o motor gravava 0,92 e a linha
+ * de baixo mostrava "receita qualificada = 70%" sem que nada na tela explicasse
+ * de onde saíram os 70. Premissa que o signatário não consegue ler é premissa
+ * que ele não pode defender — e isto vira laudo assinado.
+ *
+ * É TEXTO E NÃO CÁLCULO de propósito. `Math.round(0.92 * 100)` daria "92%", que
+ * finge medição: o valor é um ponto representativo da faixa, não uma medida.
+ * "mais de 90%" diz a verdade sobre o que foi declarado.
+ *
+ * Fica vazio onde não há percentual — "sim"/"não" valem 1 e 0, "com esforço"
+ * vale 2, e escrever "100%" ou "200%" ali seria pior do que não escrever nada.
+ */
+type Opcao = [rotulo: string, valor: number, equivale?: string];
 
 function Escolha({
   titulo,
@@ -118,7 +140,7 @@ function Escolha({
       </div>
       {dica && <p className="mb-1 mt-0.5 text-[12px] text-muted">{dica}</p>}
       <div className="mt-2 flex flex-wrap gap-1.5">
-        {opcoes.map(([rotulo, v]) => {
+        {opcoes.map(([rotulo, v, equivale]) => {
           const ativo = Math.abs(valor - v) < 1e-9;
           return (
             <button
@@ -131,6 +153,11 @@ function Escolha({
               }`}
             >
               {rotulo}
+              {equivale && (
+                <span className={ativo ? "ml-1.5 text-white/70" : "ml-1.5 text-muted"}>
+                  {equivale}
+                </span>
+              )}
             </button>
           );
         })}
@@ -746,7 +773,12 @@ export function FormAnalise({
         <Escolha
           titulo="Desses clientes empresa, quantos estão fora do Simples (Lucro Real ou Presumido)?"
           dica="Cliente no Simples tradicional ou MEI não aproveita o crédito integral."
-          opcoes={[["quase nenhum", 0.1], ["menos da metade", 0.33], ["mais da metade", 0.65], ["quase todos", 0.92]]}
+          opcoes={[
+            ["quase nenhum", 0.1, "uns 10%"],
+            ["menos da metade", 0.33, "uns 33%"],
+            ["mais da metade", 0.65, "uns 65%"],
+            ["quase todos", 0.92, "mais de 90%"],
+          ]}
           valor={dq.fora_simples}
           onEscolher={(v) => {
             setDq({ ...dq, fora_simples: v });
@@ -757,7 +789,12 @@ export function FormAnalise({
         <Escolha
           titulo="E desses, quantos ainda assim NÃO aproveitariam o crédito?"
           dica="Órgão público, entidade imune, ou quem revende direto ao consumidor final e não usa o crédito na prática."
-          opcoes={[["nenhum", 0], ["poucos", 0.15], ["cerca de um terço", 0.33], ["mais da metade", 0.6]]}
+          opcoes={[
+            ["nenhum", 0, "0%"],
+            ["poucos", 0.15, "uns 15%"],
+            ["cerca de um terço", 0.33, "uns 33%"],
+            ["mais da metade", 0.6, "uns 60%"],
+          ]}
           valor={dq.sem_aproveitamento}
           onEscolher={(v) => {
             setDq({ ...dq, sem_aproveitamento: v });

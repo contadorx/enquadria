@@ -331,6 +331,9 @@ ok    a razão social do arquivo continua vencendo a da Receita
 ok    empresa SEM CNAE não é chamada de baixo risco
 ok    o reset da conta de teste existe e é do cliente de SESSÃO
 ok    ...e exige a frase digitada e a conta declarada de demonstração
+ok    as opções qualitativas dizem quanto valem
+ok    ...e a equivalência é declarada, não calculada do valor
+ok    ...e as perguntas que não são percentuais continuam sem número
 ok    a razão social não é mais cortada na fila
 ok    premissa estimada vira TAREFA numerada, não só aviso de estado
 ok    empresa sem análise nenhuma também recebe instrução
@@ -498,4 +501,4 @@ ok    nenhuma peça da proposta promete economia, ganho ou garantia
 
 ── Resultado ───────────────────────────────────────────────────
 
-3 FALHA(S) em 437 verificações
+3 FALHA(S) em 440 verificações
