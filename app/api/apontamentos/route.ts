@@ -59,6 +59,16 @@ export async function PATCH(req: Request) {
   let corpo: {
     id?: string;
     ids?: string[];
+    /**
+     * AS EMPRESAS INTEIRAS, VINDAS DO COCKPIT — 10/08/2026.
+     *
+     * O cockpit trabalha por EMPRESA, que é a unidade da fila: quem está lá vê
+     * o selo "reforma 3" e quer dizer "tratei os três desta empresa". Sem esta
+     * porta, a tela teria de descobrir os ids de cada empresa antes de decidir
+     * — uma consulta por linha selecionada, e um lote pela metade se a quinta
+     * falhasse.
+     */
+    empresas?: string[];
     status?: StatusApontamento;
     nota?: string | null;
     /** quanto o escritório declara ter cobrado; só existe em `virou_servico` */
@@ -70,18 +80,51 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ erro: "corpo inválido" }, { status: 400 });
   }
 
+  if (!corpo.status || !VALIDOS.includes(corpo.status)) {
+    return NextResponse.json({ erro: "status inválido" }, { status: 400 });
+  }
+
   /* UM OU MUITOS, PELA MESMA PORTA.
      A tela da carteira decide uma norma inteira de uma vez — "esta resolução
      não se aplica a nenhum dos meus dez clientes de transporte" é uma decisão
      só, tomada uma vez. Obrigar dez requisições faria a tela piscar dez vezes
      e deixaria estado pela metade se a quinta falhasse. */
-  const ids = corpo.ids?.length ? corpo.ids : corpo.id ? [corpo.id] : [];
-  if (ids.length === 0) return NextResponse.json({ erro: "id obrigatório" }, { status: 400 });
-  if (ids.length > 500) {
-    return NextResponse.json({ erro: "no máximo 500 por vez" }, { status: 400 });
+  let ids = corpo.ids?.length ? corpo.ids : corpo.id ? [corpo.id] : [];
+
+  /**
+   * POR EMPRESA, E SÓ O QUE ESTÁ EM ABERTO.
+   *
+   * A resolução dos ids acontece AQUI e não na tela por dois motivos. O
+   * primeiro é de rede. O segundo é o que importa: o filtro `status = 'novo'`
+   * é a garantia de que um clique em lote não rebaixa um ponto já marcado como
+   * "virou serviço" para "tratado" — isso apagaria o valor declarado e o mês em
+   * que o dinheiro entrou (a rota limpa os dois quando o estado sai de
+   * `virou_servico`), e com eles o relatório do fim do ano, que é a peça de
+   * renovação. Em lote ninguém lê o que está apagando.
+   */
+  if (ids.length === 0 && corpo.empresas?.length) {
+    if (corpo.empresas.length > 500) {
+      return NextResponse.json({ erro: "no máximo 500 empresas por vez" }, { status: 400 });
+    }
+    const { data, error } = await supabase
+      .from("apontamentos")
+      // schema-ok: apontamentos vem da 0063
+      .select("id")
+      .in("empresa_id", corpo.empresas)
+      .eq("status", "novo")
+      .limit(2000);
+    if (error) {
+      return NextResponse.json({ erro: erroDeBanco(error, "apontamentos") }, { status: 500 });
+    }
+    ids = (data ?? []).map((l) => l.id as string);
+    /* nenhum em aberto não é erro: é o caso de dois contadores tratando a
+       mesma empresa ao mesmo tempo, e o segundo não precisa ver falha */
+    if (ids.length === 0) return NextResponse.json({ ok: true, atualizados: 0 });
   }
-  if (!corpo.status || !VALIDOS.includes(corpo.status)) {
-    return NextResponse.json({ erro: "status inválido" }, { status: 400 });
+
+  if (ids.length === 0) return NextResponse.json({ erro: "id obrigatório" }, { status: 400 });
+  if (ids.length > 2000) {
+    return NextResponse.json({ erro: "no máximo 2000 por vez" }, { status: 400 });
   }
 
   /**

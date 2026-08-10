@@ -389,7 +389,7 @@ export function contarEsteira(linhas: Linha[]): Esteira {
  * para responder a um aviso. Separado de `keyof Esteira` porque etapa é degrau
  * contado na linha de produção, e recorte não é.
  */
-export type FiltroDeFila = keyof Esteira | "aguardando_assinatura";
+export type FiltroDeFila = keyof Esteira | "aguardando_assinatura" | "reforma_pendente";
 
 export const ETAPAS: { chave: keyof Esteira; rotulo: string; ajuda: string }[] = [
   { chave: "importadas", rotulo: "importadas", ajuda: "toda a carteira que entrou no sistema" },
@@ -459,6 +459,19 @@ export function filtrarPorEtapa(linhas: Linha[], etapa: FiltroDeFila | null): Li
    */
   if (etapa === "aguardando_assinatura")
     return linhas.filter((l) => l.termo_id && !l.assinado);
+  /**
+   * PONTOS DA REFORMA EM ABERTO — 10/08/2026.
+   *
+   * `apontamentos` já contava só os de status `novo` (`abertosPorEmpresa`), ou
+   * seja, o que ainda não foi tratado. Filtrar por ele é o recorte que faltava
+   * para o selo da linha virar fila de trabalho.
+   *
+   * Recorte, e não etapa: quem tem norma nova alcançando um cliente não subiu
+   * nem desceu na linha de produção da janela. Somar isso ao funil daria uma
+   * coluna que não é degrau de nada — a mesma razão pela qual
+   * `aguardando_assinatura` mora aqui e não em `Esteira`.
+   */
+  if (etapa === "reforma_pendente") return linhas.filter((l) => (l.apontamentos ?? 0) > 0);
   return linhas;
 }
 

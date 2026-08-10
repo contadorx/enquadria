@@ -312,6 +312,17 @@ ok    ...e 'cadastrar contato' abre o DOSSIÊ, que é onde o dado que falta mora
 ok    sem trabalho pendente não há destino — o botão fica apagado
 ok    o Cockpit LÊ o mapa em vez de reescrever a regra
 ok    clicar no nome de empresa SEM análise leva ao formulário
+ok    ...e, com o filtro dos pontos da Reforma ligado, abre a aba deles
+ok    a tela duplicada de apontamentos não existe mais
+ok    ...e nenhum menu aponta para a rota que saiu
+ok    o balanço 'o que a Reforma rendeu' sobreviveu, na Reforma
+ok    a ficha da empresa tem as quatro abas, com os apontamentos entre elas
+ok    ...e a aba mostra quantos pontos estão em aberto, sem precisar abrir
+ok    ...e a lista monta mesmo com a aba fechada, senão o número nunca chega
+ok    o cockpit sabe filtrar os pontos da Reforma em aberto
+ok    o lote do cockpit marca 'tratado', e só isso
+ok    a rota resolve os pontos por empresa e só alcança o que está em aberto
+ok    a razão social não é mais cortada na fila
 ok    premissa estimada vira TAREFA numerada, não só aviso de estado
 ok    empresa sem análise nenhuma também recebe instrução
 
@@ -478,4 +489,4 @@ ok    nenhuma peça da proposta promete economia, ganho ou garantia
 
 ── Resultado ───────────────────────────────────────────────────
 
-2 FALHA(S) em 417 verificações
+2 FALHA(S) em 428 verificações

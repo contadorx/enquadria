@@ -127,13 +127,25 @@ export const ABAS_ESCRITORIO: ItemNav[] = [
  * frio, e exigir cadastro para assistir mataria o público que ele serve. Aqui
  * é só o caminho de volta, para quem já é usuário. Mesma rota, duas portas.
  */
+/**
+ * A ABA "APONTAMENTOS" SAIU DAQUI — 10/08/2026.
+ *
+ * O argumento antigo era que "ler" e "tratar" são dois estados mentais e por
+ * isso mereciam duas telas. A prática desmentiu: a lista da carteira inteira
+ * agrupada por norma e a lista por empresa mostravam as MESMAS linhas, com os
+ * mesmos três botões, em dois lugares. Quem tratava num lugar não sabia se
+ * tinha tratado no outro, e o mesmo ponto voltava a aparecer.
+ *
+ * Agora há um lugar só: o ponto vive na FICHA DA EMPRESA, ao lado da análise,
+ * do dossiê e do comparativo — que é onde o contador está quando decide
+ * qualquer coisa sobre aquele cliente. A carteira inteira continua alcançável
+ * pelo cockpit, que é a tela de fila, com o recorte "pontos da Reforma em
+ * aberto".
+ *
+ * A Reforma continua sendo a linha do tempo: o que SAIU, para ler.
+ */
 export const ABAS_APRENDER: ItemNav[] = [
   { href: "/painel/reforma", label: "Reforma" },
-  /* A Reforma mostra O QUE SAIU; os Apontamentos, O QUE FAZER com isso na
-     carteira. Duas telas porque são dois estados mentais — quem lê está se
-     informando, quem trata está trabalhando —, e uma aba porque é o mesmo
-     assunto. Sem item de menu novo: ele tem seis e já foi quinze. */
-  { href: "/painel/apontamentos", label: "Apontamentos" },
   { href: "/curso", label: "Curso" },
 ];
 

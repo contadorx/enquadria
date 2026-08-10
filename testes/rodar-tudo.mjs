@@ -1656,8 +1656,74 @@ secao("Primeiro acesso da empresa: a aba certa e a instrução certa");
      cockLib.DESTINO_DA_ACAO.fora.tipo === "nenhum");
   ok("o Cockpit LÊ o mapa em vez de reescrever a regra",
      /DESTINO_DA_ACAO\[l\.acao\]/.test(cock));
+  /* ESTE TESTE MEDIA A LINHA, NÃO A REGRA — reescrito em 10/08/2026.
+     Ele exigia o texto exato `aba: l.analise_id ? "dossie" : "decisao"`. Quando
+     o clique ganhou um terceiro destino (a aba dos pontos da Reforma, quando a
+     fila está filtrada por eles), o teste quebrou sem que nada piorasse: a
+     regra antiga continua valendo, só deixou de caber numa linha. Agora ele
+     recorta o handler do nome e confere os TRÊS destinos — o que é uma trava
+     mais forte, não mais fraca. */
+  const iNome = cock.indexOf('className="min-w-0 flex-1 text-left');
+  const cliqueNome = iNome > 0 ? cock.slice(Math.max(0, iNome - 900), iNome) : "";
   ok("clicar no nome de empresa SEM análise leva ao formulário",
-     /aba:\s*l\.analise_id \? "dossie" : "decisao"/.test(cock));
+     /l\.analise_id[\s\S]{0,80}"dossie"[\s\S]{0,40}"decisao"/.test(cliqueNome),
+     cliqueNome.slice(-220));
+  ok("...e, com o filtro dos pontos da Reforma ligado, abre a aba deles",
+     /reforma_pendente[\s\S]{0,120}"apontamentos"/.test(cliqueNome),
+     cliqueNome.slice(-220));
+
+  /* ═══ os apontamentos deixaram de existir em dois lugares (10/08/2026) ═══
+     A tela /painel/apontamentos mostrava as MESMAS linhas, com os MESMOS três
+     botões, que a ficha da empresa. Quem tratava num lugar não sabia se tinha
+     tratado no outro, e o ponto voltava a aparecer. */
+  ok("a tela duplicada de apontamentos não existe mais",
+     !fs.existsSync(path.join(RAIZ, "app/painel/apontamentos/page.tsx")) &&
+     !fs.existsSync(path.join(RAIZ, "components/PainelApontamentos.tsx")));
+
+  const navSrc = fs.readFileSync(path.join(RAIZ, "lib/nav.ts"), "utf8");
+  ok("...e nenhum menu aponta para a rota que saiu",
+     !/\/painel\/apontamentos/.test(navSrc));
+
+  /* o balanço anual morava naquela tela: some a tela, some a peça de renovação
+     — e ninguém repara, porque número que ninguém procura não faz falta */
+  const reformaSrc = fs.readFileSync(path.join(RAIZ, "app/painel/reforma/page.tsx"), "utf8");
+  ok("o balanço 'o que a Reforma rendeu' sobreviveu, na Reforma",
+     /RendimentoDaCarteira/.test(reformaSrc));
+
+  const ficha = fs.readFileSync(path.join(RAIZ, "components/PainelEmpresa.tsx"), "utf8");
+  ok("a ficha da empresa tem as quatro abas, com os apontamentos entre elas",
+     /\["decisao"/.test(ficha) && /\["dossie", "Dossiê"\]/.test(ficha) &&
+     /\["comparativo", "Comparativo"\]/.test(ficha) && /"apontamentos",/.test(ficha));
+  ok("...e a aba mostra quantos pontos estão em aberto, sem precisar abrir",
+     /Apontamentos da Reforma · \$\{pendentes\}/.test(ficha));
+  /* montar só dentro da aba ativa faria o rótulo saber o número DEPOIS de
+     alguém abrir a aba — ou seja, só para quem já não precisava do aviso */
+  ok("...e a lista monta mesmo com a aba fechada, senão o número nunca chega",
+     /aba === "apontamentos" \? "pb-4" : "hidden"/.test(ficha));
+
+  ok("o cockpit sabe filtrar os pontos da Reforma em aberto",
+     cockLib.filtrarPorEtapa(
+       [{ id: "a", faixa: "A", apontamentos: 2 }, { id: "b", faixa: "A", apontamentos: 0 }],
+       "reforma_pendente"
+     ).length === 1);
+  /* o lote só pode REGISTRAR que olhou: "não se aplica" tira a empresa do
+     relatório anual e "virou serviço" põe dinheiro nele — nenhum dos dois se
+     decide sem ler a norma */
+  ok("o lote do cockpit marca 'tratado', e só isso",
+     /status: "tratado"/.test(cock) &&
+     !/status: "nao_se_aplica"/.test(cock) && !/status: "virou_servico"/.test(cock));
+
+  const rotaApont = fs.readFileSync(path.join(RAIZ, "app/api/apontamentos/route.ts"), "utf8");
+  ok("a rota resolve os pontos por empresa e só alcança o que está em aberto",
+     /corpo\.empresas/.test(rotaApont) && /\.eq\("status", "novo"\)/.test(rotaApont));
+
+  /* nem `truncate` (reticências na primeira linha) nem `line-clamp` (corte
+     silencioso na segunda): razão social aparece inteira, quebrando em quantas
+     linhas precisar. A trava confere as duas formas de esconder. */
+  ok("a razão social não é mais cortada na fila",
+     !/truncate text-\[13\.5px\] font-semibold/.test(cock) &&
+     !/line-clamp-\d[^"]*text-\[13\.5px\] font-semibold/.test(cock) &&
+     /break-words text-\[13\.5px\] font-semibold/.test(cock));
 
   const form = fs.readFileSync(path.join(RAIZ, "components/FormAnalise.tsx"), "utf8");
   ok("premissa estimada vira TAREFA numerada, não só aviso de estado",

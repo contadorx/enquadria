@@ -123,7 +123,12 @@ export function Cockpit({
   const [busca, setBusca] = useState("");
   const [selecao, setSelecao] = useState<Set<string>>(new Set());
   const [foco, setFoco] = useState<{ aviso: Aviso; ids: Set<string> } | null>(null);
-  const [gaveta, setGaveta] = useState<{ id: string; aba: "decisao" | "dossie" } | null>(null);
+  /* a aba em que a gaveta abre. "apontamentos" entrou em 10/08/2026, quando os
+     pontos da Reforma saíram do fim do Dossiê e viraram aba própria. */
+  const [gaveta, setGaveta] = useState<{
+    id: string;
+    aba: "decisao" | "dossie" | "apontamentos";
+  } | null>(null);
   const [honorario, setHonorario] = useState(HONORARIO_PADRAO);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [recado, setRecado] = useState<string | null>(null);
@@ -192,6 +197,16 @@ export function Cockpit({
   const visiveis = filtradas.slice(0, mostrar);
   const mesa = naMesa(linhas, honorario);
   const selecionadas = filtradas.filter((l) => selecao.has(l.id));
+
+  /**
+   * OS PONTOS DA REFORMA EM ABERTO — 10/08/2026.
+   *
+   * Contado sobre a carteira INTEIRA e não sobre a fila filtrada, pela mesma
+   * razão do empurrão: responde "o que ficou pendente", e essa resposta não
+   * pode mudar porque alguém digitou na busca.
+   */
+  const comReforma = linhas.filter((l) => (l.apontamentos ?? 0) > 0);
+  const pontosAbertos = comReforma.reduce((s, l) => s + (l.apontamentos ?? 0), 0);
 
   // O empurrão sai da carteira INTEIRA, não da fila filtrada: ele responde
   // "o que fazer agora", e essa resposta não pode mudar porque o contador
@@ -343,6 +358,52 @@ export function Cockpit({
       router.refresh();
     } catch {
       setRecado("falha de rede — nada foi enviado. Confira a conexão e tente de novo.");
+    } finally {
+      setOcupado(null);
+    }
+  }
+
+  /**
+   * MARCAR OS PONTOS DA REFORMA COMO TRATADOS, EM LOTE.
+   *
+   * `chamar()` não serve: ele é POST, e a rota de apontamentos é PATCH — a
+   * diferença não é decorativa, é o verbo certo para "mudar o estado de algo
+   * que já existe". Por isso o fetch é escrito aqui, com o mesmo tratamento de
+   * erro e o mesmo `router.refresh()` no fim.
+   *
+   * Manda EMPRESAS, não ids de apontamento: o cockpit trabalha por empresa e
+   * não conhece os pontos, um a um. Quem resolve os ids é a rota, e é lá que
+   * está a trava de só alcançar o que ainda está em aberto.
+   */
+  async function tratarReforma() {
+    const empresas = selecionadas.filter((l) => (l.apontamentos ?? 0) > 0).map((l) => l.id);
+    if (empresas.length === 0) {
+      setRecado("nenhuma das empresas selecionadas tem ponto da Reforma em aberto.");
+      return;
+    }
+    setOcupado("reforma");
+    setRecado(null);
+    try {
+      const resp = await fetch("/api/apontamentos", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ empresas, status: "tratado" }),
+      });
+      const json = await lerResposta(resp);
+      if (!resp.ok) {
+        setRecado((json.erro as string) ?? "não foi possível marcar os pontos");
+        return;
+      }
+      const n = (json as { atualizados?: number }).atualizados ?? 0;
+      setRecado(
+        n === 0
+          ? "esses pontos já tinham sido tratados por alguém."
+          : `${n} ${n === 1 ? "ponto marcado" : "pontos marcados"} como tratados em ${empresas.length} ${empresas.length === 1 ? "empresa" : "empresas"}.`
+      );
+      setSelecao(new Set());
+      router.refresh();
+    } catch {
+      setRecado("falha de rede — nenhum ponto foi alterado. Confira a conexão e tente de novo.");
     } finally {
       setOcupado(null);
     }
@@ -746,6 +807,76 @@ export function Cockpit({
           </div>
         )}
 
+        {/*
+          OS PONTOS DA REFORMA — RECORTE, NÃO DEGRAU (10/08/2026).
+
+          Fica fora da grade de cinco colunas de propósito: a linha de produção
+          é o funil da janela, e norma nova alcançando um cliente não faz a
+          empresa subir nem descer nele. Somar uma sexta coluna faria o funil
+          deixar de ser funil.
+
+          E fica VISÍVEL sem clique porque é o trabalho que sobrevive ao
+          fechamento da janela — o único que ainda existe em novembro. Era um
+          selo na linha da empresa e nada mais: para achar quem tinha ponto em
+          aberto, o contador rolava a carteira inteira procurando o selo.
+        */}
+        {pontosAbertos > 0 && etapa !== "reforma_pendente" && (
+          <div className="mt-2 rounded-sm border border-accentwash bg-accentwash px-3 py-2 text-[12px] leading-relaxed text-accentdeep">
+            <b>{pontosAbertos}</b> {pontosAbertos === 1 ? "ponto" : "pontos"} da Reforma{" "}
+            {pontosAbertos === 1 ? "em aberto" : "em aberto"} em <b>{comReforma.length}</b>{" "}
+            {comReforma.length === 1 ? "empresa" : "empresas"}.{" "}
+            <button
+              // ux-ok: o clique refaz a própria lista logo abaixo
+              onClick={() => {
+                setEtapa("reforma_pendente");
+                setGrupo("todas");
+                setMostrar(PAGINA);
+              }}
+              className="font-semibold underline underline-offset-2"
+            >
+              ver quais
+            </button>
+          </div>
+        )}
+
+        {etapa === "reforma_pendente" && (
+          <div className="mt-2 rounded-sm border border-line bg-surface2 px-3 py-2 text-[12px] leading-relaxed text-slate2">
+            Mostrando as <b>{comReforma.length}</b> com ponto da Reforma em aberto. Abra a empresa
+            na aba <b>Apontamentos da Reforma</b> para ler a norma e decidir uma a uma
+            {selecionadas.length > 0 ? "" : ", ou selecione empresas para tratar em lote"}.{" "}
+            <button
+              // ux-ok: o clique refaz a própria lista logo abaixo
+              onClick={() => {
+                setEtapa(null);
+                setMostrar(PAGINA);
+              }}
+              className="font-semibold text-accentdeep underline underline-offset-2"
+            >
+              ver a carteira inteira
+            </button>
+            {selecionadas.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-line pt-2">
+                <button
+                  onClick={() => void tratarReforma()}
+                  disabled={!!ocupado}
+                  className="rounded-sm border border-ink bg-ink px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40"
+                >
+                  {ocupado === "reforma" ? "…" : `Marcar como tratados (${selecionadas.length})`}
+                </button>
+                {/* O QUE ESTE BOTÃO NÃO FAZ, dito antes de ele ser clicado:
+                    ele não decide "não se aplica" nem "virou serviço". Essas
+                    duas mudam o relatório do fim do ano — uma tira a empresa da
+                    conta, a outra põe dinheiro nela — e não se tomam em lote,
+                    sem ler a norma. */}
+                <span className="text-[11.5px] text-muted">
+                  registra que você olhou. &quot;Não se aplica&quot; e &quot;virou serviço&quot;
+                  continuam sendo um a um, na ficha.
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="mt-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-linesoft pt-2.5">
           <div className="text-[12.5px] text-slate2">
             {/* 08/08/2026: dizia "N empresas urgentes sem laudo" e somava só a
@@ -1093,10 +1224,25 @@ export function Cockpit({
 
                 {/* Clicar no NOME abre a ficha — menos quando não há análise:
                     aí a ficha só diz "nenhuma análise registrada", e o clique
-                    que deveria começar o trabalho o esconde. (07/08/2026) */}
+                    que deveria começar o trabalho o esconde. (07/08/2026)
+
+                    E, quando a fila está filtrada pelos pontos da Reforma, abre
+                    direto na aba deles (10/08/2026). O selo "reforma 3" não
+                    virou botão de propósito: botão dentro de botão é HTML
+                    inválido e o navegador decide sozinho qual dos dois cliques
+                    vale. A aba certa vem do CONTEXTO — quem filtrou por pontos
+                    em aberto e clicou numa empresa está indo tratá-los. */}
                 <button
                   onClick={() =>
-                    setGaveta({ id: l.id, aba: l.analise_id ? "dossie" : "decisao" })
+                    setGaveta({
+                      id: l.id,
+                      aba:
+                        etapa === "reforma_pendente" && (l.apontamentos ?? 0) > 0
+                          ? "apontamentos"
+                          : l.analise_id
+                            ? "dossie"
+                            : "decisao",
+                    })
                   }
                   className="min-w-0 flex-1 text-left md:flex-none"
                 >
@@ -1106,7 +1252,28 @@ export function Cockpit({
                         prioridade
                       </span>
                     )}
-                    <span className="truncate text-[13.5px] font-semibold">{l.razao_social}</span>
+                    {/* A RAZÃO SOCIAL INTEIRA — 10/08/2026.
+                        Ela vinha com `truncate`, que corta com reticências na
+                        primeira linha. Razão social de verdade é longa
+                        ("COMERCIO E DISTRIBUIDORA DE ALIMENTOS SAO JOAO LTDA"),
+                        e o que sobrava na tela era o começo — que costuma ser o
+                        genérico. Duas empresas do mesmo grupo ficavam
+                        indistinguíveis na fila, e a fila é onde se escolhe em
+                        qual clicar.
+
+                        Agora aparece INTEIRA, quebrando em quantas linhas
+                        precisar. Cortar em duas ainda escondia nome de verdade:
+                        "INDUSTRIA METALURGICA E COMERCIO DE ESTRUTURAS
+                        METALICAS VALE DO ACO SA" tem 78 caracteres e não é caso
+                        extremo. A linha da fila fica mais alta nessas empresas,
+                        e é o preço certo — a fila existe para escolher em qual
+                        clicar, e não se escolhe o que não se lê.
+
+                        `break-words` existe para o nome sem espaço (ou com uma
+                        sequência longa) não estourar a coluna. */}
+                    <span className="break-words text-[13.5px] font-semibold leading-snug">
+                      {l.razao_social}
+                    </span>
                     {/* O SELO DA REFORMA (08/08/2026). O monitor cruza cada
                         norma nova com a carteira todo dia e gravava o resultado
                         onde ninguém olhava. É o trabalho cobrável que sobrevive

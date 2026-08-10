@@ -5,6 +5,7 @@ import { temNovidade, type Artigo } from "@/lib/ajuda";
 import { atingidas, ordenar, type EmpresaRadar, type ItemRadar } from "@/lib/radar";
 import { achatar, unirFeed, type EntradaFeed } from "@/lib/reforma";
 import { FeedReforma } from "@/components/FeedReforma";
+import { RendimentoDaCarteira } from "@/components/RendimentoDaCarteira";
 
 /**
  * A ABA REFORMA — uma linha do tempo, não duas features homônimas.
@@ -120,6 +121,20 @@ export default async function ReformaPage() {
       </p>
 
       <FeedReforma linhas={achatar(feed)} hoje={hoje} />
+
+      {/* O BALANÇO SOBREVIVEU À TELA QUE O ABRIGAVA — 10/08/2026.
+          `RendimentoDaCarteira` vivia em /painel/apontamentos, que saiu por
+          duplicar a lista da ficha da empresa. Ele não duplicava nada: é a
+          resposta à pergunta de março de 2027 — "o que eu mostro ao cliente
+          para cobrar de novo?" —, que é a que decide a renovação. Apagar a tela
+          levaria o balanço junto, sem ninguém notar, porque número que ninguém
+          procura não faz falta no dia em que some.
+
+          Fica no fim da Reforma porque é o fecho da leitura: o que saiu, em
+          cima; o que isso rendeu, embaixo. */}
+      <div className="mt-10 border-t border-line pt-8">
+        <RendimentoDaCarteira />
+      </div>
     </div>
   );
 }

@@ -45,7 +45,7 @@ const COR_SAIDA: Record<string, string> = {
   verde: "bg-verde",
 };
 
-type Aba = "decisao" | "dossie" | "comparativo";
+type Aba = "decisao" | "dossie" | "comparativo" | "apontamentos";
 
 /** o mesmo recado saía escrito duas vezes, nas duas funções de envio — e duas
     cópias de uma frase são duas frases que um dia divergem */
@@ -155,6 +155,16 @@ export function PainelEmpresa({
   useEffect(() => {
     setAba(abaInicial);
   }, [abaInicial]);
+
+  /**
+   * QUANTOS PONTOS DA REFORMA ESTÃO EM ABERTO NESTA EMPRESA.
+   *
+   * Quem conta é `ApontamentosEmpresa`, que já busca a lista — contar aqui de
+   * novo seria uma segunda consulta para o mesmo número, e as duas poderiam
+   * divergir por meio segundo justamente enquanto alguém trata um ponto.
+   * `null` = ainda não sei; e não saber é diferente de zero.
+   */
+  const [pendentes, setPendentes] = useState<number | null>(null);
 
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [bloqueio, setBloqueio] = useState<string | null>(null);
@@ -615,6 +625,24 @@ export function PainelEmpresa({
     ["decisao", a ? "Análise" : "Análise · pendente"],
     ["dossie", "Dossiê"],
     ["comparativo", "Comparativo"],
+    /**
+     * A CONTAGEM NO RÓTULO, e não um pontinho.
+     *
+     * O selo do cockpit diz "reforma 3" e some quando a pessoa entra na
+     * empresa: dentro da ficha não havia nada dizendo que existia trabalho de
+     * Reforma esperando, a não ser abrir a aba. Um marcador sem número mandaria
+     * abrir; o número deixa decidir se vale abrir agora.
+     *
+     * `null` (ainda carregando) não vira "0": rótulo que pisca de "Reforma"
+     * para "Reforma · 0" e depois para "Reforma · 3" é pior do que rótulo que
+     * demora meio segundo.
+     */
+    [
+      "apontamentos",
+      pendentes == null || pendentes === 0
+        ? "Apontamentos da Reforma"
+        : `Apontamentos da Reforma · ${pendentes}`,
+    ],
   ];
 
   return (
@@ -1058,28 +1086,12 @@ export function PainelEmpresa({
             />
           </Bloco>
 
-          {/* O MONITOR DA REFORMA, NESTA EMPRESA.
-              Fica no dossiê e não na aba de análise porque é HISTÓRICO, não
-              trabalho da janela: é a lista que responde "o que aconteceu com
-              este cliente desde que ele entrou" — e é ela que vira o relatório
-              do fim do ano. */}
-          <Bloco titulo="Apontamentos da Reforma">
-            <ApontamentosEmpresa empresaId={e.id} />
-            {/* O RELATÓRIO ANUAL SAI DAQUI (08/08/2026) — e é a peça de
-                renovação. O acompanhamento bem feito não deixa rastro: a maior
-                parte das normas termina em "analisado, não alcança esta
-                empresa", e o cliente nunca fica sabendo que houve trabalho.
-                Este link transforma o registro em papel com a marca do
-                escritório, que é o que se leva para a reunião de honorário. */}
-            <a
-              href={`/doc/anuario/${e.id}`}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-3 inline-block rounded-sm border border-line px-3 py-2 text-[12.5px] font-semibold text-accentdeep"
-            >
-              Relatório do ano para o cliente →
-            </a>
-          </Bloco>
+          {/* OS APONTAMENTOS SAÍRAM DAQUI — 10/08/2026.
+              Eram um bloco no fim do Dossiê, que já é a aba mais longa da ficha
+              (contato, dados cadastrais, documentos, correção, arquivamento). O
+              contador só descobria que uma norma nova alcançava este cliente se
+              rolasse até o fim de uma aba que ele abre para outra coisa. Viraram
+              aba própria, com a contagem do que está em aberto no rótulo. */}
 
           <Bloco titulo="Decisão registrada">
             {!a || !saida ? (
@@ -1490,6 +1502,41 @@ export function PainelEmpresa({
           />
         </div>
       )}
+
+      {/* ------------------------------------------- APONTAMENTOS DA REFORMA */}
+      {/* A aba MONTA SEMPRE, escondida por CSS quando não é a selecionada.
+          Não é preciosismo: o rótulo das abas mostra quantos pontos estão em
+          aberto, e esse número vem da lista. Se o componente só existisse
+          dentro da aba ativa, o rótulo só saberia o número DEPOIS de alguém
+          abrir a aba — ou seja, exatamente para quem já não precisava do
+          aviso. */}
+      <div className={aba === "apontamentos" ? "pb-4" : "hidden"}>
+        <p className="mb-3 max-w-[70ch] text-[12.5px] leading-relaxed text-slate2">
+          Toda norma é cruzada com a carteira às 5h. O que alcança <b>esta empresa</b> fica aqui,
+          com a sua decisão — e é isso que vira o relatório do fim do ano.
+        </p>
+
+        <ApontamentosEmpresa
+          empresaId={e.id}
+          aoContarPendentes={setPendentes}
+          aoMudar={mudou}
+        />
+
+        {/* O RELATÓRIO ANUAL SAI DAQUI (08/08/2026) — e é a peça de renovação.
+            O acompanhamento bem feito não deixa rastro: a maior parte das
+            normas termina em "analisado, não alcança esta empresa", e o cliente
+            nunca fica sabendo que houve trabalho. Este link transforma o
+            registro em papel com a marca do escritório, que é o que se leva
+            para a reunião de honorário. */}
+        <a
+          href={`/doc/anuario/${e.id}`}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-4 inline-block rounded-sm border border-line px-3 py-2 text-[12.5px] font-semibold text-accentdeep"
+        >
+          Relatório do ano para o cliente →
+        </a>
+      </div>
     </div>
   );
 }

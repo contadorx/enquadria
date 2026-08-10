@@ -41,7 +41,25 @@ interface Linha {
  * critério. Deixar a tela marcar isso confundiria "o fato mudou" com "eu
  * decidi" — e são exatamente as duas coisas que este registro separa.
  */
-export function ApontamentosEmpresa({ empresaId }: { empresaId: string }) {
+export function ApontamentosEmpresa({
+  empresaId,
+  /**
+   * QUEM CONTA É QUEM JÁ TEM A LISTA — 10/08/2026.
+   *
+   * A aba da ficha mostra "Apontamentos da Reforma · 3" no rótulo e o cockpit
+   * mostra o selo "reforma 3" na linha da empresa. Se cada superfície contasse
+   * por conta própria seriam consultas diferentes para o mesmo número — e elas
+   * divergiriam por meio segundo justamente enquanto alguém trata um ponto,
+   * que é o pior momento possível para dois números discordarem na tela.
+   */
+  aoContarPendentes,
+  /** avisa o cockpit de que o selo mudou, para a fila se redesenhar */
+  aoMudar,
+}: {
+  empresaId: string;
+  aoContarPendentes?: (abertos: number) => void;
+  aoMudar?: () => void;
+}) {
   const [linhas, setLinhas] = useState<Linha[] | null>(null);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [aberto, setAberto] = useState<string | null>(null);
@@ -53,11 +71,15 @@ export function ApontamentosEmpresa({ empresaId }: { empresaId: string }) {
     try {
       const r = await fetch(`/api/apontamentos?empresa=${empresaId}`, { cache: "no-store" });
       const j = await r.json();
-      setLinhas((j.apontamentos ?? []) as Linha[]);
+      const lista = (j.apontamentos ?? []) as Linha[];
+      setLinhas(lista);
+      aoContarPendentes?.(lista.filter((l) => l.status === "novo").length);
     } catch {
       setLinhas([]);
+      /* falha de rede NÃO vira zero: zero diz "conferi e não há nada", e aqui
+         o que houve foi não conseguir conferir. O rótulo fica sem número. */
     }
-  }, [empresaId]);
+  }, [empresaId, aoContarPendentes]);
 
   useEffect(() => {
     void carregar();
@@ -76,6 +98,7 @@ export function ApontamentosEmpresa({ empresaId }: { empresaId: string }) {
         }),
       });
       await carregar();
+      aoMudar?.();
     } finally {
       setOcupado(null);
       setCobrando(null);
