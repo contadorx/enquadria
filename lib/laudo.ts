@@ -272,12 +272,72 @@ export function pressaoDoLaudo(a: AnaliseGravada): BlocoPressao | null {
   const parte = teto > 0 ? Math.min(re / teto, 1) : 1;
   const nivel: BlocoPressao["nivel"] = parte >= 0.75 ? "apertada" : parte >= 0.5 ? "media" : "folgada";
 
-  const leitura =
+  /**
+   * O DENOMINADOR DOS 42% — conserto de 10/08/2026.
+   *
+   * `parte` é `piso ÷ teto`, e a frase dizia "a empresa precisa de 42% DO QUE
+   * ESTÁ EM DISPUTA". Só que a linha imediatamente acima define o que está em
+   * disputa como `teto − piso` — outro número. Sobre ele a conta daria 72%, e
+   * 72% cai na faixa que faz o laudo trocar "a posição é confortável" por "há
+   * espaço, mas depende da conversa". O veredito comercial do documento ficava
+   * dependendo de qual denominador o leitor supusesse.
+   *
+   * E a frase estava errada nos próprios termos: no piso a empresa fica exata,
+   * então ela não precisa de NADA do que está em disputa para não perder — a
+   * disputa inteira é ganho. O que os 42% dizem é outra coisa, e é a coisa útil:
+   * de todo o espaço que o crédito do cliente comporta, essa fatia vai embora
+   * antes de a empresa começar a ganhar.
+   *
+   * O número não mudou — os cortes de `nivel` foram calibrados sobre ele em
+   * 22.400 combinações. Mudou o que a frase afirma sobre ele.
+   */
+  /**
+   * AS TRÊS PONTAS TÊM DE SOMAR NA TELA.
+   *
+   * Arredondando cada uma por si, 3,28 vira 3,3 · 4,56 vira 4,6 · 7,84 vira
+   * 7,8 — e a frase passa a afirmar que 3,3 + 4,6 = 7,8. É pequeno e é
+   * exatamente o tipo de coisa que o leitor confere, porque a frase convida:
+   * ela decompõe o teto em duas parcelas.
+   *
+   * O que está em disputa é, portanto, DERIVADO das duas pontas já
+   * arredondadas. Custa 0,06 ponto de precisão numa grandeza de leitura, e
+   * compra uma decomposição que fecha na conta de cabeça de quem lê.
+   */
+  const p1 = (x: number) => Math.round(x * 1000) / 10;
+  const num = (x: number) => x.toFixed(1).replace(".", ",");
+  const pisoP = p1(re);
+  const tetoP = p1(teto);
+  const disputaP = Math.round((tetoP - pisoP) * 10) / 10;
+  const daFaixa =
+    `De ${num(tetoP)} pontos de reajuste que o crédito do cliente comporta, ` +
+    `${num(pisoP)} vão só para a empresa não sair perdendo — ${pct(parte, 0)} do total. ` +
+    `Os ${num(disputaP)} pontos restantes são o que está em disputa.`;
+
+  const veredito =
     nivel === "apertada"
-      ? `A margem é estreita: de cada real em disputa, ${pct(parte, 0)} precisa vir para a empresa só para ela não sair perdendo. Qualquer resistência do cliente coloca a operação no vermelho.`
+      ? "A margem é estreita: qualquer resistência do cliente coloca a operação no vermelho."
       : nivel === "media"
-        ? `A empresa precisa de ${pct(parte, 0)} do que está em disputa para não sair perdendo. Há espaço, mas ele depende de a conversa acontecer.`
-        : `A empresa precisa de ${pct(parte, 0)} do que está em disputa para não sair perdendo. A posição é confortável — o que não significa que o repasse aconteça sozinho.`;
+        ? "Há espaço, mas ele depende de a conversa acontecer."
+        : "A posição é confortável — o que não significa que o repasse aconteça sozinho.";
+
+  /**
+   * A RESSALVA DOS CONCORRENTES SOBE PARA O VEREDITO — 10/08/2026.
+   *
+   * Ela existia, e existia certa, mas como o SEGUNDO aviso da lista — ou seja,
+   * depois de o documento já ter dito "a posição é confortável". O leitor
+   * recebia o veredito, e três parágrafos abaixo a informação que o desmonta.
+   *
+   * E ela desmonta de verdade: `fc` mede o ganho do comprador supondo que a
+   * alternativa dele seja continuar comprando de optante do Simples. Se os
+   * concorrentes desta empresa já estão fora, a alternativa do comprador já
+   * entrega crédito integral, e o poder de cobrar por ele é bem menor do que a
+   * aritmética sozinha sugere. Um veredito de conforto sem essa ressalva ao lado
+   * é o documento contradizendo a si mesmo entre duas seções.
+   */
+  const leitura =
+    a.respostas?.conc === 1
+      ? `${daFaixa} ${veredito} Só que a aritmética acima supõe que a alternativa do cliente seja outro fornecedor do Simples — e os concorrentes desta empresa já estão fora, portanto já entregam crédito integral. Na prática a opção reduz uma desvantagem em vez de criar vantagem, e o espaço de preço fecha mais rápido do que a faixa indica.`
+      : `${daFaixa} ${veredito}`;
 
   const avisos: string[] = [
     "NEGOCIE O PREÇO ANTES DE EXERCER A OPÇÃO, e registre por escrito. Ao optar, o crédito integral " +
@@ -285,11 +345,39 @@ export function pressaoDoLaudo(a: AnaliseGravada): BlocoPressao | null {
       "negocia depois negocia sem nada para trocar: o cliente já recebeu.",
   ];
 
-  if (a.respostas?.conc === 1) {
+  /**
+   * O CENÁRIO DE TABELA ÚNICA — trazido para a superfície em 10/08/2026.
+   *
+   * O passo 10 da memória de cálculo já imprimia este número, e ele morria ali:
+   * uma linha de tabela no meio de dez, sem nenhuma frase que dissesse para
+   * quem serve. Para uma distribuidora — que é o caso comum deste laudo — a
+   * pergunta seguinte à recomendação é sempre a mesma: "eu aumento o preço só
+   * para os clientes PJ?". Quem tem tabela única não consegue, e para essa
+   * empresa o número que decide não é o repasse de equilíbrio sobre a receita
+   * qualificada, é o custo espalhado por toda a receita.
+   *
+   * Ele é MENOR que o repasse dirigido, e por isso é o argumento mais fácil de
+   * levar ao cliente. Deixá-lo enterrado na memória de cálculo era esconder a
+   * melhor notícia do documento dentro da seção que ninguém lê em voz alta.
+   */
+  const unico = Number(a.cl);
+  if (isFinite(unico) && unico > 0 && unico < re) {
     avisos.push(
-      "Os concorrentes desta empresa estão majoritariamente fora do Simples, e por isso já entregam " +
-        "crédito integral. Aqui a opção não cria vantagem — reduz uma desvantagem, e o argumento de " +
-        "preço perde força mais rápido."
+      `SE A EMPRESA TEM TABELA ÚNICA de preços, o reajuste equivalente é de ${pct(unico)} em TODOS ` +
+        `os preços — e não de ${pct(re)} só nos clientes empresa. É menor porque o custo se espalha ` +
+        "por toda a receita em vez de se concentrar na parte vendida a quem aproveita crédito. " +
+        "Confira qual dos dois formatos a empresa consegue praticar antes de levar o número à mesa."
+    );
+  }
+
+  if (a.respostas?.conc === 1) {
+    /* o FATO da concorrência já foi para o veredito, acima; aqui fica só o que
+       fazer com ele, para o parágrafo não repetir a leitura palavra por palavra */
+    avisos.push(
+      "Com os concorrentes já fora do Simples, o repasse deixa de ser argumento de vantagem e passa " +
+        "a ser conversa de recomposição. Leve a comparação de crédito por operação para a mesa: é o " +
+        "que mostra ao cliente que o preço novo o mantém no mesmo lugar, e não que ele está pagando " +
+        "por algo que já tinha."
     );
   } else {
     avisos.push(
@@ -311,7 +399,8 @@ export function pressaoDoLaudo(a: AnaliseGravada): BlocoPressao | null {
 
   return {
     faixa: `${pct(re)} a ${pct(teto)}`,
-    excedente: pct(excedente),
+    /* a mesma subtração das pontas impressas — ver a nota de `disputaP` */
+    excedente: `${num(disputaP)} p.p.`,
     posicao: pct(parte, 0),
     nivel,
     leitura,
@@ -446,7 +535,11 @@ export function baseDeCalculo(a: AnaliseGravada): string[] {
   const linhas: string[] = [];
   if (d.fonte === "efetiva") {
     linhas.push(
-      `Alíquota efetiva do Simples: ${pct(d.aliquota)} — apurada sobre a RBT12 de ${moeda(
+      /* MESMA GRANDEZA, MESMAS CASAS — 10/08/2026. A memória de cálculo imprime
+         10,66% no passo 1 e esta nota imprimia 10,7% duas linhas abaixo. Quem
+         confere um laudo confere justamente assim: procura o mesmo número em
+         dois lugares. Achar dois é achar um erro, mesmo quando não há. */
+      `Alíquota efetiva do Simples: ${pct(d.aliquota, 2)} — apurada sobre a RBT12 de ${moeda(
         d.rbt12
       )} (Anexo ${d.anexo}, faixa ${d.faixa}).`
     );
@@ -470,7 +563,9 @@ export function baseDeCalculo(a: AnaliseGravada): string[] {
    * é o tipo de erro que só aparece quando alguém contesta.
    */
   linhas.push(
-    `Parcela que sai do DAS ao optar: ${pct(d.sharePC)} da carga do Simples = ${pct(d.das)} da receita.`
+    /* o dDAS sai com 3 casas em todo o laudo: em 1,7% some o dígito que separa
+       um cl de 2,3% de um de 2,4% — ver a nota da alíquota efetiva acima */
+    `Parcela que sai do DAS ao optar: ${pct(d.sharePC)} da carga do Simples = ${pct(d.das, 3)} da receita.`
   );
   /**
    * O TETO DE 5% DO ISS TEM DE APARECER, e por um motivo prático.
@@ -792,7 +887,9 @@ export function memoriaDeCalculo(a: AnaliseGravada): PassoCalculo[] {
       passo: "9. Folga da negociação",
       formula: "folga = fc − re líquido",
       substituicao: `${n(Number(a.fc), 4)} − ${n(liq, 4)}`,
-      resultado: `${((Number(a.fc) - liq) * 100).toFixed(2).replace(".", ",")} pontos percentuais`,
+      /* uma casa, como nas seções 5 e 7 — "4,16" aqui contra "4,2" lá era o
+         mesmo número parecendo dois */
+      resultado: `${((Number(a.fc) - liq) * 100).toFixed(1).replace(".", ",")} pontos percentuais`,
     });
   }
   /**
@@ -831,18 +928,46 @@ export function quadroComparativo(a: AnaliseGravada): LinhaQuadro[] {
 
   const dentroPct = d.aliquota;
   const foraPct = d.aliquota - d.das + Number(a.ch);
-  const difPct = Number(a.cl ?? 0);
+  /**
+   * A DIFERENÇA SAI DAS DUAS COLUNAS AO LADO — conserto de 10/08/2026.
+   *
+   * Ela era `Number(a.cl)`, o custo líquido gravado. Aritmeticamente é a mesma
+   * grandeza que `fora − dentro`, e por isso a troca passou anos sem incomodar.
+   * Só que `cl` chega deste laudo com a precisão que o registro guardou, e as
+   * outras duas células são calculadas aqui, na hora, com precisão cheia. Num
+   * laudo real de R$ 2,4 mi a linha saiu assim:
+   *
+   *     R$ 255.900   →   R$ 311.276   →   +R$ 55.368
+   *
+   * e 311.276 − 255.900 dá 55.376. Oito reais de diferença numa linha de três
+   * células que TÊM de fechar, dentro de um documento cujo argumento é "quem
+   * receber isto refaz a conta no papel". Pior: a mesma grandeza reaparece três
+   * linhas abaixo, como custo absorvido, valendo R$ 55.375.
+   *
+   * Derivando das duas colunas impressas, a linha fecha por construção — venha
+   * `cl` com a precisão que vier.
+   */
+  const difPct = foraPct - dentroPct;
   const emR$ = (x: number) => (receita ? moeda(x * receita) : "—");
+  /* PONTO PERCENTUAL NÃO É PORCENTAGEM. "+2,31%" sobre uma linha de tributo
+     lê-se como aumento relativo — R$ 5.911 em vez de R$ 55.376, um erro de dez
+     vezes numa frase dita em reunião. */
+  const pp = (x: number) =>
+    !isFinite(x) ? "—" : `${x >= 0 ? "+" : ""}${(x * 100).toFixed(2).replace(".", ",")} p.p.`;
 
   return [
     {
-      rotulo: "Tributo da empresa, sobre a receita",
+      rotulo: "Tributo da empresa, sobre a receita (antes do repasse)",
       dentro: pct(dentroPct, 2),
       fora: pct(foraPct, 2),
-      diferenca: `${difPct >= 0 ? "+" : ""}${pct(difPct, 2)}`,
+      diferenca: pp(difPct),
     },
     {
-      rotulo: "Tributo da empresa, por ano",
+      /* "antes do repasse" nas DUAS linhas: é aqui que o leitor encontra
+         "+R$ 55.376 de tributo" a quatro linhas de "ganho de R$ 70.224" e
+         conclui que o documento se contradiz. Não se contradiz — mede momentos
+         diferentes —, e era só isto que faltava dizer. */
+      rotulo: "Tributo da empresa, por ano (antes do repasse)",
       dentro: emR$(dentroPct),
       fora: emR$(foraPct),
       diferenca: receita ? `${difPct >= 0 ? "+" : ""}${moeda(difPct * receita)}` : "—",
@@ -851,7 +976,7 @@ export function quadroComparativo(a: AnaliseGravada): LinhaQuadro[] {
       rotulo: "Crédito transferido ao cliente PJ, por operação",
       dentro: pct(d.das, 3),
       fora: pct(p.aliquota, 2),
-      diferenca: `+${pct(Number(a.fc ?? 0), 2)}`,
+      diferenca: pp(Number(a.fc ?? 0)),
     },
     {
       rotulo: "Repasse de preço necessário para equilibrar",
@@ -868,10 +993,18 @@ export function quadroComparativo(a: AnaliseGravada): LinhaQuadro[] {
        * para não ter. A migração está documentada em lib/deriva.ts; este quadro
        * tinha ficado para trás.
        */
+      /* DE QUEM É A FOLGA. Ela é o que o COMPRADOR ainda ganha depois de sentir
+         o reajuste de equilíbrio — unidade "ganho do comprador". A seção 8 mede
+         a mesma folga na unidade "reajuste de preço", onde ela vale
+         folga ÷ (1 − alíquota) e sai maior. Eram dois números apresentados como
+         "o que está na mesa", 0,4 p.p. distantes, em páginas seguidas. Agora
+         cada um diz de que lado da mesa está. */
       diferenca: (() => {
         const liq = reLiquidoDe(a);
         if (liq == null || a.fc == null) return "—";
-        return `folga de ${((Number(a.fc) - liq) * 100).toFixed(1).replace(".", ",")} p.p.`;
+        return `o comprador ainda ganha ${((Number(a.fc) - liq) * 100)
+          .toFixed(1)
+          .replace(".", ",")} p.p.`;
       })(),
     },
   ];
@@ -976,7 +1109,7 @@ export function riscosELimites(a: AnaliseGravada): string[] {
        Uma auditoria externa apontou abril como o correto; o texto do § 10 diz
        março. Afirmar um dos dois num documento assinado seria escolher a favor
        do cliente sem base — e é o tipo de frase que se contesta depois. */
-    "A opção produz efeito por semestre e é cancelável até o último dia de novembro de 2026. A decisão de agora não encerra o assunto: a janela seguinte reabre a pergunta no primeiro semestre de 2027. ATENÇÃO ao mês: o art. 41 da LC 123/2006, na consolidação da LC 214/2025 com a redação da LC 227/2026, traz março no § 10 e abril no § 11 — confirme a data na Resolução do CGSN vigente antes de agendar com o cliente.",
+    "A opção produz efeito por semestre e é cancelável até o último dia de novembro de 2026 — ou seja, ANTES de o efeito começar; iniciado o semestre, ela é irretratável até o fim dele (seção 2). A decisão de agora não encerra o assunto: a janela seguinte reabre a pergunta no primeiro semestre de 2027. ATENÇÃO ao mês: o art. 41 da LC 123/2006, na consolidação da LC 214/2025 com a redação da LC 227/2026, traz março no § 10 e abril no § 11 — confirme a data na Resolução do CGSN vigente antes de agendar com o cliente.",
     "A reversibilidade tem uma exceção, e ela alcança justamente quem acumula crédito: o art. 41, § 5º, da Lei Complementar nº 214/2025 veda a saída do regime regular ao contribuinte que tenha recebido ressarcimento de créditos de IBS ou CBS no ano-calendário corrente ou no anterior. Se a empresa pretende pedir ressarcimento do saldo credor, a decisão desta janela deixa de ser semestral e passa a ser de mão única — confirme esse ponto antes de assinar.",
   ];
   if (p.ddas?.fonte === "conservador") {
@@ -1054,7 +1187,7 @@ export const BASE_LEGAL: { norma: string; papel: string }[] = [
   {
     norma: "Lei Complementar nº 123/2006, art. 13, §§ 9º e 10",
     papel:
-      "é o dispositivo operativo: faculta ao optante apurar IBS e CBS pelo regime regular, hipótese em que as parcelas relativas a eles não são cobradas pelo regime único, e fixa a opção como semestral e irretratável. Quanto ao MÊS da segunda janela o texto consolidado é contraditório: o § 10 (redação da LC 227/2026) diz setembro e março; o § 11 diz setembro e abril. Prevalece a data fixada pela Resolução do CGSN do ciclo.",
+      "é o dispositivo operativo: faculta ao optante apurar IBS e CBS pelo regime regular, hipótese em que as parcelas relativas a eles não são cobradas pelo regime único, e fixa a opção como semestral e irretratável. Irretratável e cancelável não se contradizem, e a diferença é de MOMENTO: a opção pode ser cancelada enquanto não começa a produzir efeito — até o último dia de novembro de 2026, para o semestre de janeiro a junho de 2027 — e, iniciado o efeito, vale o semestre inteiro sem volta. Quanto ao MÊS da segunda janela o texto consolidado é contraditório: o § 10 (redação da LC 227/2026) diz setembro e março; o § 11 diz setembro e abril. Prevalece a data fixada pela Resolução do CGSN do ciclo.",
   },
   {
     norma: "Lei Complementar nº 227/2026",

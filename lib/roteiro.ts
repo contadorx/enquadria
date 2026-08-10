@@ -230,15 +230,30 @@ export function leituraDoDinheiro(d: Dinheiro | null | undefined): string | null
     return `No cenário analisado, optar não gera ganho para a empresa — só acrescenta a obrigação de apurar por fora.${absorve}`;
   }
 
-  const partes = [`Optando, a empresa ganha cerca de ${moeda(ganho)} por ano`];
+  /**
+   * "A EMPRESA GANHA CERCA DE X" — a frase que saiu em 10/08/2026.
+   *
+   * `ganho_anual` é a faixa de negociação inteira convertida em reais: o que a
+   * empresa levaria se capturasse TUDO o que está na mesa. Dizer que ela "ganha
+   * cerca de" isso afirma o topo de uma faixa como se fosse o resultado
+   * esperado — e o mesmo documento explica, na seção da pressão comercial, que
+   * o resultado depende de uma negociação que ninguém garante.
+   *
+   * A frase passa a nomear a condição e o teto. O piso continua sendo zero, e é
+   * a tabela logo acima que o mostra.
+   */
+  const partes = [`Se o repasse for aceito, a empresa chega a até ${moeda(ganho)} por ano`];
 
   if (d.custo_anual != null && d.custo_anual > 0) {
     if (d.payback_meses != null && d.payback_meses > 0) {
       const meses = d.payback_meses.toFixed(1).replace(".", ",");
+      /* "1,0 meses" saía no laudo do cliente. Custa uma linha e é a única
+         palavra da frase que denuncia que ninguém leu a saída em voz alta. */
+      const unidade = meses === "1,0" ? "mês" : "meses";
       partes.push(
         d.payback_meses <= 12
-          ? `contra ${moeda(d.custo_anual)} de custo para apurar — que se paga em ${meses} meses`
-          : `contra ${moeda(d.custo_anual)} de custo para apurar, que só se paga em ${meses} meses`
+          ? `contra ${moeda(d.custo_anual)} de custo para apurar — que se paga em ${meses} ${unidade}`
+          : `contra ${moeda(d.custo_anual)} de custo para apurar, que só se paga em ${meses} ${unidade}`
       );
     } else {
       partes.push(`contra ${moeda(d.custo_anual)} de custo para apurar`);
@@ -248,9 +263,12 @@ export function leituraDoDinheiro(d: Dinheiro | null | undefined): string | null
   }
 
   const frase = partes.join(", ") + ".";
+  /* o teto vem como frase própria: enfiado na primeira oração ele virava
+     subordinada antes de uma vírgula de lista, e o parágrafo saía emendado */
+  const teto = " É o teto da faixa de negociação, não o resultado esperado: no piso do repasse a empresa apenas não perde.";
   const risco =
     d.absorvido_anual != null && d.absorvido_anual > 0
-      ? ` Se o cliente dela não aceitar o repasse, a empresa absorve ${moeda(d.absorvido_anual)} por ano — e a conta se inverte.`
+      ? ` Sem repasse nenhum, ela absorve ${moeda(d.absorvido_anual)} por ano — e a conta se inverte.`
       : "";
-  return frase + risco;
+  return frase + teto + risco;
 }

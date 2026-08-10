@@ -128,10 +128,25 @@ ok(leituraDoDinheiro({ receita: null }) === null, "sem receita informada, nenhum
 }
 {
   const t = leituraDoDinheiro({ receita: 1_000_000, ganho_anual: 18400, custo_anual: 6000, payback_meses: 3.9, absorvido_anual: 9000 });
-  ok(/a empresa ganha/.test(t), "diz de quem é o dinheiro — da EMPRESA, não do escritório", t);
+  ok(/a empresa chega/.test(t), "diz de quem é o dinheiro — da EMPRESA, não do escritório", t);
   ok(/3,9 meses/.test(t), "payback em português e com vírgula", t);
   ok(/se paga em/.test(t), "payback curto é apresentado como se paga", t);
   ok(/a conta se inverte/.test(t), "o risco do repasse não fica escondido", t);
+  /**
+   * O NÚMERO É O TETO DE UMA NEGOCIAÇÃO, E A FRASE TEM DE DIZER ISSO.
+   *
+   * `ganho_anual` é a faixa de negociação inteira convertida em reais — o que a
+   * empresa levaria capturando TUDO o que está na mesa. "A empresa ganha cerca
+   * de X por ano" afirmava o topo dessa faixa como resultado esperado, no mesmo
+   * documento que declara, na seção da pressão comercial, que nada garante o
+   * repasse. É a fronteira entre estimativa de cenário e promessa de resultado.
+   */
+  ok(/Se o repasse for aceito/.test(t), "o ganho vem condicionado ao repasse, não afirmado", t);
+  ok(/teto da faixa de negociação, não o resultado esperado/.test(t),
+     "e a frase nomeia o número como teto", t);
+  ok(/no piso do repasse a empresa apenas não perde/.test(t),
+     "com o piso à vista: sem ele, o leitor supõe que o teto é o meio da faixa", t);
+  ok(!/a empresa ganha cerca de/.test(t), "e a afirmação antiga não voltou", t);
 }
 {
   const t = leituraDoDinheiro({ receita: 1_000_000, ganho_anual: 5000, custo_anual: 9000, payback_meses: 21.6, absorvido_anual: null });

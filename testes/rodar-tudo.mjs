@@ -1906,6 +1906,53 @@ secao("Primeiro acesso da empresa: a aba certa e a instrução certa");
      /<div ref=\{coletaRef\}>/.test(painel));
 }
 
+/* ══ O LAUDO NÃO PODE DISCORDAR DE SI MESMO (10/08/2026) ═══════════════════
+   Achados relendo um laudo emitido de verdade. Nenhum deles muda a saída — são
+   todos de leitura, que é onde o documento se defende ou não numa reunião. ══ */
+secao("O laudo diz a mesma coisa uma vez só");
+{
+  const folha = fs.readFileSync(path.join(RAIZ, "components/LaudoFolha.tsx"), "utf8");
+  const laudoTs = fs.readFileSync(path.join(RAIZ, "lib/laudo.ts"), "utf8");
+
+  /* 1 · "GANHO ESTIMADO NO ANO" era o topo da faixa de negociação chamado de
+     resultado — quatro linhas abaixo de "+R$ 55.376 de tributo". Era a linha
+     que fazia o laudo parecer que se contradizia, e ela promete resultado, que
+     o produto não pode prometer. */
+  ok("o laudo não chama o teto da negociação de ganho estimado",
+     !/Ganho estimado no ano/.test(folha));
+  ok("...e mostra as DUAS pontas da faixa, com o piso valendo zero",
+     /Se o repasse ficar no mínimo que equilibra/.test(folha) &&
+     /Se o repasse for negociado até o limite do cliente/.test(folha) &&
+     /R\$ 0/.test(folha));
+  ok("...dizendo que o teto não é previsão",
+     /não é previsão/.test(folha) && /nada neste laudo garante/.test(folha));
+  ok("...e nem a nota do valor bruto volta a chamá-lo de ganho",
+     !/O ganho acima é/.test(folha) && /O teto acima é/.test(folha));
+  ok("...e a outra ponta é a absorção, nomeada como ponta da mesma faixa",
+     /Se não houver repasse nenhum, a empresa absorve/.test(folha) &&
+     /outra ponta da mesma faixa/.test(folha));
+
+  /* 2 · IRRETRATÁVEL × CANCELÁVEL. A seção 2 dizia "semestral e irretratável" e
+     a 9 dizia "cancelável até novembro", sem a frase que reconcilia. Um
+     advogado lendo as duas encontra contradição onde há só dois momentos. */
+  ok("irretratável e cancelável aparecem reconciliados, não soltos",
+     /Irretratável e cancelável não se contradizem/.test(laudoTs) &&
+     /iniciado o efeito, vale o semestre inteiro sem volta/.test(laudoTs));
+  ok("...e a seção de riscos aponta para a reconciliação em vez de repetir a metade",
+     /ANTES de o efeito começar; iniciado o semestre, ela é irretratável/.test(laudoTs));
+
+  /* 3 · MESMA GRANDEZA, MESMAS CASAS. A memória imprimia 10,66% e a nota
+     10,7%; o dDAS saía 1,653% na memória e 1,7% na nota; a folga era 4,16 no
+     passo 9 e 4,2 nas seções 5 e 7. Quem confere um laudo procura o mesmo
+     número em dois lugares — achar dois é achar um erro, mesmo sem erro. */
+  ok("a alíquota efetiva sai com as mesmas casas na memória e na nota",
+     /Alíquota efetiva do Simples: \$\{pct\(d\.aliquota, 2\)\}/.test(laudoTs));
+  ok("o dDAS também — em 1,7% some o dígito que separa um cl de 2,3% de um de 2,4%",
+     /= \$\{pct\(d\.das, 3\)\} da receita/.test(laudoTs));
+  ok("e a folga da negociação sai com uma casa, como nas seções 5 e 7",
+     !/\(Number\(a\.fc\) - liq\) \* 100\)\.toFixed\(2\)/.test(laudoTs));
+}
+
 /* ============================ 2a. ROTAS CITADAS NOS E-MAILS EXISTEM? ===== */
 secao("Links das réguas apontam para rotas que existem");
 {

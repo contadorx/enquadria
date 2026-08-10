@@ -37,7 +37,7 @@ ok    suíte normas (30 asserções)
 ok    suíte novidade (27 asserções)
 ok    suíte nps (40 asserções)
 ok    suíte passos (71 asserções)
-ok    suíte pressao (29 asserções)
+ok    suíte pressao (45 asserções)
 ok    suíte projecao (54 asserções)
 ok    suíte proposta (50 asserções)
 ok    suíte radar (45 asserções)
@@ -49,7 +49,7 @@ ok    suíte reforma-publica (36 asserções)
 ok    suíte reguas (55 asserções)
 ok    suíte reguas-indicacao (40 asserções)
 ok    suíte repasse (26 asserções)
-ok    suíte roteiro (38 asserções)
+ok    suíte roteiro (42 asserções)
 ok    suíte slug (21 asserções)
 ok    suíte tabela-2027 (82 asserções)
 ok    suíte termo (128 asserções)
@@ -346,8 +346,20 @@ ok    todas as perguntas passam pelo filtro do modo em branco
 ok    ...e as somas derivadas não aparecem antes das parcelas
 ok    ...e cada sub-pergunta é contada e acesa por si
 ok    ...e o botão trava enquanto faltar resposta, para não gravar padrão como premissa
-FALHA o formulário em branco só é oferecido enquanto não há análise do contador
+ok    o formulário em branco só é oferecido enquanto não há análise do contador
 ok    ...e cada porta do roteiro tem um destino para onde rolar
+
+── O laudo diz a mesma coisa uma vez só ────────────────────────
+ok    o laudo não chama o teto da negociação de ganho estimado
+ok    ...e mostra as DUAS pontas da faixa, com o piso valendo zero
+ok    ...dizendo que o teto não é previsão
+ok    ...e nem a nota do valor bruto volta a chamá-lo de ganho
+ok    ...e a outra ponta é a absorção, nomeada como ponta da mesma faixa
+FALHA irretratável e cancelável aparecem reconciliados, não soltos
+ok    ...e a seção de riscos aponta para a reconciliação em vez de repetir a metade
+ok    a alíquota efetiva sai com as mesmas casas na memória e na nota
+ok    o dDAS também — em 1,7% some o dígito que separa um cl de 2,3% de um de 2,4%
+ok    e a folga da negociação sai com uma casa, como nas seções 5 e 7
 
 ── Links das réguas apontam para rotas que existem ─────────────
 ok    rotas citadas nos e-mails: importar
@@ -422,7 +434,7 @@ ok    condição sobre o fator R (há serviço no mix)
 ok    análise de um anexo só mantém o passo 1 de sempre
 
 ── Navegador — curso estático e formulário da coleta ───────────
-FALHA playwright disponível → "instale para rodar as checagens de navegador"
+FALHA pasta do site encontrada → "/root/work/enquadria-site"
 
 ── Depois da janela — a frase, o carimbo e a segunda rodada ────
 ok    na janela aberta, a frase cita 30 de setembro
@@ -512,4 +524,4 @@ ok    nenhuma peça da proposta promete economia, ganho ou garantia
 
 ── Resultado ───────────────────────────────────────────────────
 
-3 FALHA(S) em 451 verificações
+3 FALHA(S) em 461 verificações

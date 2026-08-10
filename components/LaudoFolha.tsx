@@ -411,8 +411,45 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
             {dinheiro?.receita != null && (
               <table className="quadro">
                 <tbody>
+                  {/**
+                    * "GANHO ESTIMADO NO ANO" — o rótulo que saiu em 10/08/2026.
+                    *
+                    * O número é `folga × receita qualificada × receita`: a faixa
+                    * de negociação INTEIRA convertida em reais, ou seja, o que a
+                    * empresa levaria se capturasse tudo o que está na mesa. A
+                    * seção 8 deste mesmo laudo diz, três páginas adiante, que
+                    * isso depende de barganha e que nenhum número aqui garante
+                    * que o repasse será aceito.
+                    *
+                    * Chamar o topo da faixa de "ganho estimado" é prometer
+                    * resultado — e era a linha que, quatro linhas abaixo do
+                    * "+R$ 55.376 de tributo", fazia o laudo parecer que se
+                    * contradizia. Não se contradizia: media dois momentos e
+                    * chamava um deles pelo nome errado.
+                    *
+                    * Vira uma FAIXA com as duas pontas à vista, e a de baixo é
+                    * zero. Quem lê passa a ver que o piso do repasse não gera
+                    * ganho nenhum — só evita a perda —, que é exatamente a
+                    * conversa que o empresário precisa ter.
+                    */}
                   <tr>
-                    <td>Ganho estimado no ano (folga × receita qualificada × receita)</td>
+                    <td>
+                      Se o repasse ficar no mínimo que equilibra
+                      {a.re != null && isFinite(Number(a.re)) ? ` (${pct(Number(a.re))})` : ""}
+                      <div className="comp">
+                        A empresa não perde e não ganha: o reajuste apenas cobre o custo líquido.
+                      </div>
+                    </td>
+                    <td className="mono">R$ 0</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      Se o repasse for negociado até o limite do cliente
+                      <div className="comp">
+                        Teto da faixa de negociação da seção 8, convertido em reais — não é previsão,
+                        e nada neste laudo garante que a negociação chegue lá.
+                      </div>
+                    </td>
                     <td className="mono res">
                       {dinheiro.ganho_anual != null && dinheiro.ganho_anual > 0
                         ? moeda(dinheiro.ganho_anual)
@@ -428,7 +465,7 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
                   <tr>
                     {/* o laudo vai para a mesa do empresário: "payback" era a
                         única palavra que ele não tinha obrigação de conhecer */}
-                    <td>Em quanto tempo o ganho cobre esse custo</td>
+                    <td>Em quanto tempo o teto da faixa cobre esse custo</td>
                     <td className="mono">
                       {dinheiro.payback_meses != null
                         ? `${dinheiro.payback_meses.toFixed(1).replace(".", ",")} meses`
@@ -436,7 +473,12 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
                     </td>
                   </tr>
                   <tr>
-                    <td>Custo absorvido pela empresa se o cliente dela não aceitar o repasse</td>
+                    <td>
+                      Se não houver repasse nenhum, a empresa absorve
+                      <div className="comp">
+                        É a outra ponta da mesma faixa, e é para onde a conta vai sem negociação.
+                      </div>
+                    </td>
                     <td className="mono">
                       {dinheiro.absorvido_anual != null ? moeda(dinheiro.absorvido_anual) : "—"}
                     </td>
@@ -460,10 +502,13 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
               */}
             {dinheiro?.receita != null && dinheiro.custo_anual == null && dinheiro.ganho_anual != null && dinheiro.ganho_anual > 0 && (
               <p className="aviso">
-                O ganho acima é <b>bruto</b>: o custo de apurar IBS e CBS fora do DAS não foi
+                {/* "o ganho acima" era a última sobra do rótulo que saiu: o número
+                    ali é o TETO da faixa, e chamá-lo de ganho aqui devolveria pela
+                    nota o que a tabela deixou de afirmar */}
+                O teto acima é <b>bruto</b>: o custo de apurar IBS e CBS fora do DAS não foi
                 informado e <b>não está descontado</b>. Apurar por fora exige escrituração,
                 obrigação acessória e controle de crédito próprios — informe esse custo para que o
-                laudo mostre em quanto tempo o ganho o cobre.
+                laudo mostre em quanto tempo ele o cobre.
               </p>
             )}
 
@@ -551,13 +596,18 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
                         O que está em disputa entre a empresa e o cliente
                         <div className="comp">
                           Abaixo do piso a empresa absorve; acima do teto o crédito do cliente deixa
-                          de cobrir o aumento e ele recusa.
+                          de cobrir o aumento e ele recusa. Medido em pontos de <b>reajuste de
+                          preço</b> — é a mesma folga da seção 5, que a mede em pontos de{" "}
+                          <b>ganho do comprador</b> e por isso sai menor.
                         </div>
                       </td>
                       <td className="mono">{pressao.excedente}</td>
                     </tr>
                     <tr>
-                      <td>Parte dessa faixa que a empresa precisa só para não perder</td>
+                      {/* o rótulo nomeia o DENOMINADOR. "Parte dessa faixa" caía
+                          sobre a linha de cima, que é `teto − piso`, e a conta
+                          é sobre o teto — ver a nota em `pressaoDoLaudo`. */}
+                      <td>Do teto que o crédito do cliente comporta, o que a empresa precisa só para não perder</td>
                       <td className="mono">{pressao.posicao}</td>
                     </tr>
                     <tr>
