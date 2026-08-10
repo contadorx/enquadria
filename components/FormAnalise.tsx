@@ -24,7 +24,8 @@ import {
   type DetalheCred,
   type Segmento,
 } from "@/lib/motor";
-import { projetarRBT12, decidirComProjecao, rbt12AnteriorPorCrescimento } from "@/lib/projecao";
+import { projetarRBT12, decidirComProjecao } from "@/lib/projecao";
+import { mascaraMoeda, valorDaMascara, moedaParaMascara } from "@/lib/mascaras";
 import { anexoPorCnae } from "@/lib/triagem";
 import { leituraDoDinheiro } from "@/lib/roteiro";
 import { parseValorBRL } from "@/lib/csv";
@@ -171,6 +172,7 @@ export function FormAnalise({
   anexo,
   cnae,
   rbt12Inicial,
+  emBranco = false,
   respostasIniciais,
   detalhesIniciais,
   custoInicial,
@@ -185,6 +187,8 @@ export function FormAnalise({
   anexo: number | null;
   cnae: string | null;
   rbt12Inicial: number | null;
+  /** "preencher diretamente": abre sem nenhuma opção marcada */
+  emBranco?: boolean;
   respostasIniciais: Respostas | null;
   detalhesIniciais?: { qual?: DetalheQual; cred?: DetalheCred } | null;
   custoInicial?: number | null;
@@ -231,7 +235,21 @@ export function FormAnalise({
   const [dc, setDc] = useState<DetalheCred>(
     detalhesIniciais?.cred ?? { insumos: inicial.cred, servicos: 0, outros: 0 }
   );
-  const [rbt12, setRbt12] = useState(rbt12Inicial != null ? String(rbt12Inicial) : "");
+  /**
+   * O CAMPO DE RBT12 ERA UM NÚMERO CRU — conserto de 10/08/2026.
+   *
+   * Ele nascia com `String(2400000)` e recebia o que fosse digitado, sem
+   * formatação: a pessoa lia `2400000` e tinha de contar os zeros para saber se
+   * eram dois milhões e quatrocentos mil ou vinte e quatro milhões. Numa tela em
+   * que esse número TROCA A ALÍQUOTA e vira valor no laudo, contar zero com o
+   * olho é a forma mais barata de errar uma faixa inteira.
+   *
+   * `mascaraMoeda` é acumulador de centavos (lib/mascaras.ts): o texto se forma
+   * da direita para a esquerda, como no terminal de cartão, em vez de
+   * reformatar o que já está escrito — reformatar joga o cursor para o fim a
+   * cada tecla e torna impossível corrigir o meio do número.
+   */
+  const [rbt12, setRbt12] = useState(moedaParaMascara(rbt12Inicial));
   /**
    * C6 — O CRESCIMENTO DA RECEITA, perguntado direto (08/08/2026).
    *
@@ -242,11 +260,14 @@ export function FormAnalise({
    * caro de responder é campo que fica em branco, e em branco o laudo perde a
    * projeção inteira.
    *
-   * A pergunta agora é a que ele responde de cabeça: quanto a receita cresceu no
-   * último ano. Continua sendo MEDIÇÃO — é o ano que passou, não o que vem —, e
-   * o valor anterior é reconstruído aqui mesmo: `rbt12 / (1 + g)`. A conta é
-   * exata e reversível, então o motor, o laudo e a análise gravada continuam
-   * recebendo exatamente o que sempre receberam.
+   * A pergunta virou uma linha de percentual, que ele responde de cabeça.
+   *
+   * EM 10/08/2026 ela deixou de ser medição e passou a ser EXPECTATIVA — ver a
+   * nota longa junto de `projetarRBT12`, mais abaixo, que é onde a mudança tem
+   * consequência. Resumo: a opção se exerce em setembro de 2026 e vale de
+   * janeiro a junho de 2027, então o que decide se a empresa troca de faixa
+   * dentro do efeito é o que ela espera faturar, não o que faturou. Este estado
+   * guarda o texto digitado; quem interpreta é a projeção.
    */
   const [crescimento, setCrescimento] = useState(
     crescimentoInicial != null ? String(Math.round(crescimentoInicial * 1000) / 10).replace(".", ",") : ""
@@ -276,6 +297,52 @@ export function FormAnalise({
     setSegmentos(share > 0 ? [...outros, { anexo: a, share }].sort((x, y) => x.anexo - y.anexo) : outros);
   }
   const [tocadas, setTocadas] = useState<Set<string>>(new Set());
+  /**
+   * A DECISÃO SÓ APARECE DEPOIS DE MANDAR CALCULAR — ver a nota do botão.
+   *
+   * Empresa que já tem análise do contador mostra tudo de cara: ali não há
+   * surpresa a preservar, e quem reabre para ajustar uma premissa precisa ver o
+   * efeito na hora. Análise ESTIMADA pelo lote não conta — ela é chute do CNAE,
+   * e mostrar a decisão como se fosse resultado é o que faz o contador emitir
+   * laudo sem conferir.
+   */
+  const [calculou, setCalculou] = useState(!semAnalise && !estimada);
+
+  /**
+   * O MODO "PREENCHER DIRETAMENTE" — 10/08/2026.
+   *
+   * Escolher esse caminho e encontrar o formulário preenchido pela estimativa
+   * do CNAE é a armadilha que o roteiro existe para desarmar: a tela parece
+   * pronta, o contador confirma sem ler, e o chute entra num laudo assinado.
+   *
+   * Aqui nenhuma opção nasce marcada. O truque é passar `NaN` como valor
+   * selecionado enquanto o campo não foi tocado: a comparação de cada botão é
+   * `Math.abs(valor - v) < 1e-9`, e NaN não casa com nada — sem inventar um
+   * estado nulo que o motor teria de entender.
+   *
+   * E o cálculo fica travado até as DEZ estarem respondidas — dez, e não sete,
+   * porque `qual` e `cred` são agregadas de duas e três perguntas na tela, e
+   * contar a agregada faria o aviso dizer "faltam 3" com seis botões ainda
+   * apagados. Salvar com metade em branco gravaria o padrão do sistema como se
+   * fosse premissa do contador, que é exatamente o que este caminho evita.
+   */
+  const CHAVES_OBRIGATORIAS = [
+    "b2b",
+    "qual.fora_simples",
+    "qual.sem_aproveitamento",
+    "cred.insumos",
+    "cred.servicos",
+    "cred.outros",
+    "folha",
+    "preco",
+    "conc",
+    "exig",
+  ];
+  const faltamResponder = emBranco
+    ? CHAVES_OBRIGATORIAS.filter((k) => !tocadas.has(k)).length
+    : 0;
+  /** o valor que a Escolha recebe: NaN esconde a seleção até alguém tocar */
+  const vis = (chave: string, v: number) => (emBranco && !tocadas.has(chave) ? NaN : v);
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -283,8 +350,24 @@ export function FormAnalise({
   const [conflito, setConflito] = useState<string | null>(null);
   const [base_visto, setBaseVisto] = useState<string | null>(calculadoEmInicial);
 
-  function tocar(chave: string) {
-    setTocadas((s) => new Set(s).add(chave));
+  /**
+   * UM CLIQUE PODE MARCAR DUAS CHAVES — e precisa marcar.
+   *
+   * `qual` e `cred` são premissas AGREGADAS: o motor consome uma, mas a tela
+   * pergunta duas e três. A origem ("informada pelo contador") é da agregada,
+   * porque é ela que vai para a análise. A seleção visual é de cada sub-campo.
+   *
+   * Antes disto um clique em "insumos" marcava a chave `cred` inteira e as
+   * outras duas perguntas do bloco acendiam sozinhas, mostrando `nada`
+   * selecionado — resposta que ninguém deu, no modo cuja promessa é justamente
+   * que nada vem preenchido.
+   */
+  function tocar(...chaves: string[]) {
+    setTocadas((s) => {
+      const n = new Set(s);
+      for (const c of chaves) n.add(c);
+      return n;
+    });
   }
 
   /** origem de cada premissa: quem não foi tocado é padrão (ou estimado, se veio do lote) */
@@ -303,7 +386,7 @@ export function FormAnalise({
   const cred = derivarCred(dc);
   const respostas: Respostas = { ...r, qual, cred };
 
-  const rbt12Num = parseValorBRL(rbt12) ?? null;
+  const rbt12Num = valorDaMascara(rbt12);
   const custoNum = parseValorBRL(custo) ?? null;
   /**
    * A prévia só usa a segregação quando ela FECHA 100%. Enquanto o contador
@@ -318,18 +401,33 @@ export function FormAnalise({
   const alertaSeg = fechado ? fatorRSegregado(segmentos, r.folha) : null;
 
   const res = decidir(respostas, base);
+  /* mostrar quando: já havia análise do contador ao abrir, ou ele acabou de
+     mandar calcular nesta sessão */
+  const mostrarResultado = calculou || salvo;
+
   const saida = SAIDAS[res.saida];
   const dois = cenarios(respostas, base);
   const dinheiro = emReais(res, rbt12Num, custoNum);
   /**
-   * DO CRESCIMENTO DE VOLTA PARA O VALOR ANTERIOR.
+   * O CAMPO PASSOU A SER EXPECTATIVA, E ISSO MUDA DE ONDE A PROJEÇÃO SAI —
+   * 10/08/2026.
    *
-   * `rbt12_anterior = rbt12 / (1 + g)`. Guardar o valor reconstruído em vez do
-   * percentual é o que mantém intacto tudo o que veio antes: o motor continua
-   * medindo o crescimento do jeito dele, o laudo continua tratando como MEDIDO
-   * (é o ano que passou, não uma expectativa sobre o que vem) e a análise
-   * gravada não muda de formato — nenhuma migration, nenhum laudo antigo relido
-   * de outro jeito.
+   * Ele perguntava "quanto a receita cresceu no último ano": medição do
+   * passado, que o motor reconstruía como `rbt12_anterior = rbt12 / (1 + g)` e
+   * gravava como valor medido. Agora pergunta a EXPECTATIVA de crescimento
+   * anual, e a diferença não é de rótulo:
+   *
+   *   · a opção se exerce em setembro de 2026 e vale de janeiro a junho de
+   *     2027. O que decide se a empresa muda de faixa DENTRO do efeito é o que
+   *     ela espera faturar, não o que faturou;
+   *   · e reconstruir um `rbt12_anterior` a partir de uma expectativa gravaria
+   *     um passado que nunca foi medido, dentro de uma análise que vira laudo
+   *     assinado. Número inventado em documento assinado não tem conserto.
+   *
+   * Então a projeção passa a receber o crescimento DIRETO — `projetarRBT12` já
+   * aceita, com `origem: "informado"` —, e `rbt12_anterior` deixa de ser
+   * gravado. O laudo passa a chamar isso de expectativa declarada, que é o que
+   * é, em vez de medição.
    *
    * Queda de 100% ou mais seria receita zero ou negativa: aí não há projeção.
    */
@@ -339,10 +437,9 @@ export function FormAnalise({
     const n = Number(t);
     return Number.isFinite(n) ? n / 100 : null;
   })();
-  const rbt12AntNum = rbt12AnteriorPorCrescimento(rbt12Num, crescNum);
   const projecao =
-    rbt12Num != null && rbt12AntNum != null
-      ? projetarRBT12({ rbt12: rbt12Num, rbt12_anterior: rbt12AntNum, anexo: ddas.anexo })
+    rbt12Num != null && crescNum != null
+      ? projetarRBT12({ rbt12: rbt12Num, crescimento: crescNum, anexo: ddas.anexo })
       : null;
   const comProjecao = projecao ? decidirComProjecao(respostas, base, projecao) : null;
   const sens = sensibilidade(respostas, base, dinheiro);
@@ -363,7 +460,10 @@ export function FormAnalise({
           empresa_id: empresaId,
           respostas,
           rbt12: rbt12Num,
-          rbt12_anterior: rbt12AntNum,
+          /* o campo virou EXPECTATIVA (ver a nota acima): mandar um
+             `rbt12_anterior` reconstruído a partir dela gravaria um passado que
+             ninguém mediu, dentro do que vira laudo assinado */
+          crescimento_esperado: crescNum,
           custo_apuracao_anual: custoNum,
           detalhes: { qual: dq, cred: dc },
           origens,
@@ -379,6 +479,10 @@ export function FormAnalise({
       const json = await resp.json();
       if (resp.ok && json.analise_id) {
         setSalvo(true);
+        /* `salvo` volta a false em 2,5s (é o "✓" do botão). `calculou` não
+           volta: a partir daqui a decisão fica na tela, porque o contador vai
+           ajustar premissa e precisa ver o efeito na hora. */
+        setCalculou(true);
         setConflito(null);
         /* a próxima gravação compara contra o que ACABOU de ser gravado —
            sem isto, salvar duas vezes seguidas acusaria conflito consigo mesmo */
@@ -462,10 +566,10 @@ export function FormAnalise({
               <span className="font-mono text-[12px] text-muted">R$</span>
               <input
                 value={rbt12}
-                onChange={(e) => setRbt12(e.target.value)}
-                inputMode="decimal"
-                placeholder="ex.: 480.000"
-                className="w-36 bg-transparent px-2 py-1.5 font-mono text-[13px] outline-none"
+                onChange={(e) => setRbt12(mascaraMoeda(e.target.value))}
+                inputMode="numeric"
+                placeholder="480.000,00"
+                className="w-40 bg-transparent px-2 py-1.5 text-right font-mono text-[13px] outline-none"
               />
             </div>
             <span
@@ -498,17 +602,19 @@ export function FormAnalise({
             * período em que ele pode já não valer: empresa que cresce muda de
             * faixa dentro do efeito, e a parcela que sai do DAS muda com ela.
             *
-            * A pergunta é o CRESCIMENTO DO ANO QUE PASSOU, não uma expectativa
-            * sobre o que vem — continua sendo medição, e é a medição que o
-            * contador tem na cabeça. O valor anterior em reais é reconstruído
-            * daqui (ver `rbt12AntNum`), então nada mudou do motor para baixo.
+            * A pergunta é a EXPECTATIVA de crescimento, e não o que já foi
+            * medido — mudou em 10/08/2026. O período que a decisão cobre é
+            * futuro, então é a expectativa que diz se a empresa troca de faixa
+            * dentro do efeito. Nenhum `rbt12_anterior` é reconstruído a partir
+            * daqui: isso gravaria um passado que ninguém mediu dentro de uma
+            * análise que vira laudo assinado.
             *
             * Opcional. Sem ele nada é projetado, e o laudo não ganha a seção —
             * melhor do que ganhar uma seção construída sobre um chute.
             */}
           <div className="mt-3">
             <div className="text-[12.5px] font-semibold">
-              Quanto a receita cresceu no último ano{" "}
+              Expectativa de crescimento anual{" "}
               <span className="font-normal text-muted">· opcional</span>
             </div>
             <p className="mb-2 mt-0.5 max-w-[70ch] text-[12px] text-muted">
@@ -762,7 +868,7 @@ export function FormAnalise({
         <Escolha
           titulo="Quanto do faturamento vem de vendas para outras empresas?"
           opcoes={[["até 20%", 0.12], ["20–40%", 0.3], ["40–60%", 0.5], ["60–80%", 0.7], ["mais de 80%", 0.9]]}
-          valor={r.b2b}
+          valor={vis("b2b", r.b2b)}
           onEscolher={(v) => {
             setR({ ...r, b2b: v });
             tocar("b2b");
@@ -779,10 +885,10 @@ export function FormAnalise({
             ["mais da metade", 0.65, "uns 65%"],
             ["quase todos", 0.92, "mais de 90%"],
           ]}
-          valor={dq.fora_simples}
+          valor={vis("qual.fora_simples", dq.fora_simples)}
           onEscolher={(v) => {
             setDq({ ...dq, fora_simples: v });
-            tocar("qual");
+            tocar("qual", "qual.fora_simples");
           }}
         />
 
@@ -795,16 +901,26 @@ export function FormAnalise({
             ["cerca de um terço", 0.33, "uns 33%"],
             ["mais da metade", 0.6, "uns 60%"],
           ]}
-          valor={dq.sem_aproveitamento}
+          valor={vis("qual.sem_aproveitamento", dq.sem_aproveitamento)}
           onEscolher={(v) => {
             setDq({ ...dq, sem_aproveitamento: v });
-            tocar("qual");
+            tocar("qual", "qual.sem_aproveitamento");
           }}
         />
 
-        <p className="mt-2 rounded-sm bg-surface2 px-2.5 py-2 font-mono text-[11.5px] text-slate2">
-          receita qualificada = {pct(r.b2b)} × {pct(qual)} = <b>{pct(res.rq)}</b> da receita
-        </p>
+        {/* A SOMA NÃO PODE APARECER ANTES DAS PARCELAS — 10/08/2026.
+
+            No modo em branco os botões não nascem marcados, mas o estado por
+            trás deles continua tendo o padrão do sistema. Sem esta guarda a
+            linha derivada mostraria "receita qualificada = 90% × 78,2% =
+            70,4%" com as três perguntas acima ainda intocadas — um número que
+            ninguém respondeu, no lugar exato onde a tela promete que nada vem
+            preenchido. */}
+        {(!emBranco || (tocadas.has("b2b") && tocadas.has("qual.fora_simples") && tocadas.has("qual.sem_aproveitamento"))) && (
+          <p className="mt-2 rounded-sm bg-surface2 px-2.5 py-2 font-mono text-[11.5px] text-slate2">
+            receita qualificada = {pct(r.b2b)} × {pct(qual)} = <b>{pct(res.rq)}</b> da receita
+          </p>
+        )}
       </div>
 
       {/* -------------------------------------------------- o que ela compra */}
@@ -821,35 +937,38 @@ export function FormAnalise({
         <Escolha
           titulo="Mercadorias e insumos comprados de fornecedor fora do Simples"
           opcoes={[["nada", 0], ["até 10%", 0.07], ["10–20%", 0.15], ["20–35%", 0.27], ["mais de 35%", 0.45]]}
-          valor={dc.insumos}
+          valor={vis("cred.insumos", dc.insumos)}
           onEscolher={(v) => {
             setDc({ ...dc, insumos: v });
-            tocar("cred");
+            tocar("cred", "cred.insumos");
           }}
         />
         <Escolha
           titulo="Serviços tomados de pessoa jurídica fora do Simples"
           opcoes={[["nada", 0], ["até 5%", 0.03], ["5–10%", 0.07], ["mais de 10%", 0.15]]}
-          valor={dc.servicos}
+          valor={vis("cred.servicos", dc.servicos)}
           onEscolher={(v) => {
             setDc({ ...dc, servicos: v });
-            tocar("cred");
+            tocar("cred", "cred.servicos");
           }}
         />
         <Escolha
           titulo="Energia, aluguel de PJ, fretes e demais insumos com crédito"
           opcoes={[["nada", 0], ["até 5%", 0.03], ["5–10%", 0.07], ["mais de 10%", 0.13]]}
-          valor={dc.outros}
+          valor={vis("cred.outros", dc.outros)}
           onEscolher={(v) => {
             setDc({ ...dc, outros: v });
-            tocar("cred");
+            tocar("cred", "cred.outros");
           }}
         />
 
-        <p className="mt-2 rounded-sm bg-surface2 px-2.5 py-2 font-mono text-[11.5px] text-slate2">
-          compras com crédito = {pct(dc.insumos)} + {pct(dc.servicos)} + {pct(dc.outros)} ={" "}
-          <b>{pct(cred)}</b> da receita
-        </p>
+        {/* mesma regra da linha acima: soma só depois das parcelas */}
+        {(!emBranco || (tocadas.has("cred.insumos") && tocadas.has("cred.servicos") && tocadas.has("cred.outros"))) && (
+          <p className="mt-2 rounded-sm bg-surface2 px-2.5 py-2 font-mono text-[11.5px] text-slate2">
+            compras com crédito = {pct(dc.insumos)} + {pct(dc.servicos)} + {pct(dc.outros)} ={" "}
+            <b>{pct(cred)}</b> da receita
+          </p>
+        )}
       </div>
 
       {/* ------------------------------------------------------ negociação */}
@@ -861,7 +980,7 @@ export function FormAnalise({
           titulo="A folha representa quanto do faturamento?"
           dica="Entra no fator R e serve de conferência do anexo declarado."
           opcoes={[["até 15%", 0.12], ["15–30%", 0.22], ["30–45%", 0.37], ["mais de 45%", 0.55]]}
-          valor={r.folha}
+          valor={vis("folha", r.folha)}
           onEscolher={(v) => {
             setR({ ...r, folha: v });
             tocar("folha");
@@ -870,7 +989,7 @@ export function FormAnalise({
         <Escolha
           titulo="A empresa consegue renegociar preço com os clientes empresa?"
           opcoes={[["tem poder de preço", 3], ["com esforço", 2], ["contratos travados", 1], ["não, o mercado define", 0]]}
-          valor={r.preco}
+          valor={vis("preco", r.preco)}
           onEscolher={(v) => {
             setR({ ...r, preco: v });
             tocar("preco");
@@ -880,7 +999,7 @@ export function FormAnalise({
         <Escolha
           titulo="Os concorrentes diretos estão majoritariamente fora do Simples?"
           opcoes={[["sim", 1], ["não", 0]]}
-          valor={r.conc}
+          valor={vis("conc", r.conc)}
           onEscolher={(v) => {
             setR({ ...r, conc: v });
             tocar("conc");
@@ -890,7 +1009,7 @@ export function FormAnalise({
         <Escolha
           titulo="Algum cliente já sinalizou que vai exigir crédito integral em 2027?"
           opcoes={[["sim", 1], ["não", 0]]}
-          valor={r.exig}
+          valor={vis("exig", r.exig)}
           onEscolher={(v) => {
             setR({ ...r, exig: v });
             tocar("exig");
@@ -899,8 +1018,86 @@ export function FormAnalise({
         />
       </div>
 
+      {/* ═══════════════════════════════════════════════════════════════════
+          O BOTÃO DE SALVAR SUBIU PARA CÁ — 10/08/2026.
+
+          Ele ficava no rodapé, DEPOIS do resultado, dos dois cenários, da
+          sensibilidade e da tabela em reais. E o resultado era calculado ao
+          vivo, a cada clique numa opção. O efeito é que a decisão aparecia
+          enquanto o contador ainda respondia: quando ele chegava ao botão, já
+          sabia a resposta havia três blocos, e "Salvar análise" virava
+          burocracia no fim de uma leitura.
+
+          Invertido, a tela conta a história certa: você responde, você manda
+          calcular, o sistema devolve a decisão. É a mesma informação, na ordem
+          em que o trabalho acontece — e é a ordem que o laudo depois afirma.
+
+          O resultado continua ao vivo DEPOIS de existir análise salva: quem
+          reabre a empresa para ajustar uma premissa precisa ver o efeito na
+          hora, e aí já não há surpresa a preservar.
+          ═══════════════════════════════════════════════════════════════════ */}
+      {erro && <p className="rounded-sm bg-vermelhowash px-3 py-2 text-[12.5px] text-vermelho">{erro}</p>}
+
+      {conflito && (
+        <div className="rounded-sm border border-amarelo bg-amarelowash px-3 py-2.5">
+          <p className="text-[12.5px] leading-relaxed text-amarelo">{conflito}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              onClick={() => window.location.reload()}
+              className="rounded-sm border border-line bg-surface px-3 py-1.5 text-[12px] font-semibold text-slate2"
+            >
+              Recarregar e ver o que mudou
+            </button>
+            <button
+              onClick={() => void salvar(true)}
+              disabled={salvando}
+              className="rounded-sm border border-amarelo px-3 py-1.5 text-[12px] font-semibold text-amarelo disabled:opacity-40"
+            >
+              {salvando ? "…" : "Gravar a minha versão por cima"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <button
+        /* o argumento vira o MouseEvent se passado direto — e um evento é
+           `truthy`, o que faria todo salvamento normal gravar por cima do
+           colega sem perguntar. A seta existe por isso. */
+        onClick={() => void salvar()}
+        disabled={salvando || (segregar && !fechado) || faltamResponder > 0}
+        title={
+          faltamResponder > 0
+            ? `Faltam ${faltamResponder} respostas`
+            : segregar && !fechado
+              ? "Feche 100% da segregação por anexo para salvar"
+              : undefined
+        }
+        className="w-full rounded-sm bg-ink px-4 py-3 text-sm font-semibold text-white disabled:opacity-40"
+      >
+        {salvando
+          ? "Calculando..."
+          : salvo
+            ? "Análise salva ✓"
+            : mostrarResultado
+              ? "Salvar análise"
+              : "Calcular e salvar a análise"}
+      </button>
+
+      {!mostrarResultado && (
+        <p className="text-center text-[12px] text-muted">
+          {faltamResponder > 0 ? (
+            <>
+              Faltam <b>{faltamResponder}</b>{" "}
+              {faltamResponder === 1 ? "resposta" : "respostas"} para calcular.
+            </>
+          ) : (
+            "A decisão, os dois cenários e a sensibilidade aparecem aqui depois de calcular."
+          )}
+        </p>
+      )}
+
       {/* --------------------------------------------------------- resultado */}
-      <div className="rounded border border-line bg-surface p-4">
+      <div className={mostrarResultado ? "rounded border border-line bg-surface p-4" : "hidden"}>
         <div className="mb-3 font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
           A decisão em uma linha
         </div>
@@ -1057,51 +1254,6 @@ export function FormAnalise({
         </p>
       </div>
 
-      {erro && <p className="rounded-sm bg-vermelhowash px-3 py-2 text-[12.5px] text-vermelho">{erro}</p>}
-
-      {/* ux-ok: a decisão aparece no mesmo lugar do botão que a provocou.
-          Conflito não é erro de preenchimento — é trabalho de outra pessoa em
-          risco, e por isso tem cor de aviso e dois caminhos, não uma mensagem
-          vermelha e um beco. */}
-      {conflito && (
-        <div className="rounded-sm border border-amarelo bg-amarelowash px-3 py-2.5">
-          <p className="text-[12.5px] leading-relaxed text-amarelo">{conflito}</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <button
-              onClick={() => window.location.reload()}
-              className="rounded-sm border border-line bg-surface px-3 py-1.5 text-[12px] font-semibold text-slate2"
-            >
-              Recarregar e ver o que mudou
-            </button>
-            <button
-              onClick={() => void salvar(true)}
-              disabled={salvando}
-              className="rounded-sm border border-amarelo px-3 py-1.5 text-[12px] font-semibold text-amarelo disabled:opacity-40"
-            >
-              {salvando ? "…" : "Gravar a minha versão por cima"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* texto-ok: a explicação do bloqueio fica no aviso da segregação, a três
-          linhas do checkbox que o causa — pô-la aqui, no rodapé do formulário,
-          seria repetir longe de onde a pessoa mexeu. */}
-      <button
-        /* o argumento vira o MouseEvent se passado direto — e um evento é
-           `truthy`, o que faria todo salvamento normal gravar por cima do
-           colega sem perguntar. A seta existe por isso. */
-        onClick={() => void salvar()}
-        disabled={salvando || (segregar && !fechado)}
-        title={
-          segregar && !fechado
-            ? "Feche 100% da segregação por anexo para salvar"
-            : undefined
-        }
-        className="w-full rounded-sm bg-ink px-4 py-3 text-sm font-semibold text-white disabled:opacity-40"
-      >
-        {salvando ? "Salvando..." : salvo ? "Análise salva ✓" : "Salvar análise"}
-      </button>
     </div>
   );
 }

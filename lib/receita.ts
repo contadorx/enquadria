@@ -177,6 +177,39 @@ const mesmoValor = (a: unknown, b: unknown) =>
   String(b ?? "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
 
 /**
+ * O CAMPO ESTÁ VAZIO PARA EFEITO DE FUSÃO?
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * A REGRESSÃO QUE ISTO CONSERTA — 10/08/2026, mesmo dia da mudança
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Quando `fundir` passou a completar lacuna em vez de sobrescrever, quem colava
+ * um CNPJ solto parou de receber a razão social. O motivo é sutil e é meu: o
+ * parser NUNCA devolve razão social vazia — ele grava o literal
+ * `"(sem razão social)"` (lib/csv.ts), que descreve o ARQUIVO e não a empresa.
+ * Para um teste de string vazia, isso é um valor preenchido. Resultado: a
+ * Receita tinha o nome, o `completar` recusava, e a empresa entrava na carteira
+ * chamada "(sem razão social)".
+ *
+ * A regra da razão social não mudou desde sempre — a do arquivo vence, a da
+ * Receita só entra quando não veio nenhuma. O que faltava era ENTENDER que o
+ * marcador é ausência escrita por extenso.
+ *
+ * Fica aqui, e não numa comparação solta, porque o próximo marcador desse tipo
+ * (um "—" numa coluna de CNAE, um "N/A" no porte) vai querer o mesmo
+ * tratamento, e vai ser neste lugar que alguém procura.
+ */
+const MARCADORES_DE_AUSENCIA = ["(sem razão social)", "-", "—", "n/a", "na", "null", "undefined"];
+
+function vazioParaFusao(valor: unknown): boolean {
+  if (valor === null || valor === undefined) return true;
+  if (typeof valor !== "string") return false;
+  const t = valor.trim();
+  if (t === "") return true;
+  return MARCADORES_DE_AUSENCIA.includes(t.toLowerCase());
+}
+
+/**
  * Funde o dado da Receita com o do CSV — COMPLETANDO LACUNA, não substituindo.
  *
  * ═══════════════════════════════════════════════════════════════════════════
@@ -223,10 +256,7 @@ export function fundir<T extends { razao_social?: string; cnpj?: string }>(
     if (v === null || v === undefined || v === "") continue;
 
     const atual = doArquivo[k];
-    const vazioNoArquivo =
-      atual === null || atual === undefined || (typeof atual === "string" && atual.trim() === "");
-
-    if (vazioNoArquivo) {
+    if (vazioParaFusao(atual)) {
       completar[k] = v;
       continue;
     }

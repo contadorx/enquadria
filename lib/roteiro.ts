@@ -20,12 +20,69 @@ import { moeda, type Dinheiro } from "./motor";
 
 export type EstadoPasso = "feito" | "agora" | "depois";
 
+/**
+ * OS CAMINHOS DE "REUNIR AS PREMISSAS" — 10/08/2026.
+ *
+ * O passo dizia "peça ao cliente pelo formulário ou preencha você mesmo" e não
+ * oferecia nem um nem outro: era instrução sem porta. Quem lia ficava com a
+ * dúvida certa ("como eu peço?") e a resposta estava três blocos abaixo, no
+ * meio da tela.
+ *
+ * São três caminhos porque a realidade tem três, e a diferença entre eles não é
+ * de gosto — é de QUEM RESPONDE, e isso muda o que o laudo pode afirmar:
+ *
+ *  · `coleta`  — quem responde é a empresa. As respostas entram marcadas como
+ *                informadas pelo cliente, e é a origem mais forte que existe
+ *                para uma premissa num documento que ele vai assinar.
+ *  · `estimado`— quem responde é o perfil do CNAE. Serve para ordenar a fila e
+ *                para não travar quem tem 143 clientes; NÃO serve para assinar
+ *                sem conferir, e o rótulo diz isso.
+ *  · `direto`  — quem responde é o contador, da escrituração. É o caminho de
+ *                quem já tem o dado na mão.
+ *
+ * O terceiro precisa começar EM BRANCO. Preencher com a estimativa e chamar de
+ * "preencher diretamente" é a mesma armadilha do roteiro que nascia riscado: a
+ * tela parece pronta, o contador confirma sem ler, e o chute do CNAE vai para
+ * dentro de um laudo assinado.
+ */
+export type CaminhoDasPremissas = "coleta" | "estimado" | "direto";
+
+export interface AcaoDoPasso {
+  caminho: CaminhoDasPremissas;
+  rotulo: string;
+  /** o que acontece ao escolher — o contador decide com isto, não com o nome */
+  efeito: string;
+}
+
+export const ACOES_DAS_PREMISSAS: AcaoDoPasso[] = [
+  {
+    caminho: "coleta",
+    rotulo: "Solicitar à empresa",
+    efeito:
+      "Gera um link com seis perguntas em português, sem jargão. O que voltar entra marcado como resposta do cliente.",
+  },
+  {
+    caminho: "estimado",
+    rotulo: "Adotar as estimadas e revisar",
+    efeito:
+      "Usa o perfil do CNAE como ponto de partida e você confere resposta por resposta. Mais rápido, e a origem fica registrada como estimada até você tocar.",
+  },
+  {
+    caminho: "direto",
+    rotulo: "Preencher diretamente",
+    efeito:
+      "Abre o formulário em branco, para você responder pela escrituração. Nada vem preenchido — o que for marcado é seu.",
+  },
+];
+
 export interface PassoRoteiro {
   chave: "dados" | "analise" | "laudo" | "termo" | "assinatura";
   titulo: string;
   /** por que este passo existe — some quando o passo já está feito */
   detalhe: string;
   estado: EstadoPasso;
+  /** os caminhos oferecidos quando este passo é o "agora" */
+  acoes?: AcaoDoPasso[];
 }
 
 export interface EstadoDaEmpresa {
@@ -52,8 +109,7 @@ const PASSOS: Array<{ chave: PassoRoteiro["chave"]; titulo: string; detalhe: str
   {
     chave: "dados",
     titulo: "Reunir as premissas",
-    detalhe:
-      "Peça ao cliente pelo formulário ou preencha você mesmo, se a escrituração já responde.",
+    detalhe: "São seis respostas sobre para quem a empresa vende e o que ela compra. Escolha por onde vêm:",
   },
   {
     chave: "analise",
@@ -83,12 +139,32 @@ const PASSOS: Array<{ chave: PassoRoteiro["chave"]; titulo: string; detalhe: str
  * vez de inventar um sexto passo.
  */
 export function roteiroDaEmpresa(e: EstadoDaEmpresa): PassoRoteiro[] {
+  /**
+   * ESTIMATIVA NÃO FECHA PASSO — conserto de 10/08/2026.
+   *
+   * O roteiro existe, segundo o comentário de `premissasEstimadas` aqui em
+   * cima, para desarmar exatamente esta armadilha: o contador abre uma empresa
+   * da faixa A, encontra o formulário inteiro preenchido pelo lote do CNAE e
+   * conclui que não há nada a fazer.
+   *
+   * Só que ele estava CONFIRMANDO a armadilha. O lote grava análise, então
+   * `temAnalise` virava true e os dois primeiros passos — "Reunir as premissas"
+   * e "Salvar a análise" — nasciam riscados. A tela dizia "2 de 5" sobre um
+   * trabalho que ninguém fez: o CNAE chutou, e chute não é premissa reunida nem
+   * análise salva. O passo "agora" pulava direto para "Emitir o laudo" — que é
+   * a única coisa que o contador NÃO deve fazer antes de conferir.
+   *
+   * Agora estimativa não fecha nada, e a empresa recém-importada volta a abrir
+   * no primeiro passo, que é onde ele de fato está.
+   */
+  const analiseDoContador = e.temAnalise && !e.premissasEstimadas;
+
   const feitos: Record<PassoRoteiro["chave"], boolean> = {
     // dados: a análise salva também resolve — quem preencheu na mão não precisa
     // do formulário do cliente, e marcar como pendente o que já foi feito é a
     // forma mais rápida de a lista perder a credibilidade
-    dados: e.temColeta || e.temAnalise,
-    analise: e.temAnalise,
+    dados: e.temColeta || analiseDoContador,
+    analise: analiseDoContador,
     laudo: e.temLaudo,
     termo: e.temTermo,
     assinatura: e.assinado,
@@ -111,7 +187,14 @@ export function roteiroDaEmpresa(e: EstadoDaEmpresa): PassoRoteiro[] {
     if (feitos[p.chave]) return { ...p, estado: "feito" as EstadoPasso };
     if (!achouAtual) {
       achouAtual = true;
-      return { ...p, estado: "agora" as EstadoPasso };
+      /* as ações só existem no passo ATUAL: oferecer caminho para um passo que
+         ainda não chegou é convidar a pular a ordem que o roteiro existe para
+         estabelecer */
+      return {
+        ...p,
+        estado: "agora" as EstadoPasso,
+        ...(p.chave === "dados" ? { acoes: ACOES_DAS_PREMISSAS } : {}),
+      };
     }
     return { ...p, estado: "depois" as EstadoPasso };
   });

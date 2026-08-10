@@ -1814,6 +1814,96 @@ secao("Primeiro acesso da empresa: a aba certa e a instrução certa");
      /confirme antes de emitir/.test(form) && /Salve a an\u00e1lise/.test(form));
   ok("empresa sem análise nenhuma também recebe instrução",
      /semAnalise/.test(form) && /ainda n\u00e3o tem an\u00e1lise/.test(form));
+
+  /* ═══ a terceira gravação quebrada (10/08/2026) ══════════════════════════
+     Quatro defeitos numa tela só, todos do mesmo tipo: a tela contava uma
+     história diferente da que o roteiro contava, e a diferença só apareceu com
+     a câmera ligada. */
+
+  /* 1 · O RBT12 CRU. Nascia `String(2400000)` e recebia dígito por dígito sem
+     formatação: para saber se eram 2,4 milhões ou 24 milhões era preciso
+     contar zero com o olho — num campo que TROCA A ALÍQUOTA e vira número no
+     laudo. `mascaraMoeda` acumula centavos da direita para a esquerda (como
+     terminal de cartão) em vez de reformatar, que jogaria o cursor para o fim
+     a cada tecla e impediria corrigir o meio do número. */
+  ok("a receita bruta é digitada com máscara de milhar, não como número cru",
+     /mascaraMoeda\(e\.target\.value\)/.test(form) &&
+     /valorDaMascara\(rbt12\)/.test(form) &&
+     /moedaParaMascara\(rbt12Inicial\)/.test(form));
+
+  /* 2 · O CAMPO DO CRESCIMENTO. Pedia medição do ano que passou; quem não tem
+     o número na mão deixa em branco, e em branco o laudo perde a projeção
+     inteira. Agora é expectativa declarada — e o nome do campo precisa dizer
+     isso, ou vira medição fingida dentro de um documento assinado. */
+  /* a negativa roda SEM os comentários: a nota que documenta a mudança cita a
+     pergunta antiga entre aspas, de propósito, e um teste que confunde a
+     história do defeito com o defeito obriga a apagar a história para ficar
+     verde — foi o que quase aconteceu com o `createAdminClient` do reset */
+  const formSemNota = form.replace(/\/\*[\s\S]*?\*\//g, "");
+  ok("o campo de crescimento pede EXPECTATIVA, não medição do ano passado",
+     /Expectativa de crescimento anual/.test(formSemNota) &&
+     !/quanto a receita cresceu/i.test(formSemNota));
+  ok("...e é isso que viaja para o servidor",
+     /crescimento_esperado:/.test(form) &&
+     /crescimento_esperado/.test(
+       fs.readFileSync(path.join(RAIZ, "app/api/analise/route.ts"), "utf8")
+     ));
+
+  /* 3 · A ORDEM DA TELA. O botão ficava DEPOIS do resultado, e o resultado era
+     calculado ao vivo: a decisão aparecia enquanto o contador ainda respondia,
+     e "salvar" virava burocracia no fim de uma leitura. Invertido, a tela conta
+     a história que o laudo depois afirma — você responde, você manda calcular,
+     o sistema devolve. A verificação é de POSIÇÃO no arquivo, porque texto
+     certo na ordem errada é exatamente o defeito. */
+  {
+    const posBotao = form.indexOf("Calcular e salvar a análise");
+    const posResultado = form.indexOf("A decisão em uma linha");
+    ok("o botão de calcular vem ANTES do resultado na tela",
+       posBotao > 0 && posResultado > 0 && posBotao < posResultado,
+       { posBotao, posResultado });
+    ok("...e o resultado fica escondido até mandarem calcular",
+       /mostrarResultado = calculou \|\| salvo/.test(form) &&
+       /useState\(!semAnalise && !estimada\)/.test(form));
+  }
+
+  /* 4 · O CAMINHO "PREENCHER DIRETAMENTE". Escolher preencher e encontrar tudo
+     preenchido pelo chute do CNAE é a armadilha que o roteiro existe para
+     desarmar. As perguntas passam por `vis`, que devolve NaN enquanto o campo
+     não foi tocado — e NaN não casa com botão nenhum. */
+  {
+    const comVis = (form.match(/valor=\{vis\("/g) || []).length;
+    ok("todas as perguntas passam pelo filtro do modo em branco", comVis === 10, comVis);
+    /* a soma derivada é o vazamento que sobra: os botões não nascem marcados,
+       mas o estado por trás deles tem o padrão do sistema, e a linha
+       "receita qualificada = 90% × 78,2% = 70,4%" apareceria com as três
+       perguntas acima intocadas — número que ninguém respondeu, no lugar exato
+       onde a tela promete que nada vem preenchido */
+    ok("...e as somas derivadas não aparecem antes das parcelas",
+       /!emBranco \|\| \(tocadas\.has\("b2b"\) && tocadas\.has\("qual\.fora_simples"\) && tocadas\.has\("qual\.sem_aproveitamento"\)\)/.test(form) &&
+       /!emBranco \|\| \(tocadas\.has\("cred\.insumos"\) && tocadas\.has\("cred\.servicos"\) && tocadas\.has\("cred\.outros"\)\)/.test(form));
+    /* CADA sub-pergunta tem chave própria. Com a chave agregada, um clique em
+       "insumos" acendia as outras duas do bloco mostrando `nada` selecionado —
+       resposta que ninguém deu, no modo cuja promessa é que nada vem
+       preenchido. E o aviso dizia "faltam 3" com seis botões apagados. */
+    ok("...e cada sub-pergunta é contada e acesa por si",
+       /const CHAVES_OBRIGATORIAS = \[[^\]]*"qual\.fora_simples"[^\]]*"cred\.outros"[^\]]*\]/s.test(form) &&
+       (form.match(/tocar\("(qual|cred)", "(qual|cred)\./g) || []).length === 5 &&
+       !/valor=\{vis\("(qual|cred)",/.test(form));
+    ok("...e o botão trava enquanto faltar resposta, para não gravar padrão como premissa",
+       /const faltamResponder = emBranco/.test(form) &&
+       /disabled=\{salvando \|\| \(segregar && !fechado\) \|\| faltamResponder > 0\}/.test(form));
+  }
+
+  /* 5 · O EM BRANCO SÓ VALE ANTES DE SALVAR. `caminhoPremissas` é estado de
+     tela e sobrevive ao salvamento; sem a guarda, quem escolhesse "preencher
+     diretamente" e salvasse veria a própria análise recém-gravada em branco de
+     novo — a tela apagando o trabalho que ela acabou de aceitar. */
+  ok("o formulário em branco só é oferecido enquanto não há análise do contador",
+     /emBranco=\{caminhoPremissas === "direto" && \(!a \|\| estimada\)\}/.test(painel));
+  ok("...e cada porta do roteiro tem um destino para onde rolar",
+     /coletaRef = useRef<HTMLDivElement>\(null\)/.test(painel) &&
+     /if \(c === "coleta"\) coletaRef\.current\?\.scrollIntoView/.test(painel) &&
+     /<div ref=\{coletaRef\}>/.test(painel));
 }
 
 /* ============================ 2a. ROTAS CITADAS NOS E-MAILS EXISTEM? ===== */

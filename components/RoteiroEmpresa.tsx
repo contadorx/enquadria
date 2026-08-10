@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { roteiroDaEmpresa, progressoRoteiro, type EstadoDaEmpresa } from "@/lib/roteiro";
+import {
+  roteiroDaEmpresa,
+  progressoRoteiro,
+  type CaminhoDasPremissas,
+  type EstadoDaEmpresa,
+} from "@/lib/roteiro";
 
 /**
  * O ROTEIRO, na tela da empresa.
@@ -16,7 +21,22 @@ import { roteiroDaEmpresa, progressoRoteiro, type EstadoDaEmpresa } from "@/lib/
  * trabalho. A linha do passo atual continua visível fechada — é ela que
  * responde "e agora?" sem custar espaço.
  */
-export function RoteiroEmpresa({ estado }: { estado: EstadoDaEmpresa }) {
+export function RoteiroEmpresa({
+  estado,
+  /**
+   * O QUE FAZER QUANDO ELE ESCOLHE O CAMINHO — 10/08/2026.
+   *
+   * O passo "Reunir as premissas" passou a oferecer três portas em vez de
+   * descrever duas. Quem sabe abrir cada uma é a tela da empresa: a coleta rola
+   * até o bloco de pedir dados, o preenchimento direto zera o formulário. O
+   * roteiro só diz que existem — misturar aqui a mecânica de cada porta faria
+   * este componente conhecer o formulário, e ele não conhece nada.
+   */
+  aoEscolherCaminho,
+}: {
+  estado: EstadoDaEmpresa;
+  aoEscolherCaminho?: (c: CaminhoDasPremissas) => void;
+}) {
   const passos = roteiroDaEmpresa(estado);
   const { feitos, total } = progressoRoteiro(passos);
   const atual = passos.find((p) => p.estado === "agora") ?? null;
@@ -96,6 +116,26 @@ export function RoteiroEmpresa({ estado }: { estado: EstadoDaEmpresa }) {
                     coisa resolvida é entulho na leitura do que falta */}
                 {p.estado !== "feito" && (
                   <p className="text-[11.5px] leading-relaxed text-muted">{p.detalhe}</p>
+                )}
+
+                {/* AS PORTAS DO PASSO ATUAL. Só aparecem em "agora": oferecer
+                    caminho para um passo que ainda não chegou é convidar a
+                    pular a ordem que este bloco existe para estabelecer. */}
+                {p.estado === "agora" && p.acoes && aoEscolherCaminho && (
+                  <div className="mt-2 flex flex-col gap-1.5">
+                    {p.acoes.map((a) => (
+                      <button
+                        key={a.caminho}
+                        // ux-ok: o clique age na própria tela da empresa — rola
+                        // até o bloco de pedir dados, ou zera o formulário
+                        onClick={() => aoEscolherCaminho(a.caminho)}
+                        className="rounded-sm border border-line bg-surface2 px-2.5 py-2 text-left hover:border-accent"
+                      >
+                        <div className="text-[12.5px] font-semibold text-ink">{a.rotulo}</div>
+                        <div className="text-[11.5px] leading-relaxed text-muted">{a.efeito}</div>
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
             </li>

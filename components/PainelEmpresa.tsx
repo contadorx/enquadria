@@ -13,6 +13,7 @@ import { EditarEmpresa } from "@/components/EditarEmpresa";
 import { FormAnalise, RESPOSTAS_PADRAO } from "@/components/FormAnalise";
 import { Comparativo } from "@/components/Comparativo";
 import { PedirDados, type ColetaGravada } from "@/components/PedirDados";
+import type { CaminhoDasPremissas } from "@/lib/roteiro";
 import { RoteiroEmpresa } from "@/components/RoteiroEmpresa";
 import { ArquivarEmpresa } from "@/components/ArquivarEmpresa";
 import { ApontamentosEmpresa } from "@/components/ApontamentosEmpresa";
@@ -165,11 +166,29 @@ export function PainelEmpresa({
    * `null` = ainda não sei; e não saber é diferente de zero.
    */
   const [pendentes, setPendentes] = useState<number | null>(null);
+  /**
+   * O CAMINHO ESCOLHIDO NO PASSO "REUNIR AS PREMISSAS" — 10/08/2026.
+   *
+   * `null` = ainda não escolheu, e é assim que a empresa nova abre: o roteiro
+   * mostra as três portas e o formulário espera. "direto" abre o formulário em
+   * branco; "estimado" usa o que o lote do CNAE preencheu; "coleta" rola até o
+   * bloco que gera o link para a empresa.
+   */
+  const [caminhoPremissas, setCaminhoPremissas] = useState<CaminhoDasPremissas | null>(null);
 
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [bloqueio, setBloqueio] = useState<string | null>(null);
   const [muro, setMuro] = useState<Muro | null>(null);
   const formRef = useRef<HTMLDivElement>(null);
+  /**
+   * O BLOCO DA COLETA — destino do primeiro dos três caminhos.
+   *
+   * "Solicitar à empresa" não abre modal nem navega: o gerador do link já mora
+   * nesta tela, uns dois blocos abaixo do roteiro. Sem rolar até ele, o clique
+   * no botão parece não ter efeito — que é exatamente o relato que o botão
+   * "Ler CNPJs" produziu antes de ganhar o mesmo tratamento.
+   */
+  const coletaRef = useRef<HTMLDivElement>(null);
   /**
    * O MURO NASCE FORA DA VISTA — e por isso o botão "não funcionava".
    *
@@ -733,8 +752,18 @@ export function PainelEmpresa({
               temTermo: !!d.termo,
               assinado,
             }}
+            aoEscolherCaminho={(c) => {
+              setCaminhoPremissas(c);
+              /* cada porta leva a um lugar diferente da mesma tela: a coleta
+                 mora no bloco logo abaixo, o preenchimento mora no formulário.
+                 Rolar até o destino é o que impede o clique de parecer sem
+                 efeito — mesmo defeito que o botão "Ler CNPJs" tinha. */
+              if (c === "coleta") coletaRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+              else formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
           />
 
+          <div ref={coletaRef}>
           <PedirDados
             empresaId={e.id}
             empresaNome={e.razao_social}
@@ -742,6 +771,7 @@ export function PainelEmpresa({
             aoMudar={() => mudou()}
             aoAplicar={aplicarColeta}
           />
+          </div>
 
           <div ref={formRef}>
           {aplicado && (
@@ -782,6 +812,17 @@ export function PainelEmpresa({
               a?.parametros?.rbt12_anterior ?? null
             )}
             estimada={estimada}
+            /**
+             * O FORMULÁRIO EM BRANCO — só no caminho "preencher diretamente".
+             *
+             * A condição carrega `!a || estimada` de propósito. `caminhoPremissas`
+             * é estado de tela e sobrevive ao salvamento; sem a segunda parte,
+             * quem escolhesse "preencher diretamente", salvasse e reabrisse a aba
+             * veria a própria análise recém-gravada com os campos em branco de
+             * novo — a tela apagando o trabalho que ela mesma acabou de aceitar.
+             * Com análise do contador no banco, o que vale é o que foi salvo.
+             */
+            emBranco={caminhoPremissas === "direto" && (!a || estimada)}
             aoSalvar={() => {
               setDaColeta(null);
               setAplicado(false);

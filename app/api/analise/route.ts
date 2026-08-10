@@ -70,6 +70,21 @@ export async function POST(req: Request) {
     rbt12?: number | null;
     /** C6 — RBT12 dos doze meses anteriores; habilita a projeção */
     rbt12_anterior?: number | null;
+    /**
+     * A EXPECTATIVA DE CRESCIMENTO ANUAL, em fração — 10/08/2026.
+     *
+     * `rbt12_anterior` continua aceito para não reler de outro jeito as
+     * análises já gravadas. O que mudou é a origem do número novo: a tela
+     * pergunta o que a empresa ESPERA crescer, e não o que cresceu — porque o
+     * efeito da opção é de janeiro a junho de 2027, e quem decide se ela muda
+     * de faixa lá dentro é a expectativa, não a medição do ano que passou.
+     *
+     * Reconstruir um `rbt12_anterior` a partir da expectativa gravaria um
+     * passado que ninguém mediu dentro de um documento assinado. Por isso o
+     * campo é próprio, e `projetarRBT12` recebe o crescimento direto — ela já
+     * distingue as duas origens ("medido" × "informado").
+     */
+    crescimento_esperado?: number | null;
     /** premissa declarada pelo contador; sem ela o laudo não calcula payback */
     custo_apuracao_anual?: number | null;
     detalhes?: { qual?: DetalheQual; cred?: DetalheCred };
@@ -235,10 +250,18 @@ export async function POST(req: Request) {
     corpo.rbt12_anterior != null && Number(corpo.rbt12_anterior) > 0
       ? Number(corpo.rbt12_anterior)
       : null;
+  const cresceEsperado =
+    corpo.crescimento_esperado != null && Number.isFinite(Number(corpo.crescimento_esperado))
+      ? Number(corpo.crescimento_esperado)
+      : null;
+  /* medição vence expectativa quando as duas chegam: análise antiga reaberta
+     continua projetando pelo que foi medido, e não perde a seção do laudo */
   const projecao =
     rbt12Efetivo != null && rbt12Anterior != null
       ? projetarRBT12({ rbt12: rbt12Efetivo, rbt12_anterior: rbt12Anterior, anexo: anexoEfetivo })
-      : null;
+      : rbt12Efetivo != null && cresceEsperado != null
+        ? projetarRBT12({ rbt12: rbt12Efetivo, crescimento: cresceEsperado, anexo: anexoEfetivo })
+        : null;
   const comProjecao = projecao ? decidirComProjecao(corpo.respostas, base, projecao) : null;
   const doisCenarios = cenarios(corpo.respostas, base);
   const custo =

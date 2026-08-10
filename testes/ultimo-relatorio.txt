@@ -49,7 +49,7 @@ ok    suíte reforma-publica (36 asserções)
 ok    suíte reguas (55 asserções)
 ok    suíte reguas-indicacao (40 asserções)
 ok    suíte repasse (26 asserções)
-ok    suíte roteiro (24 asserções)
+ok    suíte roteiro (38 asserções)
 ok    suíte slug (21 asserções)
 ok    suíte tabela-2027 (82 asserções)
 ok    suíte termo (128 asserções)
@@ -312,7 +312,7 @@ ok    ...e 'cadastrar contato' abre o DOSSIÊ, que é onde o dado que falta mora
 ok    sem trabalho pendente não há destino — o botão fica apagado
 ok    o Cockpit LÊ o mapa em vez de reescrever a regra
 ok    clicar no nome de empresa SEM análise leva ao formulário
-FALHA ...e, com o filtro dos pontos da Reforma ligado, abre a aba deles → "     id: l.id,\n                      aba:\n                        l.analise_id\n                            ? \"dossie\"\n                            : \"decisao\",\n                    })\n                  }\n                  "
+ok    ...e, com o filtro dos pontos da Reforma ligado, abre a aba deles
 ok    a tela duplicada de apontamentos não existe mais
 ok    ...e nenhum menu aponta para a rota que saiu
 ok    o balanço 'o que a Reforma rendeu' sobreviveu, na Reforma
@@ -337,6 +337,17 @@ ok    ...e as perguntas que não são percentuais continuam sem número
 ok    a razão social não é mais cortada na fila
 ok    premissa estimada vira TAREFA numerada, não só aviso de estado
 ok    empresa sem análise nenhuma também recebe instrução
+ok    a receita bruta é digitada com máscara de milhar, não como número cru
+ok    o campo de crescimento pede EXPECTATIVA, não medição do ano passado
+ok    ...e é isso que viaja para o servidor
+ok    o botão de calcular vem ANTES do resultado na tela
+ok    ...e o resultado fica escondido até mandarem calcular
+ok    todas as perguntas passam pelo filtro do modo em branco
+ok    ...e as somas derivadas não aparecem antes das parcelas
+ok    ...e cada sub-pergunta é contada e acesa por si
+ok    ...e o botão trava enquanto faltar resposta, para não gravar padrão como premissa
+FALHA o formulário em branco só é oferecido enquanto não há análise do contador
+ok    ...e cada porta do roteiro tem um destino para onde rolar
 
 ── Links das réguas apontam para rotas que existem ─────────────
 ok    rotas citadas nos e-mails: importar
@@ -501,4 +512,4 @@ ok    nenhuma peça da proposta promete economia, ganho ou garantia
 
 ── Resultado ───────────────────────────────────────────────────
 
-3 FALHA(S) em 440 verificações
+3 FALHA(S) em 451 verificações
