@@ -82,8 +82,15 @@ export default async function CursoPage() {
   const minutos = total % 60;
   const primeira = modulos[0].aulas[0];
 
+  /* SEM COLUNA, PARA O PALCO IR DE BORDA A BORDA (10/08/2026).
+     Com `largura="max-w-5xl"` a casca embrulhava a página inteira numa coluna,
+     e o hero navy virava um retângulo azul com faixas brancas dos dois lados —
+     o oposto do palco cheio que a home, o /reforma e o /guia usam. As seis
+     seções desta página já têm o próprio `mx-auto max-w-5xl px-5`, então tirar
+     a coluna da casca não mexe em uma linha de texto: muda só até onde o FUNDO
+     vai. É o mesmo arranjo da matéria do radar. */
   return (
-    <CascaPublica largura="max-w-5xl">
+    <CascaPublica largura="max-w-none" semColuna>
       {/* O CABEÇALHO PRÓPRIO SAIU DAQUI (08/08/2026).
           Esta página é pública e é o ativo de tráfego frio: quem chega por
           busca cai nela sem ter passado pela home. Com o menu do APP em cima,
@@ -91,34 +98,73 @@ export default async function CursoPage() {
           cliente não tinha para onde ir. Agora ela usa a mesma casca das
           outras páginas públicas, com o menu do SITE. */}
       {/* ------------------------------------------------------------ hero */}
-      <section className="border-b border-line bg-surface">
-        <div className="mx-auto max-w-5xl px-5 py-10 md:py-14">
-          <span className="inline-block rounded-full bg-accentwash px-3 py-1 font-mono text-[11px] font-semibold text-accentdeep">
+      {/* O PALCO DO CURSO PASSOU A SER NAVY — 10/08/2026.
+          Ele era branco. O visitante que chegava pela home, pelo /reforma ou
+          pelo /guia via os três primeiros com o mesmo palco escuro e, no
+          curso, uma página que parecia de outro produto: o selo
+          "Curso gratuito · sem cadastro para assistir" e o título "A decisão
+          de setembro" — as duas linhas que precisam ser lidas antes de
+          qualquer outra — chegavam sem o contraste que o resto do site usa
+          justamente para dar peso ao topo.
+
+          O gradiente, a grade de fundo e as cores dos textos são os mesmos de
+          `.curso-hero` e `.page-hero` em app/site.css. Foram escritos aqui em
+          Tailwind, e não trocando por aquelas classes, porque esta página é
+          JSX com `max-w-5xl` e aquelas presumem `.container` (1180px): herdar
+          a classe desalinharia o hero do resto da página em uma largura. */}
+      <section
+        className="relative overflow-hidden border-b border-ink"
+        style={{ background: "linear-gradient(180deg, #0B1220, #0E1A30)" }}
+      >
+        {/* a mesma grade tênue do hero da home, presa atrás do conteúdo */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            backgroundImage:
+              "linear-gradient(rgba(148,163,184,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,.06) 1px, transparent 1px)",
+            backgroundSize: "44px 44px",
+            maskImage: "radial-gradient(700px 360px at 70% 0%, #000, transparent 78%)",
+            WebkitMaskImage: "radial-gradient(700px 360px at 70% 0%, #000, transparent 78%)",
+          }}
+        />
+        <div className="relative mx-auto max-w-5xl px-5 py-12 md:py-16">
+          <span
+            className="inline-block rounded-full px-3 py-1 font-mono text-[11px] font-semibold"
+            style={{
+              background: "rgba(6,182,212,.10)",
+              border: "1px solid rgba(6,182,212,.35)",
+              color: "#67E8F9",
+            }}
+          >
             {CURSO.selo}
           </span>
-          <h1 className="mt-4 max-w-[20ch] text-[32px] font-extrabold leading-[1.1] tracking-tight text-ink md:text-[44px]">
+          <h1 className="mt-4 max-w-[20ch] text-[32px] font-extrabold leading-[1.1] tracking-tight text-white md:text-[44px]">
             {CURSO.nome}
           </h1>
-          <p className="mt-3 max-w-[64ch] text-[16px] leading-relaxed text-slate2 md:text-[18px]">
+          <p className="mt-3 max-w-[64ch] text-[16px] leading-relaxed text-[#AEBED2] md:text-[18px]">
             {CURSO.promessa}
           </p>
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
+            {/* no escuro, o botão `bg-ink` do desenho anterior sumiria no
+                fundo: a ação principal vira o ciano da marca, com texto
+                escuro — o mesmo par do `.btn-primary` do site. */}
             <Link
               href={`/curso/${primeira.slug}`}
-              className="rounded-sm bg-ink px-6 py-3.5 text-[15px] font-semibold text-white"
+              className="rounded-sm bg-accent px-6 py-3.5 text-[15px] font-semibold text-[#04212B]"
             >
               Começar pela aula 1 →
             </Link>
             <a
               href="#grade"
-              className="rounded-sm border border-line bg-surface px-5 py-3.5 text-[15px] font-semibold text-slate2"
+              className="rounded-sm border border-white/25 px-5 py-3.5 text-[15px] font-semibold text-white"
             >
               Ver o currículo
             </a>
           </div>
 
-          <div className="mt-6 flex flex-wrap gap-x-6 gap-y-1 font-mono text-[12px] text-muted">
+          <div className="mt-6 flex flex-wrap gap-x-6 gap-y-1 font-mono text-[12px] text-[#93A4BC]">
             <span>
               {TOTAL_AULAS} aulas · {horas}h{String(minutos).padStart(2, "0")}
             </span>

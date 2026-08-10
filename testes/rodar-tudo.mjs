@@ -93,6 +93,10 @@ try {
     "lib/proposta-de-valor.ts",
     /* o relatório anual: números que vão para a mesa do cliente do contador */
     "lib/anuario.ts",
+    /* o que vira link no texto da matéria — e, sobretudo, o que NÃO vira:
+       inventar endereço de norma na página que se vende por citar a fonte é o
+       pior defeito possível ali */
+    "lib/normas.ts",
   ];
   const cfg = path.join(RAIZ, "tsconfig.testes.json");
   fs.writeFileSync(cfg, JSON.stringify({

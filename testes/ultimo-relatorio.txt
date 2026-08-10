@@ -3,7 +3,7 @@
 ok    compila sem erro
 
 ── Suítes de função pura ───────────────────────────────────────
-ok    49 suítes encontradas na pasta
+ok    50 suítes encontradas na pasta
 ok    suíte abertura (34 asserções)
 ok    suíte absorcao (32 asserções)
 ok    suíte ajuda (41 asserções)
@@ -33,6 +33,7 @@ ok    suíte laudo-fundamentacao (41 asserções)
 ok    suíte motor (80 asserções)
 ok    suíte muro (12 asserções)
 ok    suíte negocio (20 asserções)
+ok    suíte normas (30 asserções)
 ok    suíte novidade (27 asserções)
 ok    suíte nps (40 asserções)
 ok    suíte passos (71 asserções)
@@ -387,7 +388,7 @@ ok    condição sobre o fator R (há serviço no mix)
 ok    análise de um anexo só mantém o passo 1 de sempre
 
 ── Navegador — curso estático e formulário da coleta ───────────
-FALHA playwright disponível → "instale para rodar as checagens de navegador"
+FALHA pasta do site encontrada → "/root/work/enquadria-site"
 
 ── Depois da janela — a frase, o carimbo e a segunda rodada ────
 ok    na janela aberta, a frase cita 30 de setembro
@@ -477,4 +478,4 @@ ok    nenhuma peça da proposta promete economia, ganho ou garantia
 
 ── Resultado ───────────────────────────────────────────────────
 
-2 FALHA(S) em 416 verificações
+2 FALHA(S) em 417 verificações

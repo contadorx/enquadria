@@ -27,6 +27,25 @@
  * pedir uma rodada nova, que cria análises NOVAS e preserva as anteriores.
  */
 
+/**
+ * ESTE `create table` É REDE DE SEGURANÇA, NÃO A REALIDADE — 09/08/2026.
+ *
+ * A migration falhou na primeira aplicação, assim:
+ *
+ *   ERROR: 23502: null value in column "das_por_anexo" of relation
+ *   "parametros_exercicio" violates not-null constraint
+ *
+ * Ou seja: a tabela JÁ EXISTIA em produção, criada por alguma migration
+ * anterior à 0020 — que não está neste repositório. O `if not exists` virou
+ * no-op, e a lista de colunas abaixo descreve a tabela que eu IMAGINEI, não a
+ * que está no banco. A de verdade tem `id uuid` como chave primária (com
+ * unicidade em `exercicio`, senão o `on conflict` lá embaixo nem teria
+ * planejado), mais ao menos uma coluna herdada e obrigatória: `das_por_anexo`.
+ *
+ * A lição vale para toda migration deste repositório: com o histórico
+ * começando na 0020, `create table if not exists` não prova nada sobre o
+ * FORMATO da tabela — só que ela existe.
+ */
 create table if not exists public.parametros_exercicio (
   exercicio      int primary key,
   aliquota_cbs   numeric(6,5) not null,
@@ -91,6 +110,65 @@ create policy parametros_escrita on public.parametros_exercicio
 comment on policy parametros_escrita on public.parametros_exercicio is
   'A alíquota de referência é uma só. Escritório não edita; o dono da plataforma publica quando a Resolução sair.';
 
+/* ────────────────────────────────────────────────────────────────────────────
+   AS COLUNAS HERDADAS QUE NINGUÉM LÊ — 09/08/2026.
+
+   `das_por_anexo` é `not null` e nenhum caminho do produto a escreve. Ela não é
+   lida por nenhum tampouco: os seis lugares que consultam esta tabela pedem
+   colunas nomeadas, e ela não está em nenhum deles —
+
+     app/api/analise/route.ts:157        · app/api/analise/lote/route.ts:112
+     app/api/janela/route.ts:143         · app/painel/page.tsx:239
+     app/painel/negocio/parametros/page.tsx:26
+     app/api/negocio/parametros/route.ts:111 (upsert, sem ela)
+
+   Havia dois caminhos. Inventar um valor para ela — que é dado tributário, e
+   inventar dado tributário neste produto é a única coisa que não se pode fazer.
+   Ou tirar a obrigatoriedade da coluna que o produto não usa. Fica a segunda.
+
+   O laço é genérico de propósito: `das_por_anexo` foi a PRIMEIRA violação que o
+   Postgres relatou, não necessariamente a única. Toda coluna obrigatória, sem
+   default, que este produto não escreve, cai aqui — e o `raise notice` diz
+   quais foram, para você conferir em vez de descobrir depois.
+
+   Linhas que já existem NÃO são tocadas: tirar `not null` não apaga valor
+   nenhum. Se algum dia aparecer uma RPC que lê `das_por_anexo`, esta é a
+   primeira pedra a virar — e é por isso que o nome dela está escrito aqui.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+do $$
+declare
+  c      record;
+  soltas text[] := '{}';
+begin
+  for c in
+    select column_name
+      from information_schema.columns
+     where table_schema    = 'public'
+       and table_name      = 'parametros_exercicio'
+       and is_nullable     = 'NO'
+       and column_default is null
+       and is_generated    = 'NEVER'
+       and column_name not in (
+         'exercicio', 'aliquota_cbs', 'aliquota_ibs', 'corte_s1',
+         'fronteira_min', 'fronteira_max', 'fixada', 'fonte',
+         'atualizado_em', 'atualizado_por'
+       )
+  loop
+    execute format(
+      'alter table public.parametros_exercicio alter column %I drop not null',
+      c.column_name
+    );
+    soltas := soltas || c.column_name;
+  end loop;
+
+  if array_length(soltas, 1) is null then
+    raise notice '[0065] nenhuma coluna herdada obrigatória — a tabela é a que o código espera.';
+  else
+    raise notice '[0065] obrigatoriedade removida de coluna(s) herdada(s) que o produto não escreve: %', array_to_string(soltas, ', ');
+  end if;
+end $$;
+
 /**
  * A SEMENTE É O QUE O CÓDIGO JÁ USA — não um número novo.
  *
@@ -102,17 +180,44 @@ comment on policy parametros_escrita on public.parametros_exercicio is
  * Migration que altera resultado de cálculo no dia em que roda é migration que
  * ninguém consegue distinguir de um bug.
  */
+/* `where not exists` em vez de `on conflict (exercicio)`: o `on conflict`
+   exige que exista índice único naquela coluna, e esta migration acabou de
+   aprender que não sabe o formato desta tabela. O efeito é o mesmo — rodar
+   duas vezes não duplica —, sem depender de uma restrição que eu não vi. */
 insert into public.parametros_exercicio
   (exercicio, aliquota_cbs, aliquota_ibs, corte_s1, fronteira_min, fronteira_max, fixada, fonte)
-values
+select
   /* 0,087 de CBS + 0,001 de IBS = 0,088, que é `PARAMETROS_2027.aliquota`.
      `fronteira_min`/`fronteira_max` são MULTIPLICADORES do ganho do comprador
      (0,8·fc e 1,2·fc), não pontos percentuais — quem ler isto como "0,8%"
      inverte a banda de fronteira inteira. `corte_s1` está inerte desde que a
      banda passou a capturar o intervalo; fica em zero para não fingir efeito. */
-  (2027, 0.08700, 0.00100, 0.00000, 0.80000, 1.20000, false,
-   'Estimativa de trabalho para 2027, na forma da EC 132/2023 e da LC 214/2025. A alíquota de referência de IBS/CBS é fixada por Resolução do Senado Federal, com prazo até 31/10/2026 — depois do fechamento da janela de opção.')
-on conflict (exercicio) do nothing;
+  2027, 0.08700, 0.00100, 0.00000, 0.80000, 1.20000, false,
+  'Estimativa de trabalho para 2027, na forma da EC 132/2023 e da LC 214/2025. A alíquota de referência de IBS/CBS é fixada por Resolução do Senado Federal, com prazo até 31/10/2026 — depois do fechamento da janela de opção.'
+where not exists (
+  select 1 from public.parametros_exercicio where exercicio = 2027
+);
+
+/* A migration não pode terminar dizendo "ok" se a linha não entrou: sem ela, a
+   tela da alíquota abre vazia e as rotas de análise caem no valor do código —
+   que é justamente o estado que esta migration existe para encerrar. */
+do $$
+declare
+  a numeric;
+begin
+  select aliquota_cbs + aliquota_ibs into a
+    from public.parametros_exercicio where exercicio = 2027;
+
+  if a is null then
+    raise exception '[0065] o exercício de 2027 não foi semeado';
+  end if;
+
+  if round(a, 5) <> 0.08800 then
+    raise exception '[0065] a alíquota de 2027 ficou em %, e o motor pratica 0.088', a;
+  end if;
+
+  raise notice '[0065] 2027 no banco com alíquota % — igual à do motor, nenhum cálculo muda hoje.', a;
+end $$;
 
 /**
  * CONFERÊNCIA (rodar à mão depois de aplicar):

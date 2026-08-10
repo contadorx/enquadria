@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CascaPublica } from "@/components/CascaPublica";
+import { TextoComNormas } from "@/components/TextoComNormas";
 import { ROTULO_SEVERIDADE } from "@/lib/radar";
 import { materiasPublicas } from "@/lib/radar-publico";
 import {
@@ -135,7 +136,16 @@ export default async function MateriaDaReforma({
               {materia.publicado_em ? ` · publicado em ${dataBR(materia.publicado_em)}` : ""}
             </p>
             <h1 className="casca-titulo">{materia.titulo}</h1>
-            <p className="casca-lead">{materia.resumo}</p>
+            {/* AS NORMAS CITADAS VIRAM LINK NO PRÓPRIO PARÁGRAFO (10/08/2026).
+                Antes, a única saída para a norma era o botão do cartão lá
+                embaixo — três rolagens depois de onde ela é mencionada. Numa
+                página que se vende por "fonte sempre citada", a citação
+                precisa ser conferível onde ela aparece. O critério do que vira
+                link, e de por que algumas citações continuam texto, está em
+                lib/normas.ts. */}
+            <p className="casca-lead">
+              <TextoComNormas texto={materia.resumo} fonte={materia.fonte} />
+            </p>
           </div>
         </section>
 
@@ -146,7 +156,7 @@ export default async function MateriaDaReforma({
                 <p className="casca-destaque-rotulo">O que fazer</p>
                 <div className="casca-prosa">
                   <p className="casca-p" style={{ marginBottom: 0 }}>
-                    {materia.o_que_fazer}
+                    <TextoComNormas texto={materia.o_que_fazer} fonte={materia.fonte} />
                   </p>
                 </div>
               </div>
