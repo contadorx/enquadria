@@ -355,11 +355,21 @@ ok    ...e mostra as DUAS pontas da faixa, com o piso valendo zero
 ok    ...dizendo que o teto não é previsão
 ok    ...e nem a nota do valor bruto volta a chamá-lo de ganho
 ok    ...e a outra ponta é a absorção, nomeada como ponta da mesma faixa
-FALHA irretratável e cancelável aparecem reconciliados, não soltos
+ok    irretratável e cancelável aparecem reconciliados, não soltos
 ok    ...e a seção de riscos aponta para a reconciliação em vez de repetir a metade
 ok    a alíquota efetiva sai com as mesmas casas na memória e na nota
 ok    o dDAS também — em 1,7% some o dígito que separa um cl de 2,3% de um de 2,4%
 ok    e a folga da negociação sai com uma casa, como nas seções 5 e 7
+ok    a tela da análise não chama o teto da negociação de ganho
+ok    tela e laudo nomeiam o piso que não gera ganho do mesmo jeito
+ok    tela e laudo nomeiam o teto, condicionado ao cliente do mesmo jeito
+ok    tela e laudo nomeiam a absorção como a outra ponta do mesmo jeito
+ok    ...e o payback aponta para o teto nas duas
+FALHA ...e a alíquota efetiva sai com as mesmas casas na tela e no documento
+ok    o gráfico desenha as duas barras na mesma régua
+ok    ...e não chama o ganho do comprador de teto do aumento de preço
+ok    ...e recebe o repasse líquido de quem o calculou, em vez de refazer a conta
+ok    ...e o gráfico não imprime uma segunda versão da folga
 
 ── Links das réguas apontam para rotas que existem ─────────────
 ok    rotas citadas nos e-mails: importar
@@ -524,4 +534,4 @@ ok    nenhuma peça da proposta promete economia, ganho ou garantia
 
 ── Resultado ───────────────────────────────────────────────────
 
-3 FALHA(S) em 461 verificações
+3 FALHA(S) em 471 verificações

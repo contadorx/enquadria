@@ -578,7 +578,11 @@ export function FormAnalise({
               }`}
             >
               faixa {ddas.faixa} ·{" "}
-              {ddas.fonte === "efetiva" ? `efetiva ${pct(ddas.aliquota)}` : `topo ${pct(ddas.aliquota)} (estimado)`}
+              {/* duas casas, como na memória de cálculo do laudo: a tela dizia
+                  10,7% e o documento gerado a partir dela dizia 10,66% */}
+              {ddas.fonte === "efetiva"
+                ? `efetiva ${pct(ddas.aliquota, 2)}`
+                : `topo ${pct(ddas.aliquota, 2)} (estimado)`}
             </span>
           </div>
           {ddas.acimaDoTeto && (
@@ -1101,7 +1105,7 @@ export function FormAnalise({
         <div className="mb-3 font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted">
           A decisão em uma linha
         </div>
-        <Gauge re={res.re} fc={res.fc} />
+        <Gauge re={res.re} reLiquido={res.re_liquido} fc={res.fc} />
 
         <div className="mt-4 overflow-hidden rounded border border-line">
           <div className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-white ${CLASSE_SAIDA[saida.cor]}`}>
@@ -1172,11 +1176,33 @@ export function FormAnalise({
             </div>
             <table className="w-full border-collapse text-[13px]">
               <tbody>
+                {/**
+                  * A MESMA FAIXA DO LAUDO, COM AS DUAS PONTAS — 10/08/2026.
+                  *
+                  * "Ganho da empresa se optar" é o TOPO da faixa de negociação:
+                  * o que a empresa levaria capturando tudo o que está na mesa. O
+                  * laudo parou de chamar isso de ganho; a tela não tinha ido
+                  * junto, e passou algumas horas afirmando um resultado que o
+                  * documento gerado a partir dela recusava afirmar.
+                  *
+                  * Duas telas discordando sobre o mesmo número é pior do que as
+                  * duas erradas do mesmo jeito: o contador confere uma contra a
+                  * outra, e é assim que ele perde a confiança nas duas.
+                  */}
                 <tr>
                   <td className="py-1 pr-2 text-muted">
-                    Ganho da empresa se optar
+                    Se o repasse ficar no mínimo que equilibra
                     <span className="block font-mono text-[10.5px] text-muted">
-                      folga da negociação × receita qualificada × receita
+                      a empresa não perde e não ganha
+                    </span>
+                  </td>
+                  <td className="py-1 text-right font-mono">R$ 0</td>
+                </tr>
+                <tr>
+                  <td className="py-1 pr-2 text-muted">
+                    Se for negociado até o limite do cliente
+                    <span className="block font-mono text-[10.5px] text-muted">
+                      teto da faixa — não é previsão
                     </span>
                   </td>
                   <td className="py-1 text-right font-mono font-semibold">
@@ -1199,7 +1225,7 @@ export function FormAnalise({
                 <tr>
                   {/* "Payback" era a única palavra em inglês da tela — e a que
                       mais precisava ser entendida na reunião com o cliente */}
-                  <td className="py-1 pr-2 text-muted">Em quanto tempo o ganho cobre esse custo</td>
+                  <td className="py-1 pr-2 text-muted">Em quanto tempo o teto da faixa cobre esse custo</td>
                   <td className="py-1 text-right font-mono">
                     {dinheiro.payback_meses != null
                       ? `${dinheiro.payback_meses.toFixed(1).replace(".", ",")} meses`
@@ -1208,7 +1234,10 @@ export function FormAnalise({
                 </tr>
                 <tr>
                   <td className="py-1 pr-2 text-muted">
-                    Se o cliente dela não aceitar o repasse, a empresa absorve
+                    Se não houver repasse nenhum, a empresa absorve
+                    <span className="block font-mono text-[10.5px] text-muted">
+                      a outra ponta da mesma faixa
+                    </span>
                   </td>
                   <td className="py-1 text-right font-mono text-vermelho">
                     {dinheiro.absorvido_anual != null ? moeda(dinheiro.absorvido_anual) : "—"}

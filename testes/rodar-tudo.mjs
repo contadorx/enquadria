@@ -1951,6 +1951,55 @@ secao("O laudo diz a mesma coisa uma vez só");
      /= \$\{pct\(d\.das, 3\)\} da receita/.test(laudoTs));
   ok("e a folga da negociação sai com uma casa, como nas seções 5 e 7",
      !/\(Number\(a\.fc\) - liq\) \* 100\)\.toFixed\(2\)/.test(laudoTs));
+
+  /* ═══ A TELA TEM DE DIZER O MESMO QUE O LAUDO QUE ELA GERA ═══════════════
+     O laudo parou de chamar o topo da faixa de "ganho"; a tela não foi junto e
+     passou horas afirmando um resultado que o documento gerado a partir dela
+     recusava afirmar. Duas telas discordando sobre o mesmo número é pior do que
+     as duas erradas do mesmo jeito: o contador confere uma contra a outra, e é
+     assim que ele perde a confiança nas duas. Este bloco amarra as duas. ══ */
+  const formTela = fs.readFileSync(path.join(RAIZ, "components/FormAnalise.tsx"), "utf8");
+  /* as negativas rodam SEM comentário — a nota que documenta o conserto cita o
+     rótulo antigo entre aspas, de propósito, e um teste que confunde a história
+     do defeito com o defeito obriga a apagar a história para ficar verde. Mesma
+     armadilha do `createAdminClient` na rota de reset. */
+  const semNota = (t) => t.replace(/\/\*[\s\S]*?\*\//g, "");
+  ok("a tela da análise não chama o teto da negociação de ganho",
+     !/Ganho da empresa se optar/.test(semNota(formTela)));
+  for (const [conceito, na] of [
+    ["o piso que não gera ganho", /Se o repasse ficar no mínimo que equilibra/],
+    ["o teto, condicionado ao cliente", /limite do cliente/],
+    ["a absorção como a outra ponta", /Se não houver repasse nenhum, a empresa absorve/],
+  ]) {
+    ok(`tela e laudo nomeiam ${conceito} do mesmo jeito`,
+       na.test(formTela) && na.test(folha), { tela: na.test(formTela), laudo: na.test(folha) });
+  }
+  ok("...e o payback aponta para o teto nas duas",
+     /Em quanto tempo o teto da faixa cobre esse custo/.test(formTela) &&
+     /Em quanto tempo o teto da faixa cobre esse custo/.test(folha));
+  ok("...e a alíquota efetiva sai com as mesmas casas na tela e no documento",
+     /efetiva \$\{pct\(ddas\.aliquota, 2\)\}/.test(formTela));
+
+  /* ═══ O GRÁFICO ESTAVA COM AS DUAS BARRAS EM UNIDADES DIFERENTES ═════════
+     A de cima desenhava `fc` (ganho por operação); a de baixo, `re` (aumento de
+     PREÇO). A distância entre elas não era a folga que a frase logo abaixo
+     anunciava — 1,8 pontos no desenho contra 2,3 no texto. E a legenda de `fc`
+     dizia "teto do aumento de preço", que é fc ÷ (1 − alíquota): 7,8%, não
+     7,1%. A tela afirmava um limite de negociação que o laudo contradiz. ══ */
+  const gauge = fs.readFileSync(path.join(RAIZ, "components/Gauge.tsx"), "utf8");
+  ok("o gráfico desenha as duas barras na mesma régua",
+     /const desenhar = isFinite\(reLiquido\) \? reLiquido : re;/.test(gauge) &&
+     /larguraRe = \(Math\.min\(isFinite\(desenhar\)/.test(gauge));
+  ok("...e não chama o ganho do comprador de teto do aumento de preço",
+     !/Teto do aumento de preço/.test(semNota(gauge)));
+  ok("...e recebe o repasse líquido de quem o calculou, em vez de refazer a conta",
+     /<Gauge re=\{res\.re\} reLiquido=\{res\.re_liquido\} fc=\{res\.fc\} \/>/.test(formTela) &&
+     !/1 - .*aliquota/.test(semNota(gauge)));
+  /* a folga tem UM dono. Um segundo lugar na tela com o mesmo nome e outro
+     arredondamento é o defeito que este conserto acabou de tirar das barras. */
+  ok("...e o gráfico não imprime uma segunda versão da folga",
+     !/pontos entre as duas barras/.test(semNota(gauge)) &&
+     !/toFixed\(1\)/.test(semNota(gauge)));
 }
 
 /* ============================ 2a. ROTAS CITADAS NOS E-MAILS EXISTEM? ===== */
