@@ -798,6 +798,9 @@ export function PainelEmpresa({
             rbt12Inicial={e.rbt12 != null ? Number(e.rbt12) : null}
             respostasIniciais={daColeta?.respostas ?? (a?.respostas as unknown as Respostas) ?? null}
             chavesDaColeta={daColeta ? ["b2b", "qual", "cred", "preco", "conc", "exig"] : undefined}
+            /* sem isto, um segundo salvamento apagava a proveniência de quem
+               respondeu — inclusive a do cliente. Ver `origensIniciais`. */
+            origensIniciais={(a?.parametros?.origens as Record<string, string> | undefined) ?? null}
             detalhesIniciais={daColeta?.detalhes ?? a?.parametros?.detalhes ?? null}
             segmentosIniciais={a?.parametros?.segmentos ?? null}
             custoInicial={a?.parametros?.custo_apuracao_anual ?? null}

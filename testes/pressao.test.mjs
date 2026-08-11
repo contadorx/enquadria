@@ -283,6 +283,19 @@ ok(!pressaoDoLaudo(analise({}, { preco: 3 })).avisos.some((x) => /é a absorçã
   const repasse = q.find((x) => /Repasse de preço/.test(x.rotulo));
   ok(/o comprador ainda ganha/.test(repasse.diferenca),
      "e a folga do quadro diz de que lado da mesa está", repasse.diferenca);
+
+  /* ═══ FOLGA NEGATIVA NÃO É GANHO MENOR ═══════════════════════════════════
+     O rótulo acima nasceu em 10/08 e saiu, no primeiro laudo S2 gerado com ele,
+     como "o comprador ainda ganha -1,0 p.p." — que não quer dizer nada. Quando
+     a folga inverte, o fato inverte junto. ══════════════════════════════════ */
+  {
+    const invertido = { ...cheia, fc: 0.0715, re: 0.089, cl: 0.0627, rq: 0.704 };
+    const linha = quadroComparativo(invertido).find((x) => /Repasse de preço/.test(x.rotulo));
+    ok(/passa do ganho do comprador/.test(linha.diferenca),
+       "com o repasse acima do ganho, o quadro diz que ele PASSOU do ganho", linha.diferenca);
+    ok(!/-/.test(linha.diferenca) && !/ainda ganha/.test(linha.diferenca),
+       "...e não imprime pontos negativos nem promete ganho que não existe", linha.diferenca);
+  }
 }
 
 /* ═══════════════════════ 6 · a fronteira, dita com todas as letras ══════ */

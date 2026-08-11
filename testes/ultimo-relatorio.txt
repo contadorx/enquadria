@@ -3,10 +3,10 @@
 ok    compila sem erro
 
 ── Suítes de função pura ───────────────────────────────────────
-ok    50 suítes encontradas na pasta
+ok    51 suítes encontradas na pasta
 ok    suíte abertura (34 asserções)
 ok    suíte absorcao (32 asserções)
-ok    suíte ajuda (41 asserções)
+ok    suíte ajuda (45 asserções)
 ok    suíte apontamentos (19 asserções)
 ok    suíte assinatura (36 asserções)
 ok    suíte cnpj (47 asserções)
@@ -36,8 +36,9 @@ ok    suíte negocio (20 asserções)
 ok    suíte normas (30 asserções)
 ok    suíte novidade (27 asserções)
 ok    suíte nps (40 asserções)
+ok    suíte origem-premissa (28 asserções)
 ok    suíte passos (71 asserções)
-ok    suíte pressao (45 asserções)
+ok    suíte pressao (47 asserções)
 ok    suíte projecao (54 asserções)
 ok    suíte proposta (50 asserções)
 ok    suíte radar (45 asserções)
@@ -365,7 +366,15 @@ ok    tela e laudo nomeiam o piso que não gera ganho do mesmo jeito
 ok    tela e laudo nomeiam o teto, condicionado ao cliente do mesmo jeito
 ok    tela e laudo nomeiam a absorção como a outra ponta do mesmo jeito
 ok    ...e o payback aponta para o teto nas duas
-FALHA ...e a alíquota efetiva sai com as mesmas casas na tela e no documento
+ok    ...e a alíquota efetiva sai com as mesmas casas na tela e no documento
+ok    a tela resolve a origem pela regra compartilhada, sem reimplementar
+ok    ...e o painel entrega as origens já gravadas, senão não há o que preservar
+ok    o resumo da origem conta as sete, em vez de amostrar a primeira
+ok    o laudo decide a faixa a partir do ganho, não de um literal
+ok    o laudo não desenha piso e teto quando não há faixa
+FALHA a tela decide a faixa a partir do ganho, não de um literal → "true"
+ok    a tela não desenha piso e teto quando não há faixa
+ok    o laudo destaca também a premissa que ninguém escolheu
 ok    o gráfico desenha as duas barras na mesma régua
 ok    ...e não chama o ganho do comprador de teto do aumento de preço
 ok    ...e recebe o repasse líquido de quem o calculou, em vez de refazer a conta
@@ -534,4 +543,4 @@ ok    nenhuma peça da proposta promete economia, ganho ou garantia
 
 ── Resultado ───────────────────────────────────────────────────
 
-3 FALHA(S) em 471 verificações
+3 FALHA(S) em 480 verificações

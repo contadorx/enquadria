@@ -80,6 +80,9 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
   const pressao = pressaoDoLaudo(a);
   const absorcao = absorcaoDoLaudo(a);
   const quadro = quadroComparativo(a);
+  /* há duas pontas a mostrar? Ver a nota das linhas do dinheiro, mais abaixo. */
+  const temFaixaDeNegociacao =
+    p.dinheiro?.ganho_anual != null && Number(p.dinheiro.ganho_anual) > 0;
   const condicoes = condicoesDeValidade(a);
   const riscos = riscosELimites(a);
   const anexoTab = tabelaDoAnexo(a);
@@ -253,7 +256,7 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
                     <tr key={pr.pergunta}>
                       <td>{pr.pergunta}</td>
                       <td className="num">{pr.resposta}</td>
-                      <td className={`org ${pr.origem === "estimada" ? "est" : ""}`}>
+                      <td className={`org ${pr.origem === "estimada" || pr.origem === "padrao" ? "est" : ""}`}>
                         {rotuloOrigem(pr.origem)}
                       </td>
                     </tr>
@@ -301,7 +304,7 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
                       {pr.composicao && <div className="comp">{pr.composicao}</div>}
                     </td>
                     <td className="num">{pr.resposta}</td>
-                    <td className={`org ${pr.origem === "estimada" ? "est" : ""}`}>
+                    <td className={`org ${pr.origem === "estimada" || pr.origem === "padrao" ? "est" : ""}`}>
                       {rotuloOrigem(pr.origem)}
                     </td>
                   </tr>
@@ -432,6 +435,22 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
                     * ganho nenhum — só evita a perda —, que é exatamente a
                     * conversa que o empresário precisa ter.
                     */}
+                  {/**
+                    * SEM GANHO NÃO HÁ FAIXA — 11/08/2026.
+                    *
+                    * As duas pontas entraram hoje de manhã e ficaram certas no
+                    * caso S4. No primeiro S2 gerado com elas, a tabela dizia
+                    * "no mínimo que equilibra: R$ 0" seguido de "até o limite do
+                    * cliente: sem ganho no cenário" — um piso e um teto para uma
+                    * faixa que não existe, porque o repasse que equilibra já
+                    * passou do que o crédito do cliente comporta.
+                    *
+                    * É o mesmo cuidado que `pressaoComercial` toma no motor, e
+                    * pela mesma razão escrita lá: uma tabela degenerada é pior
+                    * que nenhuma, porque parece número e não é.
+                    */}
+                  {temFaixaDeNegociacao ? (
+                    <>
                   <tr>
                     <td>
                       Se o repasse ficar no mínimo que equilibra
@@ -450,12 +469,21 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
                         e nada neste laudo garante que a negociação chegue lá.
                       </div>
                     </td>
-                    <td className="mono res">
-                      {dinheiro.ganho_anual != null && dinheiro.ganho_anual > 0
-                        ? moeda(dinheiro.ganho_anual)
-                        : "sem ganho no cenário"}
-                    </td>
+                    <td className="mono res">{moeda(dinheiro.ganho_anual)}</td>
                   </tr>
+                    </>
+                  ) : (
+                    <tr>
+                      <td>
+                        Não há faixa de negociação neste cenário
+                        <div className="comp">
+                          O reajuste que equilibraria a conta já supera o que o crédito do cliente
+                          comporta: não existe preço que sirva aos dois lados.
+                        </div>
+                      </td>
+                      <td className="mono res">sem ganho a negociar</td>
+                    </tr>
+                  )}
                   <tr>
                     <td>Custo anual de apurar fora do DAS (premissa declarada pelo contador)</td>
                     <td className="mono">
@@ -465,7 +493,11 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
                   <tr>
                     {/* o laudo vai para a mesa do empresário: "payback" era a
                         única palavra que ele não tinha obrigação de conhecer */}
-                    <td>Em quanto tempo o teto da faixa cobre esse custo</td>
+                    <td>
+                      {temFaixaDeNegociacao
+                        ? "Em quanto tempo o teto da faixa cobre esse custo"
+                        : "Em quanto tempo o ganho cobriria esse custo"}
+                    </td>
                     <td className="mono">
                       {dinheiro.payback_meses != null
                         ? `${dinheiro.payback_meses.toFixed(1).replace(".", ",")} meses`
@@ -476,7 +508,9 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
                     <td>
                       Se não houver repasse nenhum, a empresa absorve
                       <div className="comp">
-                        É a outra ponta da mesma faixa, e é para onde a conta vai sem negociação.
+                        {temFaixaDeNegociacao
+                          ? "É a outra ponta da mesma faixa, e é para onde a conta vai sem negociação."
+                          : "É para onde a conta vai sem negociação."}
                       </div>
                     </td>
                     <td className="mono">
@@ -756,6 +790,10 @@ export function LaudoFolha({ dados, publico = false }: { dados: DadosLaudo; publ
         .prem td:first-child { width: 52%; }
         .prem .num { font-family: 'IBM Plex Mono', monospace; text-align: right; white-space: nowrap; width: 16%; }
         .prem .org { font-size: 10.5px; color: #64748B; text-align: right; width: 32%; }
+        /* o destaque âmbar marca a premissa FRACA, e "padrão do sistema" é a
+           mais fraca de todas: ninguém a escolheu. Ela saía cinza, igual à que
+           o cliente respondeu — dentro do documento cuja função é separar as
+           duas. Ver a nota de ORIGEM_ROTULO em lib/laudo.ts. */
         .prem .org.est { color: #B45309; background: #FFFBEB; }
         .comp { font-size: 10.5px; color: #64748B; line-height: 1.45; margin-top: 2px; }
         .mem td { font-size: 11.5px; }

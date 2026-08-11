@@ -78,9 +78,35 @@ ok(rotuloCategoria("reforma") === "Reforma tributária", "categoria tem rótulo 
 import { rotuloOrigem } from "./laudo.js";
 ok(rotuloOrigem("coleta") === "respondida pelo cliente no formulário",
    "coleta tem rótulo próprio, distinto de informada");
-ok(rotuloOrigem("informada") === "informada pelo cliente", "informada continua existindo");
 ok(rotuloOrigem("padrao") === "padrão do sistema", "padrão segue sendo padrão");
 ok(rotuloOrigem("inventada") === "padrão do sistema", "valor desconhecido cai no mais fraco, não no mais forte");
+
+/**
+ * CADA RÓTULO NOMEIA QUEM DE FATO RESPONDEU — 11/08/2026.
+ *
+ * Um laudo real saiu com quatro premissas "estimada pelo contador" e três
+ * "informada pelo cliente", num caso em que NENHUM cliente respondeu nada e as
+ * quatro "estimadas pelo contador" eram exatamente as que ele não tocou —
+ * palpite do perfil do CNAE. Os dois rótulos erravam em direções opostas.
+ *
+ * "Informada pelo cliente" é uma defesa que o contador leva para uma discussão
+ * em 2027. Escrever isso por ele, sobre uma premissa que ele mesmo escolheu, é
+ * dar-lhe uma defesa que ele não tem.
+ */
+ok(rotuloOrigem("informada") === "informada pelo contador",
+   "quem escolheu na tela foi o CONTADOR — e o rótulo diz o nome dele");
+ok(!/cliente/.test(rotuloOrigem("informada")),
+   "...e não atribui ao cliente uma declaração que ele não fez");
+ok(rotuloOrigem("estimada") === "estimada pelo perfil do CNAE",
+   "e o palpite do lote é creditado à tabela que o produziu, não a uma pessoa");
+ok(!/contador/.test(rotuloOrigem("estimada")),
+   "...porque creditar um chute ao contador é o mesmo erro, ao contrário");
+/* os quatro têm de ser distinguíveis: rótulo repetido apaga a distinção que a
+   seção 3 do laudo existe para fazer */
+{
+  const todos = ["coleta", "informada", "estimada", "padrao"].map(rotuloOrigem);
+  ok(new Set(todos).size === 4, "os quatro graus de proveniência são distinguíveis", todos);
+}
 
 
 

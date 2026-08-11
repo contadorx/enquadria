@@ -87,6 +87,8 @@ try {
        o que não for congelado aqui não aparece no laudo — que é prova e não
        recalcula nada */
     "lib/parametros-analise.ts",
+    /* a proveniência das premissas: é o que o laudo AFIRMA sobre quem respondeu */
+    "lib/origem-premissa.ts",
     /* a carteira da página pública /exemplo: afirmação verificável precisa de teste */
     "lib/exemplo.ts",
     /* a frase do produto: sete proposições foi o defeito, uma é a decisão */
@@ -1979,6 +1981,63 @@ secao("O laudo diz a mesma coisa uma vez só");
      /Em quanto tempo o teto da faixa cobre esse custo/.test(folha));
   ok("...e a alíquota efetiva sai com as mesmas casas na tela e no documento",
      /efetiva \$\{pct\(ddas\.aliquota, 2\)\}/.test(formTela));
+
+  /* ═══ A PROVENIÊNCIA CHEGA À TELA E AO DOCUMENTO PELO MESMO CAMINHO ═════
+     A regra saiu de dentro do formulário para lib/origem-premissa.ts, com
+     suíte própria. O que sobra de estrutural é: a tela usa a regra em vez de
+     reimplementá-la, e o painel entrega o que já estava gravado — sem isso, a
+     preservação testada lá não acontece aqui. ══════════════════════════════ */
+  ok("a tela resolve a origem pela regra compartilhada, sem reimplementar",
+     /resolverOrigem\(\{/.test(formTela) &&
+     /from "@\/lib\/origem-premissa"/.test(formTela) &&
+     !/if \(tocadas\.has\(chave\)\) return "informada";/.test(formTela));
+  ok("...e o painel entrega as origens já gravadas, senão não há o que preservar",
+     /origensIniciais=\{\(a\?\.parametros\?\.origens/.test(
+       fs.readFileSync(path.join(RAIZ, "components/PainelEmpresa.tsx"), "utf8")
+     ) &&
+     /origensIniciais\?\.\[chave\]/.test(formTela));
+  /* uma premissa não fala pelas sete: a linha resumia tudo lendo `b2b`, e num
+     caso real as sete se dividiam em quatro estimadas e três do contador */
+  ok("o resumo da origem conta as sete, em vez de amostrar a primeira",
+     /origem das premissas: \{resumoDasOrigens\}/.test(formTela) &&
+     !/ROTULO_ORIGEM\[origemDe\("b2b"\)\]/.test(formTela));
+  /* ═══ SEM GANHO NÃO HÁ FAIXA ═════════════════════════════════════════════
+     As duas pontas entraram certas no caso S4. No primeiro S2 a tabela dizia
+     "no mínimo que equilibra: R$ 0" seguido de "até o limite do cliente: sem
+     ganho no cenário" — piso e teto para uma faixa que não existe. Mesmo
+     cuidado que `pressaoComercial` toma no motor, e pela mesma razão escrita
+     lá: tabela degenerada parece número sem ser. ═══════════════════════════ */
+  /* `semNota` de novo, e é a terceira vez hoje: toda nota que documenta um
+     conserto cita o texto que saiu, e toda negativa escrita sobre o arquivo
+     cru acusa a própria explicação. A regra é a mesma sempre — negativa lê
+     código, positiva pode ler o arquivo inteiro. */
+  for (const [onde, txt] of [["o laudo", folha], ["a tela", formTela]]) {
+    /* A DERIVAÇÃO, não o identificador. A primeira versão testava
+       `/temFaixaDeNegociacao/`, que continua casando com
+       `const temFaixaDeNegociacao = true` — e foi assim que a sabotagem passou
+       batida. Presença de nome não é prova de regra: o que precisa estar preso
+       é a origem do valor. */
+    const atrib = semNota(txt).match(/temFaixaDeNegociacao\s*=\s*([^;]+);/);
+    ok(`${onde} decide a faixa a partir do ganho, não de um literal`,
+       atrib != null && /ganho_anual/.test(atrib[1]) && !/^\s*(true|false)\s*$/.test(atrib[1]),
+       atrib ? atrib[1].trim() : null);
+    ok(`${onde} não desenha piso e teto quando não há faixa`,
+       /Não há faixa de negociação neste cenário/.test(txt) &&
+       !/sem ganho no cenário/.test(semNota(txt)));
+  }
+
+  /* E O DOCUMENTO DESTACA AS DUAS FRACAS — nas DUAS tabelas.
+     O laudo tem duas: a curta (faixas C/D) e a longa. A primeira versão desta
+     asserção usava `.test()`, que acha uma ocorrência e para — e a sabotagem,
+     que troca só a primeira, passou batida. Um teste que prova metade de uma
+     regra presente em dois lugares é meio teste. */
+  {
+    const marcadas = (folha.match(/pr\.origem === "estimada" \|\| pr\.origem === "padrao"/g) || []).length;
+    const tabelas = (folha.match(/className=\{`org /g) || []).length;
+    ok("o laudo destaca também a premissa que ninguém escolheu",
+       tabelas > 0 && marcadas === tabelas,
+       { tabelasDePremissa: tabelas, comDestaqueCompleto: marcadas });
+  }
 
   /* ═══ O GRÁFICO ESTAVA COM AS DUAS BARRAS EM UNIDADES DIFERENTES ═════════
      A de cima desenhava `fc` (ganho por operação); a de baixo, `re` (aumento de

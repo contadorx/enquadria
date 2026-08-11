@@ -654,12 +654,41 @@ export interface PremissaImpressa {
   composicao?: string;
 }
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * OS DOIS RÓTULOS QUE MENTIAM — conserto de 11/08/2026.
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Um laudo real saiu com sete premissas: quatro marcadas "estimada pelo
+ * contador" e três "informada pelo cliente". Nenhum cliente tinha respondido
+ * nada — não houve formulário de coleta —, e as quatro "estimadas pelo
+ * contador" eram justamente as que ele NÃO tocou: vieram do perfil do CNAE.
+ * Os dois rótulos erravam, e erravam em direções opostas:
+ *
+ *   · `informada` marca a premissa que o CONTADOR escolheu na tela. O código
+ *     sempre soube disso — o comentário de `chavesDaColeta`, em FormAnalise,
+ *     diz com todas as letras "ali quem respondeu foi o contador". Só o rótulo
+ *     não sabia, e atribuía ao cliente uma declaração que ele nunca fez.
+ *   · `estimada` marca o palpite do lote por CNAE. Chamá-lo de "estimada pelo
+ *     contador" credita a uma pessoa um número que uma tabela produziu.
+ *
+ * Por que isso é grave e não é cosmético: a proveniência é o produto. O laudo
+ * vale porque diz DE QUEM é cada premissa, e "informada pelo cliente" é uma
+ * defesa que o contador leva para uma discussão em 2027. Uma defesa que ele não
+ * tem, escrita por nós, dentro do documento que ele assina.
+ *
+ * Os VALORES gravados não mudam — `p.origens` guarda "informada"/"estimada" em
+ * análises antigas, e trocá-los exigiria migrar dado para consertar texto. Muda
+ * só o que se lê, e laudos antigos reabertos passam a ler a verdade. É a deriva
+ * conhecida e documentada em lib/deriva.ts: o snapshot congela a análise, não o
+ * texto — e aqui a troca é a favor de quem assina.
+ */
 const ORIGEM_ROTULO: Record<string, string> = {
   // respondida pelo próprio cliente, no formulário — o grau mais forte de
   // proveniência que uma premissa pode ter neste produto
   coleta: "respondida pelo cliente no formulário",
-  informada: "informada pelo cliente",
-  estimada: "estimada pelo contador",
+  informada: "informada pelo contador",
+  estimada: "estimada pelo perfil do CNAE",
   padrao: "padrão do sistema",
 };
 
@@ -1002,9 +1031,16 @@ export function quadroComparativo(a: AnaliseGravada): LinhaQuadro[] {
       diferenca: (() => {
         const liq = reLiquidoDe(a);
         if (liq == null || a.fc == null) return "—";
-        return `o comprador ainda ganha ${((Number(a.fc) - liq) * 100)
-          .toFixed(1)
-          .replace(".", ",")} p.p.`;
+        const d = Number(a.fc) - liq;
+        const n = Math.abs(d * 100).toFixed(1).replace(".", ",");
+        /* FOLGA NEGATIVA NÃO É GANHO MENOR — 11/08/2026.
+           Este rótulo nasceu hoje de manhã e saiu, no primeiro laudo S2 gerado
+           com ele, como "o comprador ainda ganha -1,0 p.p." — que não quer
+           dizer nada. Quando a folga inverte, o fato inverte junto: não sobra
+           menos para o comprador, o repasse passa por cima do que ele ganha. */
+        return d >= 0
+          ? `o comprador ainda ganha ${n} p.p.`
+          : `o repasse passa do ganho do comprador em ${n} p.p.`;
       })(),
     },
   ];

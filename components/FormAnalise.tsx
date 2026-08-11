@@ -29,6 +29,7 @@ import { mascaraMoeda, valorDaMascara, moedaParaMascara } from "@/lib/mascaras";
 import { anexoPorCnae } from "@/lib/triagem";
 import { leituraDoDinheiro } from "@/lib/roteiro";
 import { parseValorBRL } from "@/lib/csv";
+import { resolverOrigem, ORIGENS, CHAVES_DE_PREMISSA } from "@/lib/origem-premissa";
 import { Gauge } from "@/components/Gauge";
 
 /**
@@ -57,10 +58,13 @@ const ROTULO_ANEXO: Record<number, string> = {
   5: "serviço (V)",
 };
 
+/* os mesmos quatro rótulos do laudo, e pelo mesmo motivo — ver a nota longa em
+   `ORIGEM_ROTULO`, em lib/laudo.ts. A tela e o documento não podem discordar
+   sobre de quem é a premissa: é a única coisa que o laudo afirma sobre si. */
 const ROTULO_ORIGEM: Record<Origem, string> = {
   coleta: "respondida pelo cliente no formulário",
-  informada: "informada pelo cliente",
-  estimada: "estimada pelo contador",
+  informada: "informada pelo contador",
+  estimada: "estimada pelo perfil do CNAE",
   padrao: "padrão do sistema",
 };
 
@@ -180,6 +184,7 @@ export function FormAnalise({
   segmentosIniciais,
   estimada,
   chavesDaColeta,
+  origensIniciais,
   aoSalvar,
   calculadoEmInicial = null,
 }: {
@@ -213,6 +218,26 @@ export function FormAnalise({
    * o laudo diria "informada pelo cliente" sobre um palpite do escritório.
    */
   chavesDaColeta?: string[];
+  /**
+   * AS ORIGENS JÁ GRAVADAS — 11/08/2026.
+   *
+   * Sem elas, reabrir e salvar de novo APAGAVA a proveniência. `origemDe` só
+   * conhecia o estado desta sessão: `tocadas` nasce vazio a cada abertura e
+   * `chavesDaColeta` só chega no instante em que as respostas do cliente são
+   * aplicadas. Numa reabertura qualquer, tudo o que o contador não tocasse caía
+   * no ramo `respostasIniciais` e virava "informada" — inclusive as seis
+   * respostas que o CLIENTE tinha preenchido no formulário.
+   *
+   * Ou seja: a origem mais forte que o produto sabe produzir era destruída por
+   * um segundo clique em salvar, sem aviso e sem que nada na tela mudasse. E o
+   * laudo seguinte deixava de poder dizer "respondida pelo cliente" sobre a
+   * única coisa que o cliente de fato respondeu.
+   *
+   * Agora o que já foi gravado vale, e só perde para duas coisas: um toque do
+   * contador nesta sessão (a premissa passou a ser dele) e uma coleta recém
+   * aplicada (mais recente e mais forte).
+   */
+  origensIniciais?: Record<string, string> | null;
   aoSalvar?: (analiseId: string) => void;
   /**
    * `calculado_em` da análise que esta tela LEU ao abrir. Vai junto no
@@ -373,13 +398,16 @@ export function FormAnalise({
   /** origem de cada premissa: quem não foi tocado é padrão (ou estimado, se veio do lote) */
   const daColeta = new Set(chavesDaColeta ?? []);
 
+  /* a regra mora em lib/origem-premissa.ts, com teste: é ela que decide o que o
+     laudo AFIRMA sobre quem respondeu, e viveu aqui sem trava até 11/08/2026 */
   function origemDe(chave: string): Origem {
-    // tocar sobrepõe tudo: se o contador mexeu, a premissa é dele
-    if (tocadas.has(chave)) return "informada";
-    if (daColeta.has(chave)) return "coleta";
-    if (estimada) return "estimada";
-    if (respostasIniciais) return "informada";
-    return "padrao";
+    return resolverOrigem({
+      tocada: tocadas.has(chave),
+      daColetaAgora: daColeta.has(chave),
+      gravada: origensIniciais?.[chave] ?? null,
+      doLoteCnae: !!estimada,
+      temRespostasIniciais: !!respostasIniciais,
+    });
   }
 
   const qual = derivarQual(dq);
@@ -444,15 +472,29 @@ export function FormAnalise({
   const comProjecao = projecao ? decidirComProjecao(respostas, base, projecao) : null;
   const sens = sensibilidade(respostas, base, dinheiro);
   const alerta = alertaFatorR(anexoSel, r.folha);
+  /* mesma guarda do laudo: piso e teto para uma faixa inexistente é tabela
+     degenerada, e tabela degenerada parece número sem ser */
+  const temFaixaDeNegociacao = dinheiro.ganho_anual != null && dinheiro.ganho_anual > 0;
+
+  /* a divisão real das sete premissas — ver a nota da linha que a imprime */
+  const contagemOrigens = CHAVES_DE_PREMISSA.reduce<Record<string, number>>((acc, k) => {
+    const o = origemDe(k);
+    acc[o] = (acc[o] ?? 0) + 1;
+    return acc;
+  }, {});
+  /* ORIGENS já vem da mais forte para a mais fraca — é a ordem de leitura */
+  const presentes = ORIGENS.filter((o) => (contagemOrigens[o] ?? 0) > 0);
+  const resumoDasOrigens =
+    presentes.length === 1
+      ? ROTULO_ORIGEM[presentes[0]]
+      : presentes.map((o) => `${contagemOrigens[o]} ${ROTULO_ORIGEM[o]}`).join(" · ");
 
   async function salvar(forcar = false) {
     setSalvando(true);
     setErro(null);
     if (forcar) setConflito(null);
     try {
-      const origens = Object.fromEntries(
-        ["b2b", "qual", "cred", "folha", "preco", "conc", "exig"].map((k) => [k, origemDe(k)])
-      );
+      const origens = Object.fromEntries(CHAVES_DE_PREMISSA.map((k) => [k, origemDe(k)]));
       const resp = await fetch("/api/analise", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1189,6 +1231,9 @@ export function FormAnalise({
                   * duas erradas do mesmo jeito: o contador confere uma contra a
                   * outra, e é assim que ele perde a confiança nas duas.
                   */}
+                {/* sem ganho não há faixa: ver a mesma guarda em LaudoFolha */}
+                {temFaixaDeNegociacao ? (
+                  <>
                 <tr>
                   <td className="py-1 pr-2 text-muted">
                     Se o repasse ficar no mínimo que equilibra
@@ -1206,11 +1251,21 @@ export function FormAnalise({
                     </span>
                   </td>
                   <td className="py-1 text-right font-mono font-semibold">
-                    {dinheiro.ganho_anual != null && dinheiro.ganho_anual > 0
-                      ? moeda(dinheiro.ganho_anual)
-                      : "sem ganho no cenário"}
+                    {moeda(dinheiro.ganho_anual)}
                   </td>
                 </tr>
+                  </>
+                ) : (
+                  <tr>
+                    <td className="py-1 pr-2 text-muted">
+                      Não há faixa de negociação neste cenário
+                      <span className="block font-mono text-[10.5px] text-muted">
+                        o repasse que equilibra já passa do que o cliente comporta
+                      </span>
+                    </td>
+                    <td className="py-1 text-right font-mono font-semibold">sem ganho a negociar</td>
+                  </tr>
+                )}
                 <tr>
                   <td className="py-1 pr-2 text-muted">
                     Custo de apurar IBS/CBS por fora
@@ -1225,7 +1280,11 @@ export function FormAnalise({
                 <tr>
                   {/* "Payback" era a única palavra em inglês da tela — e a que
                       mais precisava ser entendida na reunião com o cliente */}
-                  <td className="py-1 pr-2 text-muted">Em quanto tempo o teto da faixa cobre esse custo</td>
+                  <td className="py-1 pr-2 text-muted">
+                    {temFaixaDeNegociacao
+                      ? "Em quanto tempo o teto da faixa cobre esse custo"
+                      : "Em quanto tempo o ganho cobriria esse custo"}
+                  </td>
                   <td className="py-1 text-right font-mono">
                     {dinheiro.payback_meses != null
                       ? `${dinheiro.payback_meses.toFixed(1).replace(".", ",")} meses`
@@ -1236,7 +1295,7 @@ export function FormAnalise({
                   <td className="py-1 pr-2 text-muted">
                     Se não houver repasse nenhum, a empresa absorve
                     <span className="block font-mono text-[10.5px] text-muted">
-                      a outra ponta da mesma faixa
+                      {temFaixaDeNegociacao ? "a outra ponta da mesma faixa" : "para onde a conta vai sem negociação"}
                     </span>
                   </td>
                   <td className="py-1 text-right font-mono text-vermelho">
@@ -1278,8 +1337,21 @@ export function FormAnalise({
           Estimativa de cenário a partir das premissas informadas; não substitui apuração com dados
           fiscais efetivos. A decisão e a responsabilidade técnica são do contador que assina.
         </p>
+        {/**
+          * UMA PREMISSA NÃO FALA PELAS SETE — 11/08/2026.
+          *
+          * Esta linha resumia a proveniência de TODAS lendo `origemDe("b2b")`,
+          * a primeira pergunta do formulário. Num caso real as sete se
+          * dividiam em quatro estimadas pelo CNAE e três escolhidas pelo
+          * contador, e a tela anunciava uma só — a de b2b — como se fosse a
+          * origem do conjunto. O laudo, que lista uma a uma, dizia outra coisa.
+          *
+          * Agora conta. Quando as sete concordam, sai a frase de antes; quando
+          * não, sai a divisão, que é o dado que interessa: é ela que diz quanto
+          * do documento ainda depende de palpite.
+          */}
         <p className="mt-1.5 font-mono text-[10.5px] text-muted">
-          origem das premissas: {ROTULO_ORIGEM[origemDe("b2b")]} · marcada por resposta no laudo
+          origem das premissas: {resumoDasOrigens} · marcada por resposta no laudo
         </p>
       </div>
 
